@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.blend1
+.DS_Store
+# Old model versions are not kept in this repo; only the current v16 GLB.
+# (The v16 GLB itself is uploaded separately — see README "Adding the model file".)
