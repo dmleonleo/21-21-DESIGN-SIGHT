@@ -79,14 +79,25 @@
     --shade:0 1px 2px rgba(5,7,5,.45);
   }
   /* the day palette — the same ladder on paper, reached only from
-     the sun/moon switch, never from the system setting */
+     the sun/moon switch, never from the system setting.
+     Type that rests directly on the scene is DARK in day mode, not
+     white: white header text on a pale day sky was unreadable
+     (issue #2.5). --wt* flip to ink-on-paper values and the tight
+     shade flips to a light one, so the header, chips, badge, vertical
+     margin text, prologue and walk tip all read against bright sky
+     and lawn. (The in-scene 3D labels keep their own white-on-dark
+     canvas treatment — they sit on the building, not the sky.) */
   body.day{
     --ink:#1c1c1e; --ink2:#62615c; --ink3:#8f8c84;
     --paper:#f4f3ef; --sheet:rgba(246,245,241,.97); --sheet2:rgba(246,245,241,.94);
     --line:rgba(28,28,30,.16); --line2:rgba(28,28,30,.34);
     --onink:#f4f3ef; --verm:#b3402f; --ghost:rgba(28,28,30,.05);
+    --wt:#1c1c1e; --wt2:rgba(28,28,30,.78); --wt3:rgba(28,28,30,.58);
+    --wline:rgba(28,28,30,.45);
+    --shade:0 1px 2px rgba(255,255,255,.55);
     color-scheme:light;
   }
+  body.day .chip:focus-visible,body.day .themeBtn:focus-visible{outline-color:var(--ink)}
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","YuGothic","Noto Sans JP","PingFang SC","Microsoft YaHei",sans-serif;background:#0d0d0f;color:var(--ink);overflow:hidden;font-weight:400;-webkit-font-smoothing:antialiased}
@@ -163,6 +174,23 @@
   #loadBarWrap{width:min(300px,70vw);height:1px;background:var(--line);overflow:hidden;display:none}
   #loadBar{height:100%;width:0%;background:var(--ink);transition:width .25s}
   #loadRetry{display:none;border:1px solid var(--line2);background:transparent;border-radius:0;padding:8px 18px;font-size:12px;letter-spacing:.1em}
+  /* ---- no-WebGL error state (issue #2.9) ----
+     The loading screen and the error screen used to be identical
+     (same paper, same 21_21 mark, same message slot), so a visitor
+     whose browser has no WebGL read the error as "still loading" —
+     and every button was dead, because the script returned before
+     wiring any of them. The error state is deliberately a different
+     page: warm dark ground instead of paper, a red error title, a
+     static line drawing of the building in place of the 3D scene,
+     an explanation, and a working reload button. */
+  #errArt{display:none;width:min(320px,72vw);margin:2px 0 4px;color:var(--ink2)}
+  #loading.error{background:#171210}
+  #loading.error .mark{color:#f2e8e0}
+  #loading.error .mark i{color:#d8a08f}
+  #loading.error .lmicro{color:#c98a7a}
+  #loading.error #errArt{display:block}
+  #loading.error #loadMsg{color:#e8c9bd;max-width:min(420px,84vw);text-align:center;line-height:1.8}
+  #loading.error #loadRetry{display:inline-block;border-color:#a8604c;color:#f2e8e0}
 
   /* ---- mode index: a strip along the bottom edge of the sheet.
      Six chapters in a row, divided by hairlines. The current one is
@@ -239,6 +267,14 @@
   #exhibitCard .row button:first-child{border-left:0}
   #exhibitCard .row button:hover{color:var(--ink)}
   #exhibitCard .row button.go{background:transparent;color:var(--ink);border-color:var(--line);font-weight:500}
+
+  /* in walk mode the card is raised clear of the direction pad
+     (issue #2.4): the pad tops out ~212px from the bottom edge, and
+     the card used to sit at 88px, so the pad covered its left side
+     and the centred WASD tip crossed it. Raised, the card clears the
+     pad and the tip passes underneath it instead. (Mobile already did
+     this at 232px; this is the desktop equivalent.) */
+  body.walking #exhibitCard{bottom:224px}
 
   /* ---- walk controls: quiet square keys at the sheet's corners ---- */
   #walkHud{position:absolute;inset:auto 0 76px 0;z-index:24;display:none;justify-content:space-between;align-items:flex-end;padding:0 var(--edge);pointer-events:none}
@@ -374,11 +410,11 @@
   <div id="vertical" aria-hidden="true">一枚の布、一筋の光</div>
 
   <div id="err" role="alert"></div>
-  <div id="loading"><div class="mark">21_21 <i>DESIGN SIGHT</i></div><div class="lmicro">TOKYO MIDTOWN · TADAO ANDO</div><p id="loadMsg">正在载入建筑模型…</p><div id="loadBarWrap"><div id="loadBar"></div></div><button id="loadRetry" type="button">重新加载</button></div>
+  <div id="loading"><div class="mark">21_21 <i>DESIGN SIGHT</i></div><div class="lmicro">TOKYO MIDTOWN · TADAO ANDO</div><div id="errArt" aria-hidden="true"><svg viewBox="0 0 320 118" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 96 L62 44 L104 74 L152 30 L200 74 L248 44 L306 96"/><path d="M14 96 L306 96"/><path d="M40 96 V78 M80 96 V70 M120 96 V70 M160 96 V66 M200 96 V70 M240 96 V70 M280 96 V78" stroke-width="0.8" opacity="0.65"/><path d="M152 30 L152 14" opacity="0.65"/><circle cx="152" cy="10" r="3.5"/><path d="M30 108 H290" opacity="0.5"/><path d="M52 108 v6 M268 108 v6" opacity="0.5"/></svg></div><p id="loadMsg">正在载入建筑模型…</p><div id="loadBarWrap"><div id="loadBar"></div></div><button id="loadRetry" type="button">重新加载</button></div>
   <div id="cross">+</div>
   <div id="walkTip">W A S D 或左下按钮移动 · 拖动画面转头 · 楼梯口可上下层 · 穿暖帘门洞去 Gallery 2 · 下沉庭院隔着玻璃看 · 过庭院去西翼 Gallery 3</div>
 
-  <aside id="side" aria-label="建筑档案">
+  <aside id="side" class="closed" aria-label="建筑档案">
     <button type="button" class="mini-x" id="sideHide" aria-label="关闭建筑档案">✕</button>
     <h2>一枚钢板，折成一栋建筑</h2>
     <p class="sub">灵感来自三宅一生 A-POC 的「一块布」——博物馆翼的屋顶是一整张长达 54 米的钢板折叠而成；西侧还有一栋较小的咖啡翼。约八成空间藏在地下，靠三角形下沉庭院把光引进展厅。</p>
@@ -484,8 +520,42 @@ try{
   renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
 }catch(e){
   /* No WebGL (old webview, GPU blocklist, software fallback removed):
-     say so on the loading screen instead of spinning on it forever. */
-  document.getElementById('loadMsg').textContent='无法启动 3D：此浏览器或设备未提供 WebGL。请换用最新版 Safari / Chrome 打开本页。';
+     show a DISTINCT error state, not the loading screen — different
+     ground, error title, static line drawing, explanation, working
+     reload (issue #2.9). The loading screen and the error screen
+     used to be identical, so this read as "still loading", and every
+     button was dead because the script returned before wiring them.
+     The pure-interface controls (theme, archive, hide) are wired here
+     with minimal handlers so the page is not dead without WebGL. */
+  var loadingEl=document.getElementById('loading');
+  loadingEl.classList.add('error');
+  var errMark=loadingEl.querySelector('.mark'); if(errMark) errMark.textContent='3D 无法启动';
+  var errMicro=loadingEl.querySelector('.lmicro'); if(errMicro) errMicro.textContent='WEBGL UNAVAILABLE';
+  document.getElementById('loadMsg').textContent='此浏览器或设备未提供 WebGL，3D 展厅无法启动。请换用最新版 Safari / Chrome 打开本页，或在电脑上查看。';
+  var retryBtn=document.getElementById('loadRetry');
+  retryBtn.style.display='inline-block';
+  retryBtn.textContent='重新加载';
+  retryBtn.addEventListener('click',function(){ location.reload(); });
+  (function(){
+    var tb=document.getElementById('themeToggle');
+    if(tb) tb.addEventListener('click',function(){
+      var day=document.body.classList.toggle('day');
+      tb.setAttribute('aria-pressed',day?'false':'true');
+      tb.setAttribute('aria-label',day?'切换到夜晚':'切换到白天');
+    });
+    var st=document.getElementById('sideToggle'), sd=document.getElementById('side');
+    if(st&&sd) st.addEventListener('click',function(){
+      if(window.innerWidth<=760){ sd.classList.remove('closed'); sd.classList.toggle('open'); }
+      else sd.classList.toggle('closed');
+    });
+    var sh=document.getElementById('sideHide');
+    if(sh&&sd) sh.addEventListener('click',function(){ sd.classList.remove('open'); sd.classList.add('closed'); });
+    var ut=document.getElementById('uiToggle');
+    if(ut) ut.addEventListener('click',function(){
+      var hidden=document.body.classList.toggle('ui-hidden');
+      ut.textContent=hidden?'显示':'隐藏';
+    });
+  })();
   return;
 }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
@@ -726,19 +796,21 @@ function applyLabels(){
   var vis=(typeof mode!=='undefined'&&mode!=='exterior')&&labelsOn&&!document.body.classList.contains('ui-hidden');
   labelSprites.forEach(function(sp){ sp.visible=vis; });
 }
-function labelSprite(text,x,y,z){
+function labelSprite(text,x,y,z,dark){
   var tex=canvasTexture(512,104,function(ctx,w,h){
     /* Fukasawa-quiet signage: no board, no colour block — just small
-       white lettering with a hairline beneath, like the museum's own
-       captions. Legibility comes from ONE tight dark shade (1px
-       offset, 2px blur), never a blurred light halo — the halo is
-       what made the lettering look lit up. */
+       lettering with a hairline beneath, like the museum's own
+       captions. Legibility comes from ONE tight shade (1px offset,
+       2px blur), never a blurred light halo — the halo is what made
+       the lettering look lit up. White ink for the dark basement
+       rooms; dark ink for the bright white G3 room (dark=true),
+       where white lettering would vanish against the white ceiling. */
     ctx.font='300 33px "Hiragino Kaku Gothic ProN","Noto Sans JP","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.shadowColor='rgba(5,7,5,0.55)'; ctx.shadowBlur=2; ctx.shadowOffsetY=1;
-    ctx.fillStyle='rgba(255,255,255,0.96)';
+    ctx.shadowColor=dark?'rgba(255,255,255,0.55)':'rgba(5,7,5,0.55)'; ctx.shadowBlur=2; ctx.shadowOffsetY=1;
+    ctx.fillStyle=dark?'rgba(28,28,30,0.95)':'rgba(255,255,255,0.96)';
     ctx.fillText(text,4,42);
     ctx.shadowBlur=0; ctx.shadowOffsetY=0;
-    ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.fillRect(5,60,110,2);
+    ctx.fillStyle=dark?'rgba(28,28,30,0.55)':'rgba(255,255,255,0.55)'; ctx.fillRect(5,60,110,2);
   });
   var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:true,opacity:0.96}));
   sp.scale.set(2.7,0.55,1); sp.position.set(x,y,z); sp.renderOrder=5; sp.visible=false; scene.add(sp); labelSprites.push(sp); return sp;
@@ -1214,6 +1286,28 @@ function onModelLoaded(gltf){
   restoreCreateImageBitmap(); /* parse finished — the texture decoder choice is locked in */
   clearTimeout(loadSlowTimer);
   model=gltf.scene; scene.add(model);
+  /* The model's distant ground is a 400×400 m slab (MAT_FarGround,
+     flat dark green); from the air its rectangular edge reads as a
+     floating green board in the dark (issue #2.6). Extend the ground
+     with a page-side sheet in the slab's own colour
+     (baseColorFactor 0.16, 0.26, 0.12), 5 cm below the slab so it
+     never z-fights, running far past the fog so the lawn fades into
+     the fog instead of ending in a hard edge. It follows the scene
+     lighting like the slab itself, and it is added before the shadow
+     bake below, so the building's shadow falls on it too. (A single
+     big triangle fan showed radial shading seams in software
+     rendering, so the sheet is a subdivided grid instead.) */
+  var farGround=new THREE.Mesh(
+    new THREE.PlaneGeometry(1600,1600,24,24),
+    new THREE.MeshStandardMaterial({color:new THREE.Color(0.16,0.26,0.12),roughness:1,metalness:0})
+  );
+  farGround.rotation.x=-Math.PI/2; farGround.position.y=-0.05;
+  /* no receiveShadow: the sheet lies mostly outside the shadow
+     camera (-70..70), and shadow sampling across its large quads
+     left visible grid seams in software rendering; the model's own
+     slab keeps the building's shadow where it matters. */
+  farGround.receiveShadow=false;
+  scene.add(farGround);
   model.traverse(function(o){
     if(o.isMesh){
       o.castShadow=true; o.receiveShadow=true;
@@ -1308,7 +1402,7 @@ function onModelLoaded(gltf){
     labelSprite('10 · 漆器便当盒',15,-3.4,3.5);
     labelSprite('11 · 竹篮',28,-3.6,-4.0);
     labelSprite('12 · 茶碗与茶筅',6,-3.4,5.5);
-    labelSprite('G3 · Gallery 3（西翼）',-23,2.4,1.6);
+    labelSprite('G3 · Gallery 3（西翼）',-20,1.2,0.5,true);
   }catch(e){ /* labels are an enhancement */ }
   /* register exhibits for picking */
   exhibits.forEach(function(ex){
@@ -1374,9 +1468,9 @@ var cross=document.getElementById('cross');
 var modeNames={exterior:'外观 · 环视',lobby:'入口大堂',g3:'Gallery 3 · 西翼',gallery:'展厅 · 全景',walk:'展厅 · 步行中',tour:'自动游览 · 进行中'};
 /* Gallery 3 (v15: west / former cafe wing, ground floor) guided viewpoints */
 var g3Spots=[
-  {no:'G3 · 1 / 4',title:'Gallery 3 · 全景与三角接待台',
-   desc:'Gallery 3 在西翼（原咖啡翼，2017 年改建）——不在博物馆翼。从展厅西端望向东端，看清整个四边形展厅：北边长 15.0 米、深 8.0 米，约 111.7 m²，地面是深灰花岗岩；东端入口处两张三角形接待台（每张宽 1.73 米）与北墙平行。（旧机位贴在东端斜顶与 Private Room 隔墙之间，画面被墙面填满，现已移到西端开阔处。）',
-   cam:new THREE.Vector3(-31.5,1.7,4.6), tgt:new THREE.Vector3(-16,0.9,0.5)},
+  {no:'G3 · 1 / 4',title:'Gallery 3 · 全景与斜顶',
+   desc:'Gallery 3 在西翼（原咖啡翼，2017 年改建）——不在博物馆翼。从展厅南侧望向东端：四边形展厅约 111.7 m²，地面是深灰花岗岩，白色石膏斜顶顺着折叠钢板屋顶倾斜，最高 4.26 米；南侧整面玻璃外是 57 m² 的露台，东端是 Private Room 与 Kitchen 的隔墙。（旧机位贴在西端方柱与斜顶之间，画面被柱子挡住一半、顶部露出屋顶与吊顶之间的黑色楔形缝，现已移到南侧开阔处，楔形缝不在框内。）',
+   cam:new THREE.Vector3(-24,1.6,4.2), tgt:new THREE.Vector3(-13,0.8,-2.0)},
   {no:'G3 · 2 / 4',title:'Gallery 3 · 白石膏斜顶与轨道灯',
    desc:'白色石膏斜天花顺着折叠钢板屋顶的内侧倾斜，最高点 4.26 米。一条黑色轨道带 5 盏射灯贯穿展厅，筒灯与北墙上方的暖色灯槽补充照明——和地下展厅靠天窗采光不同，这里是完整的地上层光环境。',
    cam:new THREE.Vector3(-19,1.5,-1.4), tgt:new THREE.Vector3(-28,2.7,2.4)},
@@ -1420,7 +1514,7 @@ var tourStops=[
    cam:new THREE.Vector3(-13,3.4,-20), tgt:new THREE.Vector3(-5,1.2,1)},
   {title:'入口大堂 · 接待台与电梯',dwell:3400,
    desc:'大堂在博物馆翼地面层：接待台立在实心楼板上，西南角是梯形平面的电梯。展厅在地下——接下来走楼梯下去。',
-   cam:new THREE.Vector3(-1.15,1.85,1.15), tgt:new THREE.Vector3(0.9,0.6,-5.5)},
+   cam:new THREE.Vector3(-1.8,1.9,4.8), tgt:new THREE.Vector3(2.0,0.4,-1.5)},
   {title:'30 级楼梯 · 下到地下层',dwell:3000,
    desc:'楼梯共 30 级、每级高 0.16 米，北侧是混凝土栏板、南侧是玻璃栏杆。顺着它下行 4.8 米，就到了地下展厅层。',
    cam:new THREE.Vector3(0.5,1.62,3.9), tgt:new THREE.Vector3(8.8,-2.8,4.0)},
@@ -1444,13 +1538,18 @@ var tourStops=[
    cam:new THREE.Vector3(11,-1.0,-3.5), tgt:new THREE.Vector3(17.5,-4.6,0.8)},
   {title:'前往西翼 · 越过草坪',dwell:1400,
    desc:'地下参观到此结束。镜头升上草坪上空，越过下沉庭院，飞往西侧咖啡翼——Gallery 3 在那里。',
-   cam:new THREE.Vector3(-2,16,-24), tgt:new THREE.Vector3(-20,1,1)},
+   cam:new THREE.Vector3(-2,24,-28), tgt:new THREE.Vector3(-20,1,1)},
   {title:'Gallery 3 · 西翼展厅',dwell:4000,
    desc:'Gallery 3 在西翼（原咖啡厅，2017 年改建），不在博物馆翼：四边形展厅约 111.7 m²，深灰花岗岩地面，白色石膏斜顶最高 4.26 米，北墙有窗缝与磨砂玻璃带，南侧整面玻璃外是 57 m² 露台。',
    cam:new THREE.Vector3(-20.5,1.55,-1.8), tgt:new THREE.Vector3(-28,1.2,2.8)},
   {title:'收尾 · 回到鸟瞰',dwell:5200,
    desc:'游览结束：从空中再看一次两栋建筑——一块布折成的屋顶、藏在地下的展厅、引光的庭院。想自己走走，可以点「进入展厅 · 步行参观」；想再看一遍，点「下一站」会从头开始。',
-   cam:new THREE.Vector3(4,46,-54), tgt:new THREE.Vector3(4,0,-2)}
+   /* the closing aerial is the verified aerial preset view (issue
+      #2.1): the old stop sat at (4,46,-54), and the flight into it
+      from stop 13 ran low over the museum roof, so the frame filled
+      with one grey roof slope. From the aerial preset the flight
+      climbs steeply and the closing frame is the whole site. */
+   cam:new THREE.Vector3(4,74,-34), tgt:new THREE.Vector3(4,0,-2)}
 ];
 var tourHud=document.getElementById('tourHud');
 var tourNoEl=document.getElementById('tourNo');
@@ -1587,14 +1686,15 @@ function setMode(next,keepCam){
   controls.maxPolarAngle=(next==='exterior')?Math.PI*0.52:Math.PI*0.65;
   controls.maxDistance=(next==='exterior')?260:60;
   if(next==='exterior'&&!keepCam){ extDefault=true; flyTo(exteriorCamPos(),new THREE.Vector3(4,1.5,-1)); }
-  /* Lobby camera stands on the solid west strip just inside the entrance
-     (verified against the GLB: SM_Ground_Slab covers x -2..0.25 full depth).
-     The previous viewpoint (7.6,1.9,-0.4) hovered over the atrium/stair
-     opening in the slab (x 0.25..8, z -4.75..4.9), so the foreground was
-     the open drop to the basement and the lobby floor read as missing.
-     From the entrance the reception desk (0.5,-5.8) and the elevator door
-     (-0.44,-3.6) face the camera across solid floor. */
-  if(next==='lobby') flyTo(new THREE.Vector3(-1.15,1.85,1.15),new THREE.Vector3(0.9,0.6,-5.5));
+  /* Lobby camera stands in the south of the lobby, looking north-east
+     across the reception desk toward the atrium opening (issue #2.7).
+     The previous viewpoint (-1.15,1.85,1.15) faced the dark elevator
+     door dead-on at 4.2 m, so a tall black panel filled the centre of
+     the frame. From the south the trapezoidal elevator shaft is still
+     visible at the frame's right, but the black door itself is out of
+     frame; the reception desk, the south glass and the atrium opening
+     (with the basement stair below it) carry the shot. */
+  if(next==='lobby') flyTo(new THREE.Vector3(-1.8,1.9,4.8),new THREE.Vector3(2.0,0.4,-1.5));
   if(next==='g3'){ var gs=g3Spots[g3Idx]; flyTo(gs.cam,gs.tgt,1400); showG3Spot(g3Idx); }
   /* v16 Gallery 2: the east rectangle, x 24..52, z -15..1; camera inside the SW corner */
   if(next==='gallery') flyTo(new THREE.Vector3(27,-0.7,-14.8),new THREE.Vector3(46,-3.9,-2.5));
@@ -2027,6 +2127,21 @@ function animate(){
       }
     }
     lampMeshes.forEach(function(o,i){ var s=1+Math.sin(t*2+i)*0.08; o.scale.set(s,s,s); });
+    /* In-scene labels: cap their screen size at close range and fade
+       them out when the camera is right on top of them (issue #2.3).
+       A sprite's screen size grows as 1/distance, so standing at an
+       exhibit's stand point (2.6 m from its label) used to fill the
+       frame with a clipped fragment of the text. Below 8 m the sprite
+       is shrunk in proportion to distance, holding its angular size
+       at the value it has at 8 m; below 2 m it fades out, gone at 1 m. */
+    for(var li=0;li<labelSprites.length;li++){
+      var sp=labelSprites[li];
+      if(!sp.visible) continue;
+      var ld=camera.position.distanceTo(sp.position);
+      var ls=Math.min(1,ld/8);
+      sp.scale.set(2.7*ls,0.55*ls,1);
+      sp.material.opacity=0.96*Math.max(0,Math.min(1,(ld-1)/1));
+    }
     renderer.render(scene,camera);
   }catch(err){
     showErr('渲染出错：'+err.message);
