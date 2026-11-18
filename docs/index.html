@@ -145,8 +145,8 @@
   #stage{position:absolute;inset:0}
   #stage canvas{display:block;width:100%;height:100%}
   /* ---- atmosphere: vignette + grain over the scene, never the UI ---- */
-  #vignette{position:absolute;inset:0;z-index:5;pointer-events:none;background:radial-gradient(ellipse at 50% 42%,transparent 52%,rgba(24,28,22,.13) 100%)}
-  #grain{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:.032;mix-blend-mode:overlay;background-image:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E")}
+  #vignette{position:absolute;inset:0;z-index:5;pointer-events:none;background:radial-gradient(ellipse at 50% 42%,transparent 52%,rgba(28,30,32,.12) 100%)}
+  #grain{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:.030;mix-blend-mode:overlay;background-image:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E")}
   /* ---- vertical Japanese margin text (Kage) ---- */
   #vertical{position:absolute;left:var(--edge);top:50%;transform:translateY(-50%);z-index:15;writing-mode:vertical-rl;font-size:13px;font-weight:300;letter-spacing:.46em;color:var(--wt);opacity:.8;pointer-events:none;text-shadow:var(--shade)}
   #err{position:absolute;left:12px;top:110px;z-index:50;max-width:520px;background:#2b1611;border:1px solid #71402f;color:#f2bda9;padding:10px 12px;border-radius:0;font-size:13px;line-height:1.5;display:none;white-space:pre-wrap}
@@ -523,12 +523,13 @@ function makeSkyTexture(){
   var x=c.getContext('2d');
   x.scale(0.5,0.5); /* paint at half resolution: a quarter of the pixels */
   var g=x.createLinearGradient(0,0,0,H);
-  g.addColorStop(0.00,'#3565a6');
-  g.addColorStop(0.30,'#6f9fd2');
-  g.addColorStop(0.46,'#bcd6ee');
-  g.addColorStop(0.52,'#e2ecf4');
-  g.addColorStop(0.58,'#ccd6da');
-  g.addColorStop(1.00,'#aeb9bc');
+  /* #7: Tokyo thin-haze grey-blue — the old postcard blue is gone */
+  g.addColorStop(0.00,'#4d6478');
+  g.addColorStop(0.30,'#7f96a9');
+  g.addColorStop(0.46,'#b6c6cf');
+  g.addColorStop(0.52,'#dfe6e8');
+  g.addColorStop(0.58,'#c3cbcc');
+  g.addColorStop(1.00,'#a3adae');
   x.fillStyle=g; x.fillRect(0,0,W,H);
   var seed=1234567;
   function rnd(){ seed=(seed*16807)%2147483647; return seed/2147483647; }
@@ -572,19 +573,51 @@ function makeSkyTexture(){
   if('colorSpace' in t) t.colorSpace=THREE.SRGBColorSpace; else t.encoding=THREE.sRGBEncoding;
   return t;
 }
+
+/* #7: night sky as a gradient, not a flat colour — deep blue-grey with a
+   faint warm band at the horizon, so the folded roof's outline stays
+   readable against the sky instead of sinking into black. Built lazily
+   like the day sky. #4's MOMENTS night bg should use nightSkyTex at
+   rebase (same pattern as the day sky texture). */
+function makeNightSkyTexture(){
+  var W=1024,H=512;
+  var c=document.createElement('canvas'); c.width=W; c.height=H;
+  var x=c.getContext('2d');
+  var g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0.00,'#1d2632');
+  g.addColorStop(0.45,'#2c3947');
+  g.addColorStop(0.52,'#3d4c5a');
+  g.addColorStop(0.58,'#4a5a66');
+  g.addColorStop(1.00,'#232c36');
+  x.fillStyle=g; x.fillRect(0,0,W,H);
+  var wg=x.createLinearGradient(0,H*0.46,0,H*0.58);
+  wg.addColorStop(0,'rgba(214,164,110,0)');
+  wg.addColorStop(0.5,'rgba(214,164,110,0.10)');
+  wg.addColorStop(1,'rgba(214,164,110,0)');
+  x.fillStyle=wg; x.fillRect(0,H*0.46,W,H*0.12);
+  var t=new THREE.CanvasTexture(c);
+  t.mapping=THREE.EquirectangularReflectionMapping;
+  if('colorSpace' in t) t.colorSpace=THREE.SRGBColorSpace; else t.encoding=THREE.sRGBEncoding;
+  return t;
+}
+var nightSkyTex=null;
+function buildNightSky(){
+  if(nightSkyTex) return;
+  try{ nightSkyTex=makeNightSkyTexture(); }catch(e){ return; }
+}
 /* The sky is NOT painted during startup: painting hundreds of gradient
    blobs on the main thread before the model fetch even began was enough
    to stall first paint / DOMContentLoaded on slow CPUs and made the page
    look stuck on the loading screen. Start from a flat sky colour, build
    the real sky a moment later (see the deferred call below). */
 var skyTex=null;
-scene.background=new THREE.Color(0xa9c2dc);
+scene.background=new THREE.Color(0x9db1bd);
 function buildSky(){
   if(skyTex) return;
   try{ skyTex=makeSkyTexture(); }catch(e){ return; }
   if(!isNightRef()) scene.background=skyTex;
 }
-scene.fog=new THREE.Fog(0xd8e6f0,120,280);
+scene.fog=new THREE.Fog(0xc8d3d6,120,280);
 /* Environment (IBL) is generated AFTER window load, from a downscaled copy
    of the sky: PMREM generation is GPU work that must not block first paint. */
 var skyEnvTex=null;
@@ -612,12 +645,14 @@ function isNightRef(){ return typeof isNight!=='undefined'&&isNight; }
    the GLB parse, and the opaque loading overlay covers the screen until
    then, so building them earlier only delayed the model itself. */
 
-var camera=new THREE.PerspectiveCamera(50,1,0.1,500);
-camera.position.set(16,11,-60);
+var camera=new THREE.PerspectiveCamera(38,1,0.1,500); /* #7: architectural 38° (was 50°) */
+camera.position.set(20,14.5,-81); /* #7: matches exteriorCamPos */
 var EXT_TARGET=new THREE.Vector3(4,1.5,-1);
 var extDefault=true;
 function exteriorCamPos(){
-  if(camera.aspect>=0.85) return new THREE.Vector3(16,11,-60);
+  /* #7: pulled back along the same sightline so both wings still fit
+     at the 38° lens (distance x1.35 vs the 50° position) */
+  if(camera.aspect>=0.85) return new THREE.Vector3(20,14.5,-81);
   /* Portrait: the two wings span ~85 m along x, which overflows the narrow
      horizontal FOV of a portrait screen at any fixed distance. Solve the
      camera distance from the projected corners of the buildings' bounding
@@ -649,7 +684,7 @@ controls.addEventListener('start',function(){ if(mode==='exterior') extDefault=f
 
 /* lights — strong directional sun with sharp shadows, sky IBL (scene.environment)
    for ambient/reflections; low fills so the contrast stays photographic */
-var hemi=new THREE.HemisphereLight(0xdfeaf5,0x8a9077,0.35); scene.add(hemi);
+var hemi=new THREE.HemisphereLight(0xdde3e6,0x8a8a80,0.35); /* #7: greyer sky/ground */ scene.add(hemi);
 var sun=new THREE.DirectionalLight(0xfff2dd,3.0);
 sun.position.set(50,62,30); sun.castShadow=true;
 sun.shadow.mapSize.set(2048,2048);
@@ -657,7 +692,7 @@ if(isSoftwareGL) sun.shadow.mapSize.set(1024,1024);
 sun.shadow.camera.left=-70; sun.shadow.camera.right=70; sun.shadow.camera.top=70; sun.shadow.camera.bottom=-70;
 sun.shadow.camera.far=220; sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.03;
 scene.add(sun);
-var fill=new THREE.DirectionalLight(0xbfd4e6,0.3); fill.position.set(-40,24,-36); scene.add(fill);
+var fill=new THREE.DirectionalLight(0xc3d2d8,0.3); /* #7: greyer fill */ fill.position.set(-40,24,-36); scene.add(fill);
 scene.add(new THREE.AmbientLight(0xffffff,0.06));
 /* interior lights for the basement galleries (the model is enclosed) */
 var intLights=[];
@@ -1208,6 +1243,56 @@ function pruneExteriorTrees(){
     if(key!==null&&!KEEP_TREE_KEYS[key]) o.visible=false;
   });
 }
+
+/* #7: mute a texture's saturation in place (draw -> mix toward luma ->
+   re-upload). Used for the turf / flower-bed maps: their baked colours
+   are postcard-saturated and no colour multiplier can desaturate a
+   texture (multiplication can only darken). Runs once at load. */
+function desaturateTexture(tex,amount){
+  if(!tex||!tex.image||amount<=0) return;
+  try{
+    var img=tex.image, w=img.width, h=img.height;
+    if(!w||!h||w>1024||h>1024) return;
+    var c=document.createElement('canvas'); c.width=w; c.height=h;
+    var x=c.getContext('2d',{willReadFrequently:true});
+    x.drawImage(img,0,0);
+    var d=x.getImageData(0,0,w,h), px=d.data;
+    for(var i=0;i<px.length;i+=4){
+      var l=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
+      px[i]+=(l-px[i])*amount; px[i+1]+=(l-px[i+1])*amount; px[i+2]+=(l-px[i+2])*amount;
+    }
+    x.putImageData(d,0,0);
+    tex.image=c; tex.needsUpdate=true;
+  }catch(e){ /* unreadable texture: leave it alone */ }
+}
+/* #7: page-side material pass (see issue #7 for what stays model-side).
+   - Steel roof -> matte dark grey (roughness up, metalness down, tone deepened).
+   - Turf / far ground / flower beds -> desaturated (texture-level for the
+     two maps; colour factor for the untextured far ground). The flower
+     beds drop from signal red to dusty rose: red stays with the G2 sphere.
+   - Concrete is already neutral grey in the baked textures: left alone.
+     Template grid, tie-hole alignment and tiling repetition need the model.
+   - Exhibits: geometry is the limiter; ceramic/lacquer/bamboo/paper params
+     are already differentiated in the GLB. Left alone. */
+function applyAestheticMaterials(){
+  if(!model) return;
+  var done={};
+  model.traverse(function(o){
+    if(!o.isMesh||!o.material||Array.isArray(o.material)) return;
+    var m=o.material, mn=m.name||'';
+    if(mn==='MAT_Steel_Roof'&&!done.roof){
+      done.roof=true;
+      m.roughness=0.88; m.metalness=0.05;
+      if(m.color) m.color.multiplyScalar(0.72);
+    }
+    if(mn==='MAT_Grass'&&m.map&&!done.grass){ done.grass=true; desaturateTexture(m.map,0.45); }
+    if(mn==='MAT_Flowers'&&m.map&&!done.flowers){ done.flowers=true; desaturateTexture(m.map,0.55); }
+    if(mn==='MAT_FarGround'&&!done.far){
+      done.far=true;
+      if(m.color) m.color.setRGB(0.20,0.22,0.19);
+    }
+  });
+}
 function onModelLoaded(gltf){
   if(loadDone) return;
   loadDone=true;
@@ -1294,6 +1379,7 @@ function onModelLoaded(gltf){
   try{ fixG3RoofClip(); }catch(e){ /* roof correction is an enhancement */ }
   try{ fixStairFootWall(); }catch(e){ /* stair correction is an enhancement */ }
   try{ pruneExteriorTrees(); }catch(e){ /* tree pruning is an enhancement */ }
+  try{ applyAestheticMaterials(); }catch(e){ /* aesthetic material pass is an enhancement */ }
   /* exhibit labels */
   try{
     labelSprite('01 · 一块布 A-POC',32,-0.5,-9.5);
@@ -1429,7 +1515,7 @@ var tourStops=[
    cam:new THREE.Vector3(14,-1.7,5.8), tgt:new THREE.Vector3(28,-3.4,3.8)},
   {title:'Gallery 2 · 全景（地下层已放大）',dwell:3400,
    desc:'Gallery 2 层高 4.8 米，是全馆最大的展厅。地下层按官方总楼面放大到约 1,336 m²，轮廓向东一直延到 x=52；0.55 米方柱成列排开，沿柱线有一条连续天窗缝。空间做大后展品也翻倍——全馆共 12 件：01–08 与 11 在这间东侧大厅里，09 暖帘挂在两厅之间，10 在 Gallery 1，12 在楼梯底旁。',
-   cam:new THREE.Vector3(27,-0.7,-14.8), tgt:new THREE.Vector3(46,-3.9,-2.5)},
+   cam:new THREE.Vector3(30,-0.9,-14.2), tgt:new THREE.Vector3(47,-3.9,-3.5)} /* #7: reframe — red fabric to the right edge as a frame, not a wall */,
   {title:'展品 01 · 一块布 / 02 · 光的织物',dwell:3800,
    desc:'01《一块布 · A-POC 织物》：一块布直接织造成衣，正是折叠钢板屋顶的灵感来源。02《光的织物》：七盏球形吊灯如经纬般垂落——地下展厅里，光本身就是展品。',
    cam:new THREE.Vector3(31,-3.18,-5.2), tgt:new THREE.Vector3(34,-2.4,-8.6)},
@@ -1441,13 +1527,13 @@ var tourStops=[
    cam:new THREE.Vector3(43,-3.18,-7.6), tgt:new THREE.Vector3(46,-3.9,-10.0)},
   {title:'下沉庭院 · 露天深坑',dwell:3400,
    desc:'三角形下沉庭院是一个真正的露天坑，坑底就是地下层地面。庭院和中庭把阳光送进地下展厅——这是这栋地下建筑真正的「立面」。站在 Gallery 2 里，隔着整面玻璃正对坑底。',
-   cam:new THREE.Vector3(11,-1.0,-3.5), tgt:new THREE.Vector3(17.5,-4.6,0.8)},
+   cam:new THREE.Vector3(15.67,1.07,-3.78), tgt:new THREE.Vector3(10,1.5,0)}, /* #7: pit-floor-looking-up is impossible — OrbitControls maxPolarAngle (PI*0.52) clamps the camera to level with the target; this IS the clamped position, verified by screenshot (pit opening, west-wall skylight slit, stair, sky) */
   {title:'前往西翼 · 越过草坪',dwell:1400,
    desc:'地下参观到此结束。镜头升上草坪上空，越过下沉庭院，飞往西侧咖啡翼——Gallery 3 在那里。',
    cam:new THREE.Vector3(-2,16,-24), tgt:new THREE.Vector3(-20,1,1)},
   {title:'Gallery 3 · 西翼展厅',dwell:4000,
    desc:'Gallery 3 在西翼（原咖啡厅，2017 年改建），不在博物馆翼：四边形展厅约 111.7 m²，深灰花岗岩地面，白色石膏斜顶最高 4.26 米，北墙有窗缝与磨砂玻璃带，南侧整面玻璃外是 57 m² 露台。',
-   cam:new THREE.Vector3(-20.5,1.55,-1.8), tgt:new THREE.Vector3(-28,1.2,2.8)},
+   cam:new THREE.Vector3(-31.5,1.7,4.6), tgt:new THREE.Vector3(-16,0.9,0.5)}, /* #7: same as G3 spot 1 — old cam faced the blank west wall (see g3Spots[0] note) */
   {title:'收尾 · 回到鸟瞰',dwell:5200,
    desc:'游览结束：从空中再看一次两栋建筑——一块布折成的屋顶、藏在地下的展厅、引光的庭院。想自己走走，可以点「进入展厅 · 步行参观」；想再看一遍，点「下一站」会从头开始。',
    cam:new THREE.Vector3(4,46,-54), tgt:new THREE.Vector3(4,0,-2)}
@@ -1574,7 +1660,7 @@ function setMode(next,keepCam){
   document.querySelectorAll('#modebar button').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.mode===next?'true':'false'); });
   badge.textContent=modeNames[next];
   var inside=(next!=='exterior');
-  scene.fog=inside? null : new THREE.Fog(isNight?0x2b3442:0xd8e6f0,120,280);
+  scene.fog=inside? null : new THREE.Fog(isNight?0x39434e:0xc8d3d6,120,280);
   applyLabels();
   walkHud.classList.toggle('show',next==='walk');
   document.body.classList.toggle('walking',next==='walk');
@@ -1597,7 +1683,7 @@ function setMode(next,keepCam){
   if(next==='lobby') flyTo(new THREE.Vector3(-1.15,1.85,1.15),new THREE.Vector3(0.9,0.6,-5.5));
   if(next==='g3'){ var gs=g3Spots[g3Idx]; flyTo(gs.cam,gs.tgt,1400); showG3Spot(g3Idx); }
   /* v16 Gallery 2: the east rectangle, x 24..52, z -15..1; camera inside the SW corner */
-  if(next==='gallery') flyTo(new THREE.Vector3(27,-0.7,-14.8),new THREE.Vector3(46,-3.9,-2.5));
+  if(next==='gallery') flyTo(new THREE.Vector3(30,-0.9,-14.2),new THREE.Vector3(47,-3.9,-3.5)); /* #7: same reframe as tour stop 7 */
   if(next==='walk') enterWalk();
   if(next==='tour'){ setTourFolded(true); startTour(); }
 }
@@ -1618,6 +1704,24 @@ var nightViewBtn=document.querySelector('#side .views button[data-view="night"]'
    never drift the intensities apart. Fog follows the mode: there
    is none indoors, and setMode re-derives it from isNight when
    the visitor steps back outside. */
+
+/* #7: vignette + grain tint follows the light moment — the old fixed
+   green-grey is gone. The table covers all four moments so #4's
+   setMoment(name) can call applyAtmosphereTint(name) directly at
+   rebase; main's day/night toggle calls it with 'day'/'night'. */
+var ATMOSPHERE_TINTS={
+  morning:{vig:'rgba(56,48,38,0.12)',grain:0.030},
+  noon:{vig:'rgba(28,30,32,0.12)',grain:0.030},
+  day:{vig:'rgba(28,30,32,0.12)',grain:0.030},
+  dusk:{vig:'rgba(64,44,30,0.15)',grain:0.036},
+  night:{vig:'rgba(14,18,28,0.16)',grain:0.026}
+};
+function applyAtmosphereTint(name){
+  var t=ATMOSPHERE_TINTS[name]||ATMOSPHERE_TINTS.night;
+  var v=document.getElementById('vignette'), g=document.getElementById('grain');
+  if(v) v.style.background='radial-gradient(ellipse at 50% 42%,transparent 52%,'+t.vig+' 100%)';
+  if(g) g.style.opacity=t.grain;
+}
 function setNight(n){
   n=!!n;
   var changed=(n!==isNight);
@@ -1629,8 +1733,8 @@ function setNight(n){
   var mc=document.querySelector('meta[name="color-scheme"]');
   if(mc) mc.setAttribute('content',n?'dark':'light');
   if(n){
-    scene.background=new THREE.Color(0x2b3442);
-    if(mode==='exterior') scene.fog=new THREE.Fog(0x2b3442,120,280);
+    buildNightSky(); scene.background=nightSkyTex||new THREE.Color(0x39434e); /* #7: gradient night sky */
+    if(mode==='exterior') scene.fog=new THREE.Fog(0x39434e,120,280); /* #7: lighter night fog */
     sun.intensity=0.55; sun.position.set(-40,30,-24); hemi.intensity=0.14;
     renderer.toneMappingExposure=0.95;
     if(skyEnvTex) scene.environment=skyEnvTex;
@@ -1638,14 +1742,15 @@ function setNight(n){
     if(changed) intLights.forEach(function(l){ l.intensity*=1.6; });
   }else{
     buildSky(); /* the day background is restored from the sky texture */
-    scene.background=skyTex||new THREE.Color(0xa9c2dc);
-    if(mode==='exterior') scene.fog=new THREE.Fog(0xd8e6f0,120,280);
+    scene.background=skyTex||new THREE.Color(0x9db1bd);
+    if(mode==='exterior') scene.fog=new THREE.Fog(0xc8d3d6,120,280);
     sun.intensity=sunDay.sun; sun.position.copy(sunDay.pos); hemi.intensity=sunDay.hemi;
     renderer.toneMappingExposure=sunDay.exp;
     if(skyEnvTex) scene.environment=skyEnvTex;
     if('environmentIntensity' in scene) scene.environmentIntensity=0.5;
     if(changed) intLights.forEach(function(l){ l.intensity/=1.6; });
   }
+  applyAtmosphereTint(n?'night':'day'); /* #7: vignette/grain tint follows the moment */
   renderer.shadowMap.needsUpdate=true; /* sun moved — re-bake shadows */
 }
 themeBtn.addEventListener('click',function(){ setNight(!isNight); });
@@ -1977,11 +2082,37 @@ function updateWalk(dt,nowMs){
   }
 }
 
+
+/* #7: keep verticals vertical — a shift-lens. Architectural photography
+   does not tilt the camera: it keeps the film level and shifts the lens.
+   After the frame's camera orientation is set, level the camera to its
+   yaw and shift the film window vertically so the aim point stays
+   centred. The framing (centre + FOV) is unchanged; only the
+   convergence is gone. Skipped in walk mode (first-person pitch is the
+   visitor's own) and when looking steeply down (aerial: no verticals
+   to keep). #5's raycast picking reads the same projection matrix, so
+   click-to-move keeps working through the offset at rebase. */
+var SHIFT_MAX_PITCH=0.44; /* ~25 degrees */
+function applyShiftLens(){
+  if(mode==='walk'||!camera){ camera.clearViewOffset(); return; }
+  var fwd=new THREE.Vector3(); camera.getWorldDirection(fwd);
+  var pitch=Math.asin(Math.max(-1,Math.min(1,fwd.y)));
+  if(Math.abs(pitch)<0.01||Math.abs(pitch)>SHIFT_MAX_PITCH){ camera.clearViewOffset(); return; }
+  var yaw=Math.atan2(-fwd.x,-fwd.z);
+  camera.rotation.set(0,yaw,0,'YXZ');
+  var rel=controls.target.clone().sub(camera.position);
+  var dist=Math.hypot(rel.x,rel.z);
+  if(dist<0.1){ camera.clearViewOffset(); return; }
+  var ndcY=(rel.y/dist)/Math.tan(camera.fov*Math.PI/360);
+  var w=renderer.domElement.width, h=renderer.domElement.height;
+  camera.setViewOffset(w,h,0,-ndcY*h/2,w,h);
+  camera.updateProjectionMatrix();
+}
 /* ================= Resize & loop ================= */
 function resize(){
   var w=stage.clientWidth||window.innerWidth, h=stage.clientHeight||window.innerHeight;
   renderer.setSize(w,h); camera.aspect=w/h;
-  camera.fov=camera.aspect<0.85?70:50; /* wider FOV in portrait so the two wings can fit */
+  camera.fov=camera.aspect<0.85?60:38; /* #7: 38° landscape; portrait 60° so the two wings still fit */
   camera.updateProjectionMatrix();
   /* keep the default exterior framing fitted when the viewport changes
      (rotation, webview resize) — unless the user has orbited or picked a
@@ -2008,6 +2139,7 @@ function animate(){
     if(mode==='walk') updateWalk(dt,nowMs);
     else if(mode==='tour'){ updateTour(nowMs); camera.lookAt(controls.target); }
     else controls.update();
+    applyShiftLens(); /* #7: keep verticals vertical (shift-lens) */
     if(spinnerPivot) spinnerPivot.rotation.y=t*0.45;
     if(petals){
       var pTarget=(mode==='exterior')?0.75:0;
