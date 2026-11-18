@@ -7,6 +7,7 @@
 <link rel="icon" href="data:,"/>
 <title>21_21 DESIGN SIGHT 3D — 可进入的建筑与展厅</title>
 <script src="assets/three.min.js"></script>
+<script src="assets/meshopt_decoder.js"></script>
 <style>
   /* ============================================================
      21_21 DESIGN SIGHT — interface as a drawing sheet's margins.
@@ -151,6 +152,9 @@
   #vertical{position:absolute;left:var(--edge);top:50%;transform:translateY(-50%);z-index:15;writing-mode:vertical-rl;font-size:13px;font-weight:300;letter-spacing:.46em;color:var(--wt);opacity:.8;pointer-events:none;text-shadow:var(--shade)}
   #err{position:absolute;left:12px;top:110px;z-index:50;max-width:520px;background:#2b1611;border:1px solid #71402f;color:#f2bda9;padding:10px 12px;border-radius:0;font-size:13px;line-height:1.5;display:none;white-space:pre-wrap}
   body.day #err{background:#fdf3f1;border-color:#e3c4bd;color:#8a3b2e}
+  /* ---- debug HUD (issue #3): renderer.info readout, hidden unless ?debug=1 / #debug / D ---- */
+  #dbgHud{position:absolute;left:12px;bottom:12px;z-index:60;display:none;font-family:var(--mono);font-size:11px;line-height:1.7;letter-spacing:.04em;color:#f4f2ea;background:rgba(10,12,10,.55);padding:6px 10px;pointer-events:none;white-space:pre}
+  body.debug #dbgHud{display:block}
 
   /* ---- loading: a sheet of paper, one thin ink line ---- */
   #loading{position:absolute;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:var(--paper);transition:opacity .5s}
@@ -374,6 +378,7 @@
   <div id="vertical" aria-hidden="true">一枚の布、一筋の光</div>
 
   <div id="err" role="alert"></div>
+  <div id="dbgHud" aria-hidden="true"></div>
   <div id="loading"><div class="mark">21_21 <i>DESIGN SIGHT</i></div><div class="lmicro">TOKYO MIDTOWN · TADAO ANDO</div><p id="loadMsg">正在载入建筑模型…</p><div id="loadBarWrap"><div id="loadBar"></div></div><button id="loadRetry" type="button">重新加载</button></div>
   <div id="cross">+</div>
   <div id="walkTip">W A S D 或左下按钮移动 · 拖动画面转头 · 楼梯口可上下层 · 穿暖帘门洞去 Gallery 2 · 下沉庭院隔着玻璃看 · 过庭院去西翼 Gallery 3</div>
@@ -772,13 +777,15 @@ function restoreCreateImageBitmap(){
   _hiddenCIB=null;
 }
 /* Asset architecture: the model is NOT embedded in this page. The
-   7.55 MB GLB ships as its own file, assets/design2121.glb, and is
-   fetched by the relative path in fetchModel() below; three.min.js
-   is likewise an external file. This HTML therefore stays ~117 KB —
-   no base64 model blob, no data-URI geometry. (The single-file
-   11 MB HTML that the platform's export produces inlines these
-   assets at export time; that is an export packaging choice, not
-   how this page is written or served.)
+   ~1.99 MB Meshopt-compressed GLB ships as its own file,
+   assets/design2121.glb, and is fetched by the relative path in
+   fetchModel() below; three.min.js is likewise an external file,
+   as is the Meshopt decoder it needs (assets/meshopt_decoder.js,
+   registered on the loader in parseModel). This HTML therefore
+   stays ~120 KB — no base64 model blob, no data-URI geometry.
+   (The single-file 11 MB HTML that the platform's export produces
+   inlines these assets at export time; that is an export packaging
+   choice, not how this page is written or served.)
 
    Robust loading — final architecture, after the failure was finally
    reproduced end-to-end (headless Chromium against a gateway simulator
@@ -1008,6 +1015,12 @@ function parseModel(){
     loadFailed(new Error('模型解析超时'));
   },PARSE_TIMEOUT_MS);
   var ld=new THREE.GLTFLoader();
+  /* [#3] The GLB is Meshopt-compressed (EXT_meshopt_compression);
+     register the decoder so the loader can unpack it. The decoder
+     ships as assets/meshopt_decoder.js (self-contained: its wasm is
+     embedded as base64, no separate .wasm file). Guarded so a missing
+     decoder file fails as a parse error, not a script error. */
+  if(window.MeshoptDecoder) ld.setMeshoptDecoder(MeshoptDecoder);
   try{
     ld.parse(asmBuffer.slice(0),'',function(gltf){
       if(settled) return;
@@ -1230,7 +1243,10 @@ function onModelLoaded(gltf){
         o.material.depthWrite=false;
       }
       var mn=o.material&&o.material.name;
-      if(mn==='MAT_Pendant_Light'&&o.material.emissive){ o.material=o.material.clone(); o.material.emissive=new THREE.Color(0xffc98a); o.material.emissiveIntensity=0.9; lampMeshes.push(o); }
+      /* Meshopt-quantized GLB bakes each mesh's half-extent into its node scale
+         (lamps 0.15, downlights 0.07); the pulse must multiply that base scale,
+         not overwrite it — overwriting inflates lamps ~6.7x / downlights ~14x. */
+      if(mn==='MAT_Pendant_Light'&&o.material.emissive){ o.material=o.material.clone(); o.material.emissive=new THREE.Color(0xffc98a); o.material.emissiveIntensity=0.9; o.userData.baseScale=o.scale.x; lampMeshes.push(o); }
       if((mn==='MAT_LightStrip'||mn==='MAT_Skylight')&&o.material.emissive){ o.material=o.material.clone(); o.material.emissive=new THREE.Color(0xfff3d0); o.material.emissiveIntensity=0.55; }
       /* capture group must keep the leading zero: exhibitMeshes is keyed
          '01'..'12' to match the exhibits data (key:'01'…). Capturing only
@@ -1992,6 +2008,28 @@ window.addEventListener('resize',resize); resize();
 camera.position.copy(exteriorCamPos());
 
 var lastNow=performance.now(), elapsed=0;
+/* ================= Debug HUD (issue #3) =================
+   Shows renderer.info (draw calls / triangles) for the model-
+   compression work. Hidden by default; enable with ?debug=1 in
+   the URL, #debug, or by pressing D. Updated at most twice a
+   second so it never costs a layout per frame. */
+var dbgHud=document.getElementById('dbgHud');
+var dbgLast=0;
+function setDebug(on){
+  document.body.classList.toggle('debug',!!on);
+  if(dbgHud&&!on) dbgHud.textContent='';
+}
+if(/[?&]debug=1/.test(location.search)||location.hash==='#debug') setDebug(true);
+window.addEventListener('keydown',function(e){
+  if(e.key&&e.key.toLowerCase()==='d'&&!e.metaKey&&!e.ctrlKey&&!e.altKey) setDebug(!document.body.classList.contains('debug'));
+});
+function updateDbgHud(nowMs){
+  if(!document.body.classList.contains('debug')||!dbgHud||!renderer) return;
+  if(nowMs-dbgLast<500) return;
+  dbgLast=nowMs;
+  var r=renderer.info.render, m=renderer.info.memory;
+  dbgHud.textContent='calls '+r.calls+' · tris '+r.triangles+' · geo '+m.geometries+' · tex '+m.textures;
+}
 function animate(){
   requestAnimationFrame(animate);
   try{
@@ -2026,8 +2064,9 @@ function animate(){
         petals.geometry.attributes.position.needsUpdate=true;
       }
     }
-    lampMeshes.forEach(function(o,i){ var s=1+Math.sin(t*2+i)*0.08; o.scale.set(s,s,s); });
+    lampMeshes.forEach(function(o,i){ var s=1+Math.sin(t*2+i)*0.08; var b=o.userData.baseScale||1; o.scale.set(b*s,b*s,b*s); });
     renderer.render(scene,camera);
+    updateDbgHud(nowMs);
   }catch(err){
     showErr('渲染出错：'+err.message);
   }
