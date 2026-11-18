@@ -52,7 +52,26 @@
        targets grow to 44px without growing the glyphs.
      — progress is drawn his way: a solid segment on a hairline
        remainder, ending in a small square knob.
+     #6 (page design): one chapter on screen at a time — exterior is
+     title + mode bar, tour is only the subtitle card, walk is only
+     the walk controls + current exhibit name; the introduction shows
+     on first entry only. Opening: a 7 s glide along the roof edge
+     after load, the scene sharpening from blur as the deferred work
+     finishes. Fonts: subsetted Noto Serif/Sans JP served locally
+     (assets/fonts/), zero external requests. The vertical margin
+     text appears only at chapter transitions. Vermilion stays
+     current-state only — the one exception is the brand's red
+     square, kept as Leon's approved logo mark (see issue #6).
      ============================================================ */
+  /* ---- #6.3 webfonts: subsetted Noto Serif JP / Noto Sans JP ----
+     Variable-weight woff2, served locally from assets/fonts/ — zero
+     external requests, works offline. Generated from the variable
+     fonts with pyftsubset, covering exactly the glyphs this page
+     uses (source + unicodes list live in page-design/fonts/).
+     font-display:swap + full system fallbacks: if the files are not
+     yet uploaded, the page falls back silently and nothing blocks. */
+  @font-face{font-family:'Noto Serif JP';font-style:normal;font-weight:200 900;font-display:swap;src:url('assets/fonts/noto-serif-jp.woff2') format('woff2')}
+  @font-face{font-family:'Noto Sans JP';font-style:normal;font-weight:100 900;font-display:swap;src:url('assets/fonts/noto-sans-jp.woff2') format('woff2')}
   :root{
     /* Night is the default ground (Leon's direction): the sheet is
        near-black, the ink a warm off-white, and the grey ladder runs
@@ -67,7 +86,7 @@
     --line:rgba(236,234,227,.16); --line2:rgba(236,234,227,.34);
     --onink:#111113; --verm:#e8503a; --ghost:rgba(236,234,227,.06);
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    --serif:"Hiragino Mincho ProN","YuMincho","Yu Mincho","Noto Serif JP","Noto Serif SC","Songti SC",serif;
+    --serif:"Noto Serif JP","Hiragino Mincho ProN","YuMincho","Yu Mincho","Noto Serif SC","Songti SC",serif;
     --edge:22px;
     color-scheme:dark;
     /* Type that rests directly on the scene is plain white with ONE
@@ -89,7 +108,7 @@
   }
   *{box-sizing:border-box}
   html,body{height:100%}
-  body{margin:0;font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","YuGothic","Noto Sans JP","PingFang SC","Microsoft YaHei",sans-serif;background:#0d0d0f;color:var(--ink);overflow:hidden;font-weight:400;-webkit-font-smoothing:antialiased}
+  body{margin:0;font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","YuGothic","PingFang SC","Microsoft YaHei",sans-serif;background:#0d0d0f;color:var(--ink);overflow:hidden;font-weight:400;-webkit-font-smoothing:antialiased}
   body.day{background:#dfe3dc}
   button,[role="button"],select,summary,input:not([type="checkbox"],[type="radio"]){min-height:36px}
   button{font:inherit;cursor:pointer;color:inherit}
@@ -105,7 +124,7 @@
   /* ---- header: type resting directly on the scene, no plate ---- */
   header{position:absolute;top:0;left:0;right:0;z-index:20;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px var(--edge);pointer-events:none}
   .brand{pointer-events:auto;max-width:min(480px,60vw);color:var(--wt);text-shadow:var(--shade)}
-  .brand h1{margin:0;font-size:21px;font-weight:300;letter-spacing:.12em;line-height:1.1;display:flex;align-items:baseline;gap:11px;white-space:nowrap}
+  .brand h1{margin:0;font-size:21px;font-weight:300;letter-spacing:.16em;line-height:1.1;display:flex;align-items:baseline;gap:11px;white-space:nowrap}
   .brand h1::before{content:"";flex:none;width:6px;height:6px;background:var(--verm);align-self:center}
   .brand h1 span{font-size:10.5px;font-weight:400;letter-spacing:.38em;color:var(--wt2)}
   .brand p{margin:7px 0 0 17px;font-size:11.5px;line-height:1.7;color:var(--wt2);letter-spacing:.03em}
@@ -122,7 +141,7 @@
      mono lettering held between two hairlines — white like all type
      that rests on the scene; vermilion stays on paper, in the mode
      index numeral and the tour progress */
-  .badge{flex:none;background:transparent;color:var(--wt);padding:5px 2px;border-top:1px solid var(--wline);border-bottom:1px solid var(--wline);font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.22em;white-space:nowrap;text-shadow:var(--shade)}
+  .badge{flex:none;background:transparent;color:var(--wt);padding:5px 2px;border-top:1px solid var(--wline);border-bottom:1px solid var(--wline);font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.26em;white-space:nowrap;text-shadow:var(--shade)}
   /* day/night switch: one stroke icon at the chips' weight — the
      sun is shown at night (tap for day), the moon by day */
   .themeBtn{flex:none;background:transparent;border:0;color:var(--wt3);border-radius:0;padding:2px 1px 5px;min-height:0;display:flex;align-items:center;transition:color .25s}
@@ -140,7 +159,44 @@
   body.ui-hidden .brand,body.ui-hidden #modeBadge,body.ui-hidden #sideToggle,
   body.ui-hidden #labelToggle,body.ui-hidden #side,body.ui-hidden #modebar,
   body.ui-hidden #caption,body.ui-hidden #tourHud,body.ui-hidden #exhibitCard,
-  body.ui-hidden #walkTip,body.ui-hidden #vertical{display:none!important}
+  body.ui-hidden #walkTip,body.ui-hidden #vertical,body.ui-hidden #walkExit{display:none!important}
+
+  /* ---- #6.1 per-mode mutually exclusive UI ----
+     Only the current chapter's elements are on screen. Exterior:
+     title + mode bar. Tour: only the subtitle card (the mode bar
+     fades out). Walk: only the walk controls + current exhibit name
+     (mode bar fades out; #walkExit replaces it as the way out).
+     G3 / gallery: title + mode bar + their card. An open archive
+     is hidden while touring / walking and returns afterwards. */
+  body[data-mode="tour"] header,body[data-mode="walk"] header{display:none}
+  body[data-mode="tour"] #side,body[data-mode="walk"] #side{display:none}
+  body[data-mode="tour"] #modebar,body[data-mode="walk"] #modebar{opacity:0;visibility:hidden;pointer-events:none}
+  #modebar{transition:opacity .45s ease,visibility 0s linear .45s}
+  body[data-mode="exterior"] #modebar,body[data-mode="lobby"] #modebar,body[data-mode="g3"] #modebar,body[data-mode="gallery"] #modebar{transition:opacity .45s ease,visibility 0s linear 0s}
+  /* walk-mode exhibit card clears the direction pad (#2 item 4's fix,
+     applied here too so this branch shows it correctly on its own) */
+  body[data-mode="walk"] #exhibitCard{bottom:224px}
+  /* ---- #6.1 first entry only: the two-line introduction + prologue
+     collapse once seen (see endIntro / armIntro in the script) ---- */
+  .brand{cursor:pointer}
+  body.intro-done .brand p{display:none}
+  /* ---- #6.2 opening: the scene starts blurred (Sugimoto) and
+     sharpens as the deferred loading work finishes; the opening
+     glide hides every control except the title + vertical text ---- */
+  #stage{transition:filter 1.6s ease}
+  body.scene-blur #stage{filter:blur(18px) saturate(1.05)}
+  body.opening .hgroup,body.opening #modeBadge{display:none}
+  body.opening .brand p{display:none}
+  body.opening #modebar,body.opening #caption,body.opening #side,body.opening #walkHud,body.opening #walkTip,body.opening #tourHud,body.opening #exhibitCard,body.opening #cross,body.opening #walkExit{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .45s ease,visibility 0s linear .45s}
+  #skipOpening{position:absolute;left:50%;transform:translateX(-50%);bottom:28px;z-index:30;color:var(--wt3);font-size:11px;letter-spacing:.22em;display:none;text-shadow:var(--shade);pointer-events:none;white-space:nowrap}
+  body.opening #skipOpening{display:block}
+  /* ---- #6.1 walk exit: a minimal text control, top right ---- */
+  #walkExit{position:absolute;top:18px;right:var(--edge);z-index:24;display:none;background:transparent;border:0;border-bottom:1px solid transparent;color:var(--wt3);padding:2px 1px 5px;font-size:10.5px;letter-spacing:.18em;text-shadow:var(--shade)}
+  #walkExit:hover{color:var(--wt);border-bottom-color:var(--wt)}
+  body[data-mode="walk"] #walkExit{display:block}
+  /* ---- #6.5 bottom-drawer handle (mobile only) ---- */
+  .drawerHandle{display:none}
+  @media (prefers-reduced-motion: reduce){ body.scene-blur #stage{filter:none} }
 
   #stage{position:absolute;inset:0}
   #stage canvas{display:block;width:100%;height:100%}
@@ -148,7 +204,11 @@
   #vignette{position:absolute;inset:0;z-index:5;pointer-events:none;background:radial-gradient(ellipse at 50% 42%,transparent 52%,rgba(24,28,22,.13) 100%)}
   #grain{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:.032;mix-blend-mode:overlay;background-image:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E")}
   /* ---- vertical Japanese margin text (Kage) ---- */
-  #vertical{position:absolute;left:var(--edge);top:50%;transform:translateY(-50%);z-index:15;writing-mode:vertical-rl;font-size:13px;font-weight:300;letter-spacing:.46em;color:var(--wt);opacity:.8;pointer-events:none;text-shadow:var(--shade)}
+  #vertical{position:absolute;left:var(--edge);top:50%;transform:translateY(-50%);z-index:15;writing-mode:vertical-rl;font-size:13px;font-weight:300;letter-spacing:.46em;color:var(--wt);opacity:0;pointer-events:none;text-shadow:var(--shade);transition:opacity .6s ease}
+  /* #6.4: the margin text is hidden except at chapter transitions
+     (mode changes, tour stops) and during the opening — see
+     flashVertical() and beginOpening(). */
+  #vertical.on{opacity:.8}
   #err{position:absolute;left:12px;top:110px;z-index:50;max-width:520px;background:#2b1611;border:1px solid #71402f;color:#f2bda9;padding:10px 12px;border-radius:0;font-size:13px;line-height:1.5;display:none;white-space:pre-wrap}
   body.day #err{background:#fdf3f1;border-color:#e3c4bd;color:#8a3b2e}
 
@@ -158,7 +218,7 @@
   #loading .mark{font-size:30px;font-weight:300;letter-spacing:.1em;display:flex;align-items:baseline;gap:12px}
   #loading .mark::before{content:"";width:7px;height:7px;background:var(--verm);align-self:center}
   #loading .mark i{font-style:normal;color:var(--ink2);font-size:13px;letter-spacing:.36em}
-  #loading .lmicro{font-family:var(--mono);font-size:10px;letter-spacing:.34em;color:var(--ink3)}
+  #loading .lmicro{font-family:var(--mono);font-size:10px;letter-spacing:.38em;color:var(--ink3)}
   #loading p{margin:0;color:var(--ink2);font-size:12px;letter-spacing:.08em}
   #loadBarWrap{width:min(300px,70vw);height:1px;background:var(--line);overflow:hidden;display:none}
   #loadBar{height:100%;width:0%;background:var(--ink);transition:width .25s}
@@ -192,7 +252,7 @@
   #side h2{margin:0 30px 8px 0;font-family:var(--serif);font-size:16px;font-weight:600;letter-spacing:.04em;line-height:1.55}
   #side .sub{margin:0;font-size:12px;color:var(--ink2);line-height:1.85}
   /* one section label style for all three blocks of the sheet */
-  #side .slabel{margin:24px 0 10px;font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.28em;color:var(--ink3)}
+  #side .slabel{margin:28px 0 10px;font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.32em;color:var(--ink3)}
   /* the archive reads as a true specification table: every row is
      ruled, terms sit in a fixed 68px column, values align — the
      typographic grid of a drawing's title block */
@@ -220,7 +280,7 @@
   .mini-x:hover{color:var(--ink)}
 
   /* ---- exhibit caption: a museum label, ruled at the top only ---- */
-  #exhibitCard{position:absolute;left:var(--edge);bottom:88px;z-index:22;width:350px;max-width:calc(100vw - 44px);background:var(--sheet);border:0;border-top:1px solid var(--ink);border-radius:0;padding:22px 26px 16px;display:none;overflow:hidden}
+  #exhibitCard{position:absolute;left:var(--edge);bottom:88px;z-index:22;width:350px;max-width:calc(100vw - 44px);background:var(--sheet);border:0;border-top:1px solid var(--ink);border-radius:0;padding:26px 30px 18px;display:none;overflow:hidden}
   #exhibitCard.show{display:block;animation:fadeIn .45s ease}
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   #exGhost{position:absolute;right:2px;top:2px;font-size:56px;font-weight:200;line-height:1.1;letter-spacing:.01em;color:var(--ghost);pointer-events:none;font-family:var(--mono)}
@@ -265,7 +325,7 @@
      edges — B&O restraint: a narrower card, real margins from the
      screen edge on every side, and generous internal padding so no
      line of type or row of actions ever touches the card's edge ---- */
-  #tourHud{position:absolute;left:50%;transform:translateX(-50%);bottom:88px;z-index:26;width:520px;max-width:calc(100vw - 48px);background:var(--sheet);border:0;border-top:1px solid var(--ink);border-radius:0;padding:26px 30px 20px;display:none}
+  #tourHud{position:absolute;left:50%;transform:translateX(-50%);bottom:28px;z-index:26;width:520px;max-width:calc(100vw - 48px);background:var(--sheet);border:0;border-top:1px solid var(--ink);border-radius:0;padding:28px 32px 22px;display:none}
   #tourHud.show{display:block;animation:fadeIn .45s ease}
   #tourHud .tno{font-size:10.5px;font-weight:400;letter-spacing:.24em;color:var(--ink3);font-family:var(--mono)}
   #tourHud h3{margin:12px 0 8px;font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:.03em;line-height:1.5}
@@ -288,7 +348,10 @@
   #tourHud .thead{display:flex;justify-content:space-between;align-items:center;gap:8px}
   #tourFold{flex:none;border:0;background:transparent;color:var(--ink2);border-radius:0;padding:4px 6px;min-height:24px;font-size:11px;letter-spacing:.1em}
   #tourFold:hover{color:var(--ink)}
-  #tourHud.folded p,#tourHud.folded #tourTrack,#tourHud.folded #tourDots{display:none}
+  #tourHud.folded #tourTrack,#tourHud.folded #tourDots{display:none}
+  /* #6.1 the tour card is a subtitle card: station name + ONE line of
+     narration while folded; 展开讲解 reveals the full text. */
+  #tourHud.folded p{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;min-height:0}
   #tourHud.folded h3{font-size:14px;margin:6px 0 0}
   #tourHud.folded .trow{margin-top:14px}
   #tourHud.folded .trow button{padding:10px 4px 0;font-size:11.5px}
@@ -310,35 +373,40 @@
     #side .mini-x{top:53px}
     #err{top:56px;left:8px;right:8px;max-width:none}
     #caption{display:none}
-    #modebar{left:0;right:0;transform:none;bottom:0;display:grid;grid-template-columns:repeat(3,1fr);gap:0;padding:0 0 env(safe-area-inset-bottom)}
-    #modebar button{padding:10px 2px 11px;font-size:12px;min-height:44px;letter-spacing:.06em;border-left:1px solid var(--line);border-top:1px solid var(--line)}
-    #modebar button:nth-child(3n+1){border-left:0}
-    #modebar button:nth-child(-n+3){border-top:0}
+    /* #6.5 the mode bar is one horizontally scrollable row, not two —
+       it costs ~44px instead of ~88px and every mode stays one tap
+       away; the current mode is scrolled into view on change. */
+    #modebar{left:0;right:0;transform:none;bottom:0;display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:0 0 env(safe-area-inset-bottom)}
+    #modebar::-webkit-scrollbar{display:none}
+    #modebar button{flex:0 0 auto;min-width:96px;padding:12px 10px 13px;font-size:12px;min-height:44px;letter-spacing:.06em;border-left:1px solid var(--line);border-top:0}
+    #modebar button:first-child{border-left:0}
     #modebar button[aria-pressed="true"]::before{width:20px}
     .lbl-full{display:none}
     .lbl-short{display:inline}
-    #tourHud{left:20px;right:20px;transform:none;width:auto;bottom:calc(112px + env(safe-area-inset-bottom));padding:20px 22px 16px}
+    #tourHud{left:0;right:0;transform:none;width:auto;max-width:none;bottom:calc(52px + env(safe-area-inset-bottom));padding:18px 20px 16px}
     #tourHud h3{font-size:15px;margin:6px 0 4px}
     #tourHud p{font-size:12.5px;line-height:1.75;min-height:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-    #tourHud.folded p{display:none}
+    #tourHud.folded p{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;min-height:0}
     #tourTrack{margin:12px 0 4px}
     #tourDots{flex-wrap:nowrap;margin:7px 0 2px}
     #tourDots button{min-width:0}
     #tourHud .trow{margin-top:12px}
     #tourHud .trow button{font-size:11.5px;padding:10px 2px 0}
     #tourHud .trow button.exit{padding:10px 6px 0 10px}
-    #exhibitCard{left:20px;right:20px;width:auto;bottom:calc(112px + env(safe-area-inset-bottom));padding:18px 20px 14px}
+    .drawerHandle{display:block;width:26px;height:14px;margin:2px auto 10px;position:relative;cursor:pointer;flex:none}
+    .drawerHandle::after{content:"";position:absolute;left:0;right:0;top:6px;height:2px;background:var(--line2)}
+    #exhibitCard{left:0;right:0;width:auto;max-width:none;bottom:calc(52px + env(safe-area-inset-bottom));padding:18px 20px 14px}
     #exhibitCard h3{font-size:15px;margin:6px 0 4px}
     #exhibitCard p{font-size:12.5px;line-height:1.75;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
     #exhibitCard.folded p{display:none}
     #exhibitCard .row{margin-top:12px}
     #exhibitCard .row button{font-size:11.5px;padding:10px 2px 0}
-    body.walking #exhibitCard{bottom:calc(232px + env(safe-area-inset-bottom))}
-    #walkHud{bottom:calc(104px + env(safe-area-inset-bottom));padding:0 var(--edge)}
+    body.walking #exhibitCard{bottom:calc(180px + env(safe-area-inset-bottom))}
+    #walkHud{bottom:calc(56px + env(safe-area-inset-bottom));padding:0 var(--edge)}
     .pad{grid-template-columns:38px 38px 38px;grid-template-rows:38px 38px 38px}
     .pad button,.lookpad button{width:38px;height:38px;min-height:38px;font-size:14px}
     #walkTip{top:54px;bottom:auto;left:8px;right:8px;transform:none;width:auto;white-space:normal;text-align:center;font-size:11px;line-height:1.55;padding:6px 10px}
-    #vertical{display:none}
+    #vertical{display:none!important}
     #loading .mark{font-size:24px}
     #loading .mark i{font-size:11px}
   }
@@ -348,14 +416,14 @@
   }
 </style>
 </head>
-<body>
+<body data-mode="exterior">
 <div id="app">
   <div id="stage" aria-label="21_21 DESIGN SIGHT 三维建筑与展厅"></div>
   <div id="vignette" aria-hidden="true"></div>
   <div id="grain" aria-hidden="true"></div>
 
   <header>
-    <div class="brand">
+    <div class="brand" title="点按展开 / 收起介绍">
       <h1>21_21 <span>DESIGN SIGHT</span></h1>
       <p><b>东京六本木 · Tokyo Midtown</b> — 安藤忠雄设计的地下美术馆。<span class="long">拖动环视两栋建筑，进入展厅，在展品之间走动参观。</span></p>
     </div>
@@ -376,9 +444,11 @@
   <div id="err" role="alert"></div>
   <div id="loading"><div class="mark">21_21 <i>DESIGN SIGHT</i></div><div class="lmicro">TOKYO MIDTOWN · TADAO ANDO</div><p id="loadMsg">正在载入建筑模型…</p><div id="loadBarWrap"><div id="loadBar"></div></div><button id="loadRetry" type="button">重新加载</button></div>
   <div id="cross">+</div>
+  <div id="skipOpening">点按任意处跳过</div>
   <div id="walkTip">W A S D 或左下按钮移动 · 拖动画面转头 · 楼梯口可上下层 · 穿暖帘门洞去 Gallery 2 · 下沉庭院隔着玻璃看 · 过庭院去西翼 Gallery 3</div>
+  <button type="button" id="walkExit" aria-label="退出步行参观">退出步行 ✕</button>
 
-  <aside id="side" aria-label="建筑档案">
+  <aside id="side" class="closed" aria-label="建筑档案">
     <button type="button" class="mini-x" id="sideHide" aria-label="关闭建筑档案">✕</button>
     <h2>一枚钢板，折成一栋建筑</h2>
     <p class="sub">灵感来自三宅一生 A-POC 的「一块布」——博物馆翼的屋顶是一整张长达 54 米的钢板折叠而成；西侧还有一栋较小的咖啡翼。约八成空间藏在地下，靠三角形下沉庭院把光引进展厅。</p>
@@ -410,6 +480,7 @@
   </aside>
 
   <section id="exhibitCard" class="folded" aria-live="polite">
+    <div class="drawerHandle" aria-hidden="true"></div>
     <div id="exGhost" aria-hidden="true">01</div>
     <div class="cardhead">
       <div class="no" id="exNo">EXHIBIT 01</div>
@@ -430,6 +501,7 @@
   <div id="caption"><button type="button" id="captionHide" aria-label="关闭提示">✕</button><b>先看建筑，再进展厅。</b><br/>草坪上是两栋折叠钢板屋顶的建筑：博物馆翼与西侧咖啡翼（Gallery 3 所在）。点下方「▶ 自动游览」可沿固定路线自动参观全程；也可点「进入展厅」，经入口大堂与 30 级楼梯下到地下展厅参观。</div>
 
   <section id="tourHud" class="folded" aria-live="polite" aria-label="自动游览">
+    <div class="drawerHandle" aria-hidden="true"></div>
     <div class="thead">
       <div class="tno" id="tourNo">自动游览 · 1 / 14</div>
       <button type="button" id="tourFold" aria-expanded="false">展开讲解</button>
@@ -454,8 +526,8 @@
       <button type="button" class="right" data-move="r" aria-label="右移">→</button>
     </div>
     <div class="lookpad" aria-label="转头">
-      <button type="button" data-look="-1" aria-label="向左看">⟲</button>
-      <button type="button" data-look="1" aria-label="向右看">⟳</button>
+      <button type="button" data-look="1" aria-label="向左看">⟲</button>
+      <button type="button" data-look="-1" aria-label="向右看">⟳</button>
     </div>
   </div>
 
@@ -733,7 +805,7 @@ function labelSprite(text,x,y,z){
        captions. Legibility comes from ONE tight dark shade (1px
        offset, 2px blur), never a blurred light halo — the halo is
        what made the lettering look lit up. */
-    ctx.font='300 33px "Hiragino Kaku Gothic ProN","Noto Sans JP","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.font='300 33px "Noto Sans JP","Hiragino Kaku Gothic ProN","PingFang SC","Microsoft YaHei",sans-serif';
     ctx.shadowColor='rgba(5,7,5,0.55)'; ctx.shadowBlur=2; ctx.shadowOffsetY=1;
     ctx.fillStyle='rgba(255,255,255,0.96)';
     ctx.fillText(text,4,42);
@@ -1251,6 +1323,7 @@ function onModelLoaded(gltf){
   modelReady=true;
   renderer.shadowMap.needsUpdate=true; /* bake the sun shadow map once */
   document.getElementById('loading').classList.add('hide');
+  document.body.classList.add('scene-blur'); /* #6.2: the scene starts blurred, sharpens as deferred work finishes */
   /* Texture health check: sample every unique base-colour map. If one
      decoded to a blank white image (the WebKit failure guarded against
      at the loader above), say so on screen instead of silently showing
@@ -1317,7 +1390,7 @@ function onModelLoaded(gltf){
     });
   });
   /* now that the model is on screen, build the cloudy sky + IBL */
-  setTimeout(function(){ buildSky(); setupEnvironment(); },60);
+  setTimeout(function(){ buildSky(); setupEnvironment(); beginOpening(); },60);
 }
 startLoad();
 
@@ -1368,8 +1441,71 @@ var exhibitCard=document.getElementById('exhibitCard');
 var caption=document.getElementById('caption');
 var captionDismissed=false;
 document.getElementById('captionHide').addEventListener('click',function(){ captionDismissed=true; caption.style.display='none'; });
+/* ---- #6.1 first entry only ----
+   The two-line introduction (brand p) + the prologue card show on
+   first entry and collapse 9 s after the visitor can actually see
+   them (i.e. after the opening), or on the first interaction —
+   whichever comes first. Returning visitors start collapsed;
+   tapping the title re-opens the introduction. */
+var introSeen=false;
+try{ introSeen=window.localStorage&&localStorage.getItem('2121-intro-seen')==='1'; }catch(e){ introSeen=false; }
+var introTimer=null;
+function endIntro(){
+  if(introTimer){ clearTimeout(introTimer); introTimer=null; }
+  if(document.body.classList.contains('intro-done')) return;
+  document.body.classList.add('intro-done');
+  captionDismissed=true; caption.style.display='none';
+  try{ if(window.localStorage) localStorage.setItem('2121-intro-seen','1'); }catch(e){}
+}
+function armIntro(){
+  if(introSeen){ document.body.classList.add('intro-done'); captionDismissed=true; caption.style.display='none'; return; }
+  if(introTimer) return;
+  introTimer=setTimeout(endIntro,9000);
+  renderer.domElement.addEventListener('pointerdown',function(){ endIntro(); },{once:true});
+}
+function toggleIntro(){
+  var done=document.body.classList.toggle('intro-done');
+  captionDismissed=done;
+  caption.style.display=(done||mode!=='exterior')?'none':'block';
+  try{ if(window.localStorage) localStorage.setItem('2121-intro-seen',done?'1':'0'); }catch(e){}
+  if(!done&&!introTimer) introTimer=setTimeout(endIntro,9000);
+}
+var brandEl=document.querySelector('.brand');
+if(brandEl){
+  brandEl.setAttribute('tabindex','0');
+  brandEl.addEventListener('click',toggleIntro);
+  brandEl.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleIntro(); } });
+}
+/* ---- #6.4 the vertical margin text: hidden except at chapter
+   transitions (mode changes, tour stops) and during the opening ---- */
+var verticalEl=document.getElementById('vertical');
+var verticalTimer=null;
+function flashVertical(){
+  if(!verticalEl||window.innerWidth<=760) return;
+  if(document.body.classList.contains('ui-hidden')) return;
+  verticalEl.classList.add('on');
+  if(verticalTimer) clearTimeout(verticalTimer);
+  verticalTimer=setTimeout(function(){ verticalEl.classList.remove('on'); },2400);
+}
 var walkHud=document.getElementById('walkHud');
 var walkTip=document.getElementById('walkTip');
+/* ---- #6.7 walk tip, wording follows the controls that exist ----
+   Desktop: WASD / direction keys. Mobile: tap-to-move once #5's
+   click-to-move layer is present (probed via its __2121 handle),
+   the direction pad before that. */
+function updateWalkTip(){
+  var coarse=false;
+  try{ coarse=window.matchMedia('(pointer: coarse)').matches; }catch(e){}
+  var tapMove=(typeof window.__2121!=='undefined');
+  if(!coarse){
+    walkTip.textContent='W A S D 或左下按钮移动 · 拖动画面转头 · 楼梯口可上下层 · 穿暖帘门洞去 Gallery 2 · 下沉庭院隔着玻璃看 · 过庭院去西翼 Gallery 3';
+  }else if(tapMove){
+    walkTip.textContent='点按地面走过去 · 拖动画面转头 · 楼梯口可上下层 · 穿暖帘门洞去 Gallery 2 · 下沉庭院隔着玻璃看 · 过庭院去西翼 Gallery 3';
+  }else{
+    walkTip.textContent='左下按钮移动 · 拖动画面转头 · 楼梯口可上下层 · 穿暖帘门洞去 Gallery 2 · 下沉庭院隔着玻璃看 · 过庭院去西翼 Gallery 3';
+  }
+}
+updateWalkTip();
 var cross=document.getElementById('cross');
 var modeNames={exterior:'外观 · 环视',lobby:'入口大堂',g3:'Gallery 3 · 西翼',gallery:'展厅 · 全景',walk:'展厅 · 步行中',tour:'自动游览 · 进行中'};
 /* Gallery 3 (v15: west / former cafe wing, ground floor) guided viewpoints */
@@ -1493,6 +1629,7 @@ function tourGoTo(idx,nowMs){
   tour.start=nowMs;
   tour.paused=false; tourPauseBtn.textContent='暂停';
   tourShowCard();
+  flashVertical();
 }
 function tourJump(idx){ if(mode==='tour') tourGoTo(idx,performance.now()); }
 function startTour(){
@@ -1525,9 +1662,10 @@ document.getElementById('tourPrev').addEventListener('click',function(){ tourJum
 document.getElementById('tourNext').addEventListener('click',function(){ tourJump(tour.idx+1); });
 document.getElementById('tourExit').addEventListener('click',function(){ setMode('exterior'); });
 window.addEventListener('keydown',function(e){
-  if(mode!=='tour') return;
-  if(e.key===' '){ e.preventDefault(); setTourPaused(!tour.paused); }
-  if(e.key==='Escape') setMode('exterior');
+  if(mode==='tour'){
+    if(e.key===' '){ e.preventDefault(); setTourPaused(!tour.paused); }
+    if(e.key==='Escape') setMode('exterior');
+  }else if(mode==='walk'&&e.key==='Escape'){ setMode('exterior'); }
 });
 function updateTour(nowMs){
   if(tour.paused) return true;
@@ -1571,6 +1709,10 @@ function flyTo(pos,tgt,dur){
 }
 function setMode(next,keepCam){
   mode=next;
+  document.body.dataset.mode=next;
+  flashVertical();
+  var activeBtn=document.querySelector('#modebar button[data-mode="'+next+'"]');
+  if(activeBtn&&window.innerWidth<=760){ try{ activeBtn.scrollIntoView({inline:'center',block:'nearest'}); }catch(e){} }
   document.querySelectorAll('#modebar button').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.mode===next?'true':'false'); });
   badge.textContent=modeNames[next];
   var inside=(next!=='exterior');
@@ -1581,7 +1723,7 @@ function setMode(next,keepCam){
   walkTip.classList.toggle('show',next==='walk');
   cross.classList.toggle('show',next==='walk');
   tourHud.classList.toggle('show',next==='tour');
-  if(next==='tour') exhibitCard.classList.remove('show');
+  if(next!=='g3'&&next!=='walk') exhibitCard.classList.remove('show'); /* #6.1: the exhibit/spot card belongs to one mode only — a G3 spot must not linger into the gallery panorama (and vice versa); g3 re-shows it via showG3Spot(), walk via showExhibit()/proximity */
   caption.style.display=(next==='exterior'&&!captionDismissed)?'block':'none';
   controls.enabled=(next!=='walk'&&next!=='tour');
   controls.maxPolarAngle=(next==='exterior')?Math.PI*0.52:Math.PI*0.65;
@@ -1598,12 +1740,48 @@ function setMode(next,keepCam){
   if(next==='g3'){ var gs=g3Spots[g3Idx]; flyTo(gs.cam,gs.tgt,1400); showG3Spot(g3Idx); }
   /* v16 Gallery 2: the east rectangle, x 24..52, z -15..1; camera inside the SW corner */
   if(next==='gallery') flyTo(new THREE.Vector3(27,-0.7,-14.8),new THREE.Vector3(46,-3.9,-2.5));
-  if(next==='walk') enterWalk();
+  if(next==='walk'){ updateWalkTip(); enterWalk(); }
   if(next==='tour'){ setTourFolded(true); startTour(); }
 }
 document.querySelectorAll('#modebar button').forEach(function(b){
   b.addEventListener('click',function(){ setMode(b.dataset.mode); });
 });
+/* ================= Opening (#6.2) =================
+   After the model is on screen: the Sugimoto blur sharpens as the
+   deferred sky / IBL work finishes, then a 7 s glide runs along the
+   54 m folded roof's south edge, west to east, settling on the
+   standard exterior framing. Only the title + the vertical text are
+   on screen during the glide; the full interface appears when it
+   ends. Any input skips it. First visit only (localStorage), and
+   never under reduced motion — returning visitors go straight to
+   the exterior view. */
+var opening=null, openingDone=false;
+function beginOpening(){
+  document.body.classList.remove('scene-blur');
+  var seen=false;
+  try{ seen=window.localStorage&&localStorage.getItem('2121-opening-seen')==='1'; }catch(e){}
+  if(seen||reducedMotion){ endOpening(true); return; }
+  opening={s:performance.now(),d:7000,
+    p0:new THREE.Vector3(-14,8.5,-34), p1:exteriorCamPos(),
+    t0:new THREE.Vector3(8,5,-2), t1:new THREE.Vector3(4,1.5,-1)};
+  camera.position.copy(opening.p0); controls.target.copy(opening.t0);
+  controls.enabled=false;
+  document.body.classList.add('opening');
+  if(verticalEl) verticalEl.classList.add('on');
+  var skip=function(){ if(opening) endOpening(false); };
+  window.addEventListener('pointerdown',skip,{once:true});
+  window.addEventListener('keydown',skip,{once:true});
+}
+function endOpening(instant){
+  if(openingDone&&!opening) return;
+  opening=null; openingDone=true;
+  document.body.classList.remove('opening');
+  if(verticalEl) verticalEl.classList.remove('on');
+  controls.enabled=(mode!=='walk'&&mode!=='tour');
+  camera.position.copy(exteriorCamPos()); controls.target.copy(EXT_TARGET);
+  try{ if(window.localStorage) localStorage.setItem('2121-opening-seen','1'); }catch(e){}
+  armIntro();
+}
 /* exterior preset views — framed on the real two-wing model */
 var sunDay={pos:new THREE.Vector3(50,62,30),exp:1.05,sun:3.0,hemi:0.35};
 var isNight=false;
@@ -1688,6 +1866,7 @@ uiToggleBtn.addEventListener('click',toggleUi);
 window.addEventListener('keydown',function(e){
   if(e.key&&e.key.toLowerCase()==='h'&&!e.metaKey&&!e.ctrlKey&&!e.altKey) toggleUi();
 });
+document.getElementById('walkExit').addEventListener('click',function(){ setMode('exterior'); });
 
 /* ================= Exhibit selection ================= */
 var currentEx=null;
@@ -1740,6 +1919,25 @@ document.getElementById('exGo').addEventListener('click',function(){
   if(mode==='g3'){ var s=g3Spots[g3Idx]; flyTo(s.cam,s.tgt,1200); }
   else if(currentEx) goNearExhibit(currentEx);
 });
+/* ---- #6.5 bottom-drawer handle + swipe-down to fold (mobile) ---- */
+document.querySelectorAll('.drawerHandle').forEach(function(h){
+  h.addEventListener('click',function(){
+    var card=h.parentElement;
+    if(card.id==='exhibitCard') setExFolded(!exhibitCard.classList.contains('folded'));
+    else if(card.id==='tourHud') setTourFolded(!tourHud.classList.contains('folded'));
+  });
+});
+function addDrawerSwipe(el,foldFn){
+  var sy=null;
+  el.addEventListener('touchstart',function(e){ if(e.target.closest('button')) return; sy=e.touches[0].clientY; },{passive:true});
+  el.addEventListener('touchend',function(e){
+    if(sy===null) return;
+    var dy=e.changedTouches[0].clientY-sy; sy=null;
+    if(dy>50) foldFn();
+  },{passive:true});
+}
+addDrawerSwipe(exhibitCard,function(){ setExFolded(true); });
+addDrawerSwipe(tourHud,function(){ setTourFolded(true); });
 
 /* picking */
 var ray=new THREE.Raycaster(), ptr=new THREE.Vector2(), downAt=null;
@@ -1986,7 +2184,7 @@ function resize(){
   /* keep the default exterior framing fitted when the viewport changes
      (rotation, webview resize) — unless the user has orbited or picked a
      preset view, in which case their framing is left alone */
-  if(mode==='exterior'&&extDefault&&!camAnim){ camera.position.copy(exteriorCamPos()); controls.target.copy(EXT_TARGET); }
+  if(mode==='exterior'&&extDefault&&!camAnim&&!opening){ camera.position.copy(exteriorCamPos()); controls.target.copy(EXT_TARGET); }
 }
 window.addEventListener('resize',resize); resize();
 camera.position.copy(exteriorCamPos());
@@ -1998,16 +2196,27 @@ function animate(){
     var nowMs=performance.now();
     var dt=Math.min((nowMs-lastNow)/1000,0.05); lastNow=nowMs; elapsed+=dt;
     var t=elapsed;
-    if(camAnim&&mode!=='walk'&&mode!=='tour'){
+    if(opening){
+      /* #6.2 opening glide: ease along the roof edge, then hand over */
+      var ok=(nowMs-opening.s)/opening.d;
+      if(ok>=1){ endOpening(false); }
+      else{
+        var oe=ok<0.5?4*ok*ok*ok:1-Math.pow(-2*ok+2,3)/2;
+        camera.position.lerpVectors(opening.p0,opening.p1,oe);
+        controls.target.lerpVectors(opening.t0,opening.t1,oe);
+      }
+    }else if(camAnim&&mode!=='walk'&&mode!=='tour'){
       var k=Math.min(1,(performance.now()-camAnim.s)/camAnim.d);
       var e=1-Math.pow(1-k,3);
       camera.position.lerpVectors(camAnim.p0,camAnim.p1,e);
       controls.target.lerpVectors(camAnim.t0,camAnim.t1,e);
       if(k>=1) camAnim=null;
     }
-    if(mode==='walk') updateWalk(dt,nowMs);
-    else if(mode==='tour'){ updateTour(nowMs); camera.lookAt(controls.target); }
-    else controls.update();
+    if(!opening){
+      if(mode==='walk') updateWalk(dt,nowMs);
+      else if(mode==='tour'){ updateTour(nowMs); camera.lookAt(controls.target); }
+      else controls.update();
+    }
     if(spinnerPivot) spinnerPivot.rotation.y=t*0.45;
     if(petals){
       var pTarget=(mode==='exterior')?0.75:0;
