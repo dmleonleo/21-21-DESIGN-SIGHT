@@ -249,6 +249,10 @@
   .pad .up{grid-column:2}.pad .left{grid-column:1;grid-row:2}.pad .down{grid-column:2;grid-row:2}.pad .right{grid-column:3;grid-row:2}
   .lookpad{pointer-events:auto;display:flex;gap:1px;background:var(--line);border:1px solid var(--line2);align-items:center}
   .lookpad button{border:0}
+  /* item 6: optional pointer lock (desktop walk mode only) */
+  #lockBtn{width:auto;padding:0 12px;font-size:11.5px;letter-spacing:.1em;white-space:nowrap}
+  #lockBtn[aria-pressed="true"]{background:var(--ink);color:var(--onink)}
+  @media (pointer:coarse){ #lockBtn{display:none} }
   #walkTip{position:absolute;left:50%;transform:translateX(-50%);bottom:140px;z-index:23;background:transparent;border:0;color:var(--wt);font-size:11.5px;letter-spacing:.05em;padding:7px 12px;border-radius:0;display:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis;text-shadow:var(--shade)}
   #walkTip.show{display:block}
   #cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;color:rgba(255,255,255,.85);font-size:15px;font-weight:300;display:none;text-shadow:var(--shade)}
@@ -335,6 +339,9 @@
     #exhibitCard .row button{font-size:11.5px;padding:10px 2px 0}
     body.walking #exhibitCard{bottom:calc(232px + env(safe-area-inset-bottom))}
     #walkHud{bottom:calc(104px + env(safe-area-inset-bottom));padding:0 var(--edge)}
+    /* item 1: on phones the direction pad is hidden by default —
+       tap-to-move is the way around; the turn buttons stay. */
+    #walkHud .pad{display:none}
     .pad{grid-template-columns:38px 38px 38px;grid-template-rows:38px 38px 38px}
     .pad button,.lookpad button{width:38px;height:38px;min-height:38px;font-size:14px}
     #walkTip{top:54px;bottom:auto;left:8px;right:8px;transform:none;width:auto;white-space:normal;text-align:center;font-size:11px;line-height:1.55;padding:6px 10px}
@@ -436,7 +443,7 @@
     </div>
     <h3 id="tourTitle">—</h3>
     <p id="tourDesc">—</p>
-    <div id="tourTrack"><div id="tourFill"></div></div>
+    <div id="tourTrack" tabindex="0" role="slider" aria-label="游览进度" aria-valuemin="1" aria-valuemax="14" aria-valuenow="1" aria-valuetext="第 1 站"><div id="tourFill"></div></div>
     <div id="tourDots" aria-label="游览站点"></div>
     <div class="trow">
       <button type="button" id="tourPrev">← 上一站</button>
@@ -456,6 +463,7 @@
     <div class="lookpad" aria-label="转头">
       <button type="button" data-look="-1" aria-label="向左看">⟲</button>
       <button type="button" data-look="1" aria-label="向右看">⟳</button>
+      <button type="button" id="lockBtn" aria-pressed="false" aria-label="锁定视角">锁定</button>
     </div>
   </div>
 
@@ -481,7 +489,14 @@ window.addEventListener('unhandledrejection',function(e){ showErr('页面出错�
 var stage=document.getElementById('stage');
 var renderer;
 try{
-  renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+  /* item 8: preserveDrawingBuffer — on-demand rendering freezes the
+     frame when the exterior is idle, and without preserve the canvas
+     reads back black in screenshots (and after a compositor surface
+     loss) until the next interaction redraws it. Verified: with the
+     freeze on, an idle exterior screenshotted black even 8 s after a
+     fresh frame had rendered. The cost is one retained buffer; the
+     power saving (no redraws while idle) is unaffected. */
+  renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance',preserveDrawingBuffer:true});
 }catch(e){
   /* No WebGL (old webview, GPU blocklist, software fallback removed):
      say so on the loading screen instead of spinning on it forever. */
@@ -645,7 +660,9 @@ var controls=new THREE.OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true; controls.dampingFactor=0.06;
 controls.maxPolarAngle=Math.PI*0.52; controls.minDistance=4; controls.maxDistance=260;
 controls.target.set(4,1.5,-1);
-controls.addEventListener('start',function(){ if(mode==='exterior') extDefault=false; });
+controls.addEventListener('start',function(){
+  if(mode==='exterior'){ extDefault=false; if(currentView){ currentView=null; syncHash(); } }
+});
 
 /* lights — strong directional sun with sharp shadows, sky IBL (scene.environment)
    for ambient/reflections; low fills so the contrast stays photographic */
@@ -711,6 +728,9 @@ if(!reducedMotion&&!isSoftwareGL){
    glTF space: x east, y up, z south-ish; ground y=0, basement floor y=-4.8. */
 var model=null, modelReady=false;
 var pickMeshes=[];
+/* item 2: every mesh of the loaded GLB — the geometry the raycast
+   collision guard, the landing ring and the ground snap read from. */
+var solidMeshes=[];
 var exhibitMeshes={};   /* '01'..'12' -> [meshes] (all twelve are real objects in the v16 GLB) */
 var spinnerPivot=null, lampMeshes=[];
 var FLOOR_Y=-4.8, EYE=1.62, EYE_Y=FLOOR_Y+EYE;
@@ -1214,6 +1234,7 @@ function onModelLoaded(gltf){
   restoreCreateImageBitmap(); /* parse finished — the texture decoder choice is locked in */
   clearTimeout(loadSlowTimer);
   model=gltf.scene; scene.add(model);
+  model.traverse(function(o){ if(o.isMesh) solidMeshes.push(o); });
   model.traverse(function(o){
     if(o.isMesh){
       o.castShadow=true; o.receiveShadow=true;
@@ -1318,6 +1339,8 @@ function onModelLoaded(gltf){
   });
   /* now that the model is on screen, build the cloudy sky + IBL */
   setTimeout(function(){ buildSky(); setupEnvironment(); },60);
+  /* item 5: a shared link (#exhibit-07, #tour-5, ...) lands here */
+  try{ applyDeepLink(); }catch(e){ /* a bad hash must not break the page */ }
 }
 startLoad();
 
@@ -1397,6 +1420,7 @@ function showG3Spot(i){
   document.getElementById('exDesc').textContent=s.desc;
   document.getElementById('exGo').textContent='飞到这个位置';
   exhibitCard.classList.add('show'); setExFolded(true);
+  syncHash();
 }
 /* ================= Auto tour =================
    A fixed cinematic route through the whole building, reusing the same
@@ -1467,6 +1491,21 @@ tourStops.forEach(function(s,i){
   b.addEventListener('click',function(){ tourJump(i); });
   tourDotsEl.appendChild(b); tourDots.push(b);
 });
+/* item 4: the progress bar itself is clickable — tap anywhere on the
+   track to jump to that stop. The dots already did this; the track
+   makes the whole bar a target, and it is keyboard-operable too. */
+var tourTrackEl=document.getElementById('tourTrack');
+tourTrackEl.addEventListener('click',function(e){
+  var r=tourTrackEl.getBoundingClientRect();
+  var frac=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+  tourJump(Math.min(tourStops.length-1,Math.floor(frac*tourStops.length)));
+});
+tourTrackEl.addEventListener('keydown',function(e){
+  if(e.key==='ArrowLeft'){ e.preventDefault(); tourJump(tour.idx-1); }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); tourJump(tour.idx+1); }
+  else if(e.key==='Home'){ e.preventDefault(); tourJump(0); }
+  else if(e.key==='End'){ e.preventDefault(); tourJump(tourStops.length-1); }
+});
 var tour={idx:0,phase:'travel',start:0,travelDur:3000,dwellDur:3400,
   fromPos:new THREE.Vector3(),fromTgt:new THREE.Vector3(),
   paused:false,pauseAt:0,drift:new THREE.Vector3()};
@@ -1477,6 +1516,11 @@ function tourShowCard(){
   tourTitleEl.textContent=s.title;
   tourDescEl.textContent=s.desc;
   tourFillEl.style.width=((tour.idx)/tourStops.length*100)+'%';
+  var trackEl=document.getElementById('tourTrack');
+  if(trackEl){
+    trackEl.setAttribute('aria-valuenow',String(tour.idx+1));
+    trackEl.setAttribute('aria-valuetext','第 '+(tour.idx+1)+' 站：'+s.title);
+  }
   tourDots.forEach(function(b,i){
     b.className=i<tour.idx?'done':(i===tour.idx?'now':'');
   });
@@ -1488,11 +1532,14 @@ function tourGoTo(idx,nowMs){
   tour.fromTgt.copy(controls.target);
   var dist=tour.fromPos.distanceTo(s.cam);
   tour.travelDur=Math.max(2600,Math.min(6800,dist*150));
-  tour.dwellDur=s.dwell||3400;
+  /* item 4: the dwell follows the narration length (6-10 s), not a
+     fixed 3.4 s — ~55 ms per character plus a 2 s base, clamped. */
+  tour.dwellDur=Math.max(6000,Math.min(10000,2000+Math.round(s.desc.length*55)));
   tour.phase='travel';
   tour.start=nowMs;
   tour.paused=false; tourPauseBtn.textContent='暂停';
   tourShowCard();
+  syncHash();
 }
 function tourJump(idx){ if(mode==='tour') tourGoTo(idx,performance.now()); }
 function startTour(){
@@ -1560,7 +1607,10 @@ function updateTour(nowMs){
     }
     tourGoTo(tour.idx+1,nowMs); return true;
   }
-  camera.position.copy(s.cam).addScaledVector(tour.drift,dk);
+  /* item 4: a very slow push-and-pull during the dwell — the camera
+     eases 0.55 m toward the subject and back over the whole dwell,
+     instead of a one-way drift that never returns. */
+  camera.position.copy(s.cam).addScaledVector(tour.drift,Math.sin(dk*Math.PI));
   controls.target.copy(s.tgt);
   return true;
 }
@@ -1571,6 +1621,9 @@ function flyTo(pos,tgt,dur){
 }
 function setMode(next,keepCam){
   mode=next;
+  /* item 5: a fresh mode entry drops any preset view; the hash
+     follows the new state (a view button sets currentView after). */
+  currentView=null;
   document.querySelectorAll('#modebar button').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.mode===next?'true':'false'); });
   badge.textContent=modeNames[next];
   var inside=(next!=='exterior');
@@ -1600,10 +1653,64 @@ function setMode(next,keepCam){
   if(next==='gallery') flyTo(new THREE.Vector3(27,-0.7,-14.8),new THREE.Vector3(46,-3.9,-2.5));
   if(next==='walk') enterWalk();
   if(next==='tour'){ setTourFolded(true); startTour(); }
+  syncHash();
 }
 document.querySelectorAll('#modebar button').forEach(function(b){
   b.addEventListener('click',function(){ setMode(b.dataset.mode); });
 });
+/* ================= Deep links (item 5) =================
+   The URL hash carries the visit state so a shared link (or a
+   refresh) lands back in the same place: #exhibit-07, #tour-5,
+   #g3-2, #view-aerial, or a plain mode (#lobby, #gallery, #walk,
+   #exterior). The hash is written with replaceState — no history
+   spam as the tour advances — and read once the model is on screen
+   (see the applyDeepLink() call at the end of onModelLoaded). */
+var currentView=null;
+function syncHash(){
+  var h='';
+  if(mode==='tour') h='#tour-'+(tour.idx+1);
+  else if(mode==='g3') h='#g3-'+(g3Idx+1);
+  else if(mode==='walk'&&currentEx) h='#exhibit-'+currentEx.key;
+  else if(mode==='walk') h='#walk';
+  else if(mode==='lobby') h='#lobby';
+  else if(mode==='gallery') h='#gallery';
+  else if(mode==='exterior'&&currentView) h='#view-'+currentView;
+  else h='#exterior';
+  try{ history.replaceState(null,'',h); }catch(e){}
+}
+function applyDeepLink(){
+  var h=(location.hash||'').replace(/^#/,'');
+  if(!h||!modelReady) return;
+  var m;
+  if((m=h.match(/^exhibit-(\d{2})$/))){
+    var ex=null;
+    exhibits.forEach(function(e){ if(e.key===m[1]) ex=e; });
+    if(ex){ showExhibit(ex); goNearExhibit(ex); }
+    return;
+  }
+  if((m=h.match(/^tour-(\d+)$/))){
+    var ti=Math.max(0,Math.min(tourStops.length-1,parseInt(m[1],10)-1));
+    setMode('tour'); tourGoTo(ti,performance.now());
+    return;
+  }
+  if((m=h.match(/^g3-(\d+)$/))){
+    var gi=Math.max(0,Math.min(g3Spots.length-1,parseInt(m[1],10)-1));
+    setMode('g3'); showG3Spot(gi); var gs=g3Spots[gi]; flyTo(gs.cam,gs.tgt,1200);
+    return;
+  }
+  if((m=h.match(/^view-(aerial|front|court|night)$/))){
+    setMode('exterior',true); extDefault=false; currentView=m[1];
+    var v=m[1];
+    if(v==='front') flyTo(new THREE.Vector3(20,7,-44),new THREE.Vector3(19,2.2,-3));
+    if(v==='aerial') flyTo(new THREE.Vector3(4,74,-34),new THREE.Vector3(4,0,-2));
+    if(v==='court') flyTo(new THREE.Vector3(-13,3.4,-20),new THREE.Vector3(-5,1.2,1));
+    if(v==='night'){ setNight(!isNight); flyTo(new THREE.Vector3(28,8.5,-44),new THREE.Vector3(10,2,-2)); }
+    syncHash();
+    return;
+  }
+  if(h==='lobby'||h==='gallery'||h==='walk'||h==='exterior'){ setMode(h); return; }
+}
+window.addEventListener('hashchange',function(){ applyDeepLink(); });
 /* exterior preset views — framed on the real two-wing model */
 var sunDay={pos:new THREE.Vector3(50,62,30),exp:1.05,sun:3.0,hemi:0.35};
 var isNight=false;
@@ -1655,6 +1762,7 @@ document.querySelectorAll('#side .views button').forEach(function(b){
     if(mode!=='exterior') setMode('exterior',true);
     extDefault=false;
     var v=b.dataset.view;
+    currentView=v;
     if(v==='front') flyTo(new THREE.Vector3(20,7,-44),new THREE.Vector3(19,2.2,-3));
     if(v==='aerial') flyTo(new THREE.Vector3(4,74,-34),new THREE.Vector3(4,0,-2));
     if(v==='court') flyTo(new THREE.Vector3(-13,3.4,-20),new THREE.Vector3(-5,1.2,1));
@@ -1662,6 +1770,7 @@ document.querySelectorAll('#side .views button').forEach(function(b){
       setNight(!isNight);
       flyTo(new THREE.Vector3(28,8.5,-44),new THREE.Vector3(10,2,-2));
     }
+    syncHash();
   });
 });
 document.getElementById('sideToggle').addEventListener('click',function(){
@@ -1700,6 +1809,7 @@ function showExhibit(ex){
   document.getElementById('exTitle').textContent=ex.title;
   document.getElementById('exDesc').textContent=ex.desc;
   exhibitCard.classList.add('show');
+  syncHash();
 }
 function stepExhibit(dir){
   var i=currentEx?exhibits.indexOf(currentEx):0;
@@ -1708,6 +1818,14 @@ function stepExhibit(dir){
 }
 function goNearExhibit(ex){
   if(mode!=='walk'){ setMode('walk'); }
+  /* a teleport cancels any in-progress tap-to-move, or the stale
+     target drags the visitor away from the stand on arrival */
+  walk.clickTarget=null; walk.clickBlocked=0; walk.focusEx=null; hideMoveRing();
+  /* a teleport also ends any previous focus session: without this, a
+     same-document hash navigation (e.g. a shared #exhibit-01 link
+     opened while focused on 07) leaves focusState pointing at the
+     old exhibit while the card shows the new one. */
+  focusState=null;
   walk.intro=null;
   walk.level='base';
   walk.inStair=false; /* teleported to a stand point, outside the stair rects */
@@ -1741,8 +1859,84 @@ document.getElementById('exGo').addEventListener('click',function(){
   else if(currentEx) goNearExhibit(currentEx);
 });
 
-/* picking */
+/* picking + tap-to-move + exhibit focus (items 1, 2, 3) */
 var ray=new THREE.Raycaster(), ptr=new THREE.Vector2(), downAt=null;
+var pointerLocked=false;
+var focusState=null; /* the view before an exhibit focus, for Esc / empty-click exit */
+var moveRing=null;
+function initMoveRing(){
+  moveRing=new THREE.Group();
+  var ring=new THREE.Mesh(new THREE.RingGeometry(0.3,0.38,40),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.85,side:THREE.DoubleSide,depthWrite:false}));
+  ring.rotation.x=-Math.PI/2; moveRing.add(ring);
+  var dot=new THREE.Mesh(new THREE.CircleGeometry(0.08,24),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.9,side:THREE.DoubleSide,depthWrite:false}));
+  dot.rotation.x=-Math.PI/2; dot.position.y=0.01; moveRing.add(dot);
+  moveRing.visible=false; moveRing.renderOrder=6; scene.add(moveRing);
+}
+function showMoveRing(x,y,z,opacity){
+  if(!moveRing) return;
+  moveRing.position.set(x,y+0.03,z);
+  moveRing.visible=true;
+  moveRing.children.forEach(function(c){ c.material.opacity=opacity; });
+}
+function hideMoveRing(){ if(moveRing) moveRing.visible=false; }
+initMoveRing();
+function floorHitAt(cx,cy){
+  /* the first upward-facing surface under the cursor, or null — the
+     floor a tap-to-move target (or a hover ring) stands on */
+  var r=renderer.domElement.getBoundingClientRect();
+  ptr.x=((cx-r.left)/r.width)*2-1; ptr.y=-((cy-r.top)/r.height)*2+1;
+  ray.setFromCamera(ptr,camera);
+  var fh=ray.intersectObjects(solidMeshes,false);
+  for(var i=0;i<fh.length;i++){
+    var n=fh[i].face?fh[i].face.normal:null;
+    var wn=n?n.clone().transformDirection(fh[i].object.matrixWorld):null;
+    if(wn&&wn.y>0.5) return fh[i].point;
+  }
+  return null;
+}
+function setClickTarget(x,y,z){
+  walk.clickTarget={x:x,z:z}; walk.clickBlocked=0;
+  showMoveRing(x,y,z,0.9);
+}
+function arriveClickTarget(){
+  var ex=walk.focusEx; walk.clickTarget=null; walk.clickBlocked=0; hideMoveRing();
+  if(ex){
+    walk.focusEx=null;
+    var dir=ex.focus.clone().sub(walk.pos);
+    walk.yaw=Math.atan2(-dir.x,-dir.z); walk.pitch=-0.05;
+    showExhibit(ex); setExFolded(false);
+  }
+}
+function focusExhibit(ex){
+  if(!ex) return;
+  showExhibit(ex); setExFolded(false);
+  if(mode==='walk'){
+    /* walk to the exhibit's stand point, then face it */
+    focusState={mode:'walk',ex:ex};
+    walk.focusEx=ex;
+    setClickTarget(ex.stand.x,ex.stand.y-1.62,ex.stand.z);
+    return;
+  }
+  /* orbit modes: remember the view, fly to a viewpoint in front of it */
+  focusState={mode:mode,ex:ex,pos:camera.position.clone(),tgt:controls.target.clone()};
+  flyTo(ex.stand.clone(),ex.focus.clone(),1400);
+}
+function exitFocus(){
+  if(!focusState) return;
+  var fs=focusState; focusState=null;
+  walk.focusEx=null; walk.clickTarget=null; hideMoveRing();
+  exhibitCard.classList.remove('show');
+  if(fs.mode==='walk') return; /* stay where you are; only the card closes */
+  flyTo(fs.pos,fs.tgt,1200);
+}
+window.addEventListener('keydown',function(e){
+  if(e.key!=='Escape') return;
+  /* Esc unlocks the pointer first (real browsers also exit pointer lock
+     natively on Esc, but a synthetic Esc — e.g. in a test — does not, so
+     exit explicitly; calling it when not locked is a no-op). */
+  if(document.pointerLockElement===renderer.domElement){ document.exitPointerLock(); return; }
+  if(focusState){ exitFocus(); }
+});
 renderer.domElement.addEventListener('pointerdown',function(e){ downAt=[e.clientX,e.clientY]; });
 renderer.domElement.addEventListener('pointerup',function(e){
   if(!downAt) return;
@@ -1752,7 +1946,40 @@ renderer.domElement.addEventListener('pointerup',function(e){
   ptr.x=((e.clientX-r.left)/r.width)*2-1; ptr.y=-((e.clientY-r.top)/r.height)*2+1;
   ray.setFromCamera(ptr,camera);
   var hits=ray.intersectObjects(pickMeshes,false);
-  if(hits.length&&hits[0].object.userData.exhibit) showExhibit(hits[0].object.userData.exhibit);
+  var exHit=hits.length?hits[0]:null;
+  /* occlusion: a wall or floor between the camera and the exhibit
+     hides it — without this, a tap on the lobby floor would "hit"
+     an exhibit in the basement below through the slab. The nearest
+     solid hit IS the exhibit itself when the line of sight is clear,
+     so only a solid hit strictly in front of it occludes: compare
+     with a 5 cm epsilon. (A strict exHit.distance < solidHit.distance
+     could never pass — solidMeshes contains every exhibit mesh, so
+     the nearest solid hit is never farther than the exhibit hit.) */
+  var solidHit=null;
+  if(exHit&&solidMeshes.length){
+    var sh=ray.intersectObjects(solidMeshes,false);
+    if(sh.length) solidHit=sh[0];
+  }
+  if(exHit&&(!solidHit||solidHit.distance>=exHit.distance-0.05)){
+    focusExhibit(exHit.object.userData.exhibit);
+    return;
+  }
+  if(focusState){ exitFocus(); return; }
+  if(mode==='walk'&&!pointerLocked){
+    /* item 1: tap the floor to walk there */
+    var p=floorHitAt(e.clientX,e.clientY);
+    if(p&&canStand(p.x,p.z)) setClickTarget(p.x,p.y,p.z);
+  }
+});
+/* item 1: hover shows the landing ring where a tap would walk to */
+var hoverTick=0;
+renderer.domElement.addEventListener('pointermove',function(e){
+  if(mode!=='walk'||pointerLocked||!modelReady||walk.clickTarget) return;
+  var nowMs=performance.now();
+  if(nowMs-hoverTick<90) return; hoverTick=nowMs;
+  var p=floorHitAt(e.clientX,e.clientY);
+  if(p&&canStand(p.x,p.z)) showMoveRing(p.x,p.y,p.z,0.55);
+  else hideMoveRing();
 });
 
 /* ================= Walk mode (v16 layout, re-measured) =================
@@ -1786,7 +2013,8 @@ renderer.domElement.addEventListener('pointerup',function(e){
    The 30-step stair (x 0-8.1, z 3-5) links the levels; its trigger is
    edge-latched (see checkStairTrigger). */
 var GEYE=1.62;
-var walk={pos:new THREE.Vector3(-1.0,GEYE,-1.8),yaw:-2.88,pitch:0,keys:{},press:{},intro:null,level:'ground',inStair:false};
+var walk={pos:new THREE.Vector3(-1.0,GEYE,-1.8),yaw:-2.88,pitch:0,keys:{},press:{},intro:null,level:'ground',inStair:false,
+  clickTarget:null,clickBlocked:0,focusEx:null};
 function rectPoly(x1,z1,x2,z2){ return [[x1,z1],[x2,z1],[x2,z2],[x1,z2]]; }
 function inPoly(x,z,poly){
   var inside=false;
@@ -1852,10 +2080,27 @@ function canStand(x,z){
   for(var k=0;k<bl.length;k++){ var b=bl[k]; if(x>b[0]-r&&x<b[2]+r&&z>b[1]-r&&z<b[3]+r) return false; }
   return true;
 }
+function rayWallBlocked(fx,fz,tx,tz){
+  /* item 2: a geometry wall guard. Before a step, cast a short ray
+     at chest height in the step direction against the loaded GLB —
+     a wall (or glass, column, tall exhibit) inside the step plus a
+     0.4 m margin blocks the step, even if the hand-written zone
+     tables are stale. The ray is horizontal, so floors and ceilings
+     never intersect it. */
+  if(!solidMeshes.length||!modelReady) return false;
+  var dx=tx-fx, dz=tz-fz;
+  var dist=Math.hypot(dx,dz);
+  if(dist<0.01) return false;
+  ray.set(new THREE.Vector3(fx,walk.pos.y-0.45,fz),new THREE.Vector3(dx/dist,0,dz/dist));
+  ray.far=dist+0.4;
+  var hits=ray.intersectObjects(solidMeshes,false);
+  ray.far=Infinity;
+  return hits.length>0;
+}
 function attemptMove(nx,nz){
-  if(canStand(nx,nz)){ walk.pos.x=nx; walk.pos.z=nz; return true; }
-  if(canStand(nx,walk.pos.z)){ walk.pos.x=nx; return true; }
-  if(canStand(walk.pos.x,nz)){ walk.pos.z=nz; return true; }
+  if(canStand(nx,nz)&&!rayWallBlocked(walk.pos.x,walk.pos.z,nx,nz)){ walk.pos.x=nx; walk.pos.z=nz; return true; }
+  if(canStand(nx,walk.pos.z)&&!rayWallBlocked(walk.pos.x,walk.pos.z,nx,walk.pos.z)){ walk.pos.x=nx; return true; }
+  if(canStand(walk.pos.x,nz)&&!rayWallBlocked(walk.pos.x,walk.pos.z,walk.pos.x,nz)){ walk.pos.z=nz; return true; }
   return false;
 }
 function startStair(down){
@@ -1886,6 +2131,7 @@ function checkStairTrigger(){
 }
 function enterWalk(){
   camAnim=null;
+  walk.clickTarget=null; walk.clickBlocked=0; walk.focusEx=null; hideMoveRing();
   walk.level='ground';
   walk.intro={s:performance.now(),d:5600,
     pts:[new THREE.Vector3(-1.0,GEYE,-1.8), new THREE.Vector3(0.5,GEYE,3.9), new THREE.Vector3(8.8,EYE_Y,4.0)],
@@ -1938,13 +2184,36 @@ function nudge(k,dist){
 var lookDrag=null;
 renderer.domElement.addEventListener('pointerdown',function(e){ if(mode==='walk') lookDrag=[e.clientX,e.clientY]; });
 window.addEventListener('pointermove',function(e){
-  if(mode!=='walk'||!lookDrag) return;
+  if(mode!=='walk'||!lookDrag||pointerLocked) return;
   walk.yaw-=(e.clientX-lookDrag[0])*0.005;
   walk.pitch-=(e.clientY-lookDrag[1])*0.004;
   walk.pitch=Math.max(-0.9,Math.min(0.9,walk.pitch));
   lookDrag=[e.clientX,e.clientY];
 });
 window.addEventListener('pointerup',function(){ lookDrag=null; });
+/* item 6: optional pointer lock for desktop walk mode. A toggle
+   button in the walk HUD (hidden on touch devices) — click the
+   scene to lock, Esc to unlock. While locked, mouse movement turns
+   the view; tap-to-move is suspended (the cursor is hidden). */
+var lockBtn=document.getElementById('lockBtn');
+if(lockBtn){
+  lockBtn.addEventListener('click',function(){
+    if(document.pointerLockElement===renderer.domElement){ document.exitPointerLock(); return; }
+    if(mode!=='walk') return;
+    try{ renderer.domElement.requestPointerLock(); }catch(e){}
+  });
+  document.addEventListener('pointerlockchange',function(){
+    pointerLocked=(document.pointerLockElement===renderer.domElement);
+    lockBtn.setAttribute('aria-pressed',pointerLocked?'true':'false');
+    lockBtn.textContent=pointerLocked?'已锁定':'锁定';
+  });
+  document.addEventListener('mousemove',function(e){
+    if(!pointerLocked||mode!=='walk') return;
+    walk.yaw-=e.movementX*0.0025;
+    walk.pitch-=e.movementY*0.0025;
+    walk.pitch=Math.max(-0.9,Math.min(0.9,walk.pitch));
+  });
+}
 function updateWalk(dt,nowMs){
   if(!introPose(nowMs)){
     var sp=6.2*dt;
@@ -1958,8 +2227,45 @@ function updateWalk(dt,nowMs){
     if(walk.keys['q']) walk.yaw+=1.8*dt;
     if(walk.keys['e']) walk.yaw-=1.8*dt;
     var len=Math.hypot(mv.x,mv.z);
-    if(len>0){ attemptMove(walk.pos.x+mv.x/len*sp, walk.pos.z+mv.z/len*sp); }
+    if(len>0){
+      attemptMove(walk.pos.x+mv.x/len*sp, walk.pos.z+mv.z/len*sp);
+      /* any manual move input cancels a tap-to-move target */
+      walk.clickTarget=null; walk.clickBlocked=0; hideMoveRing();
+    }
+    /* item 1: glide toward a tapped floor point. attemptMove slides
+       along walls, so a straight-line target that clips a corner
+       still gets there by sliding. */
+    if(walk.clickTarget){
+      var cdx=walk.clickTarget.x-walk.pos.x, cdz=walk.clickTarget.z-walk.pos.z;
+      var cdd=Math.hypot(cdx,cdz);
+      if(cdd<0.35){ arriveClickTarget(); }
+      else{
+        var bx=walk.pos.x, bz=walk.pos.z;
+        attemptMove(walk.pos.x+cdx/cdd*sp, walk.pos.z+cdz/cdd*sp);
+        if(Math.hypot(walk.pos.x-bx,walk.pos.z-bz)<sp*0.15){
+          walk.clickBlocked=(walk.clickBlocked||0)+1;
+          if(walk.clickBlocked>45){ walk.clickTarget=null; walk.clickBlocked=0; hideMoveRing(); }
+        }else walk.clickBlocked=0;
+        checkStairTrigger();
+      }
+    }
     checkStairTrigger();
+    /* item 2: ground snap — keep the eye on the model's real floor.
+       Only within 0.6 m of the level's expected floor (0 / -4.8), so
+       a ray through the atrium opening can never drop the visitor. */
+    if(modelReady&&solidMeshes.length){
+      ray.set(new THREE.Vector3(walk.pos.x,walk.pos.y+0.3,walk.pos.z),new THREE.Vector3(0,-1,0));
+      ray.far=2.2;
+      var gh=ray.intersectObjects(solidMeshes,false);
+      ray.far=Infinity;
+      if(gh.length){
+        var fy=gh[0].point.y;
+        var expectY=(walk.level==='ground')?0:-4.8;
+        if(Math.abs(fy-expectY)<0.6){
+          walk.pos.y+=(fy+1.62-walk.pos.y)*Math.min(1,dt*8);
+        }
+      }
+    }
   }
   camera.position.copy(walk.pos);
   var look=new THREE.Vector3(
@@ -1992,12 +2298,38 @@ window.addEventListener('resize',resize); resize();
 camera.position.copy(exteriorCamPos());
 
 var lastNow=performance.now(), elapsed=0;
+var renderCount=0; /* frames actually drawn — the on-demand test reads this */
+/* item 8: idle tracking + FPS window for automatic DPR */
+var lastInteract=performance.now();
+var lastIdleRender=performance.now();
+var fpsWindowStart=performance.now(), fpsFrames=0, lastDprAdjust=0;
+var maxDpr=isSoftwareGL?1:Math.min(window.devicePixelRatio||1,1.5);
+['pointerdown','pointermove','wheel','keydown','touchstart'].forEach(function(ev){
+  window.addEventListener(ev,function(){ lastInteract=performance.now(); },{passive:true});
+});
 function animate(){
   requestAnimationFrame(animate);
   try{
     var nowMs=performance.now();
     var dt=Math.min((nowMs-lastNow)/1000,0.05); lastNow=nowMs; elapsed+=dt;
     var t=elapsed;
+    /* item 8: a 2 s FPS window drives automatic DPR — below 25 fps
+       the pixel ratio steps down (floor 0.75), above 55 it steps back
+       up (cap: the initial ratio). At most one step per 3 s, so it
+       never oscillates. */
+    fpsFrames++;
+    if(nowMs-fpsWindowStart>=2000&&nowMs-lastDprAdjust>3000){
+      var avgFps=fpsFrames/((nowMs-fpsWindowStart)/1000);
+      fpsFrames=0; fpsWindowStart=nowMs; lastDprAdjust=nowMs;
+      var curDpr=renderer.getPixelRatio();
+      if(avgFps<25&&curDpr>0.75){
+        renderer.setPixelRatio(Math.max(0.75,curDpr-0.25)); resize();
+      }else if(avgFps>55&&curDpr<maxDpr){
+        renderer.setPixelRatio(Math.min(maxDpr,curDpr+0.25)); resize();
+      }
+    }
+    var camBefore=null;
+    if(mode!=='walk'&&mode!=='tour') camBefore=camera.position.clone();
     if(camAnim&&mode!=='walk'&&mode!=='tour'){
       var k=Math.min(1,(performance.now()-camAnim.s)/camAnim.d);
       var e=1-Math.pow(1-k,3);
@@ -2008,30 +2340,105 @@ function animate(){
     if(mode==='walk') updateWalk(dt,nowMs);
     else if(mode==='tour'){ updateTour(nowMs); camera.lookAt(controls.target); }
     else controls.update();
-    if(spinnerPivot) spinnerPivot.rotation.y=t*0.45;
-    if(petals){
-      var pTarget=(mode==='exterior')?0.75:0;
-      petals.material.opacity+=(pTarget-petals.material.opacity)*Math.min(1,dt*2);
-      petals.visible=petals.material.opacity>0.02;
-      if(petals.visible){
-        var pArr=petals.geometry.attributes.position.array;
-        for(var qi=0;qi<petalData.length;qi++){
-          var pd=petalData[qi];
-          pd.y-=pd.sp*dt;
-          pd.x+=Math.sin(t*pd.sw+pd.ph)*dt*0.55;
-          pd.z+=Math.cos(t*pd.sw*0.8+pd.ph)*dt*0.3;
-          if(pd.y<0.15){ pd.y=12+Math.random()*3; pd.x=-48+Math.random()*105; pd.z=-26+Math.random()*42; }
-          pArr[qi*3]=pd.x; pArr[qi*3+1]=pd.y; pArr[qi*3+2]=pd.z;
+    /* item 8: on-demand rendering. In exterior orbit mode, once the
+       visitor has not touched anything for 3 s and the camera has
+       settled (damping done), the scene is static — instead of
+       redrawing the same frame 60 times a second, re-render at most
+       once a second (a heartbeat). A full freeze is not usable: the
+       frozen canvas reads back black in screenshots, and a lost
+       compositor surface would stay black until the next interaction.
+       1 fps is still ~98% fewer frames than 60 fps. The heartbeat
+       re-presents the same frame without advancing the petals /
+       spinner / lamps, so nothing visibly jumps. Walk and tour mode
+       always render (the view moves). */
+    var idleExterior=(mode==='exterior'&&!camAnim&&(nowMs-lastInteract>3000));
+    var camMoved=camBefore?camBefore.distanceToSquared(camera.position)>1e-8:false;
+    var heartbeat=idleExterior&&!camMoved&&(nowMs-lastIdleRender>1000);
+    if(idleExterior&&!camMoved&&!heartbeat){
+      /* frozen frame: nothing moves, nothing is redrawn */
+    }else{
+      if(!heartbeat&&spinnerPivot) spinnerPivot.rotation.y=t*0.45;
+      if(!heartbeat&&petals){
+        var pTarget=(mode==='exterior')?0.75:0;
+        petals.material.opacity+=(pTarget-petals.material.opacity)*Math.min(1,dt*2);
+        petals.visible=petals.material.opacity>0.02;
+        if(petals.visible){
+          var pArr=petals.geometry.attributes.position.array;
+          for(var qi=0;qi<petalData.length;qi++){
+            var pd=petalData[qi];
+            pd.y-=pd.sp*dt;
+            pd.x+=Math.sin(t*pd.sw+pd.ph)*dt*0.55;
+            pd.z+=Math.cos(t*pd.sw*0.8+pd.ph)*dt*0.3;
+            if(pd.y<0.15){ pd.y=12+Math.random()*3; pd.x=-48+Math.random()*105; pd.z=-26+Math.random()*42; }
+            pArr[qi*3]=pd.x; pArr[qi*3+1]=pd.y; pArr[qi*3+2]=pd.z;
+          }
+          petals.geometry.attributes.position.needsUpdate=true;
         }
-        petals.geometry.attributes.position.needsUpdate=true;
       }
+      if(!heartbeat) lampMeshes.forEach(function(o,i){ var s=1+Math.sin(t*2+i)*0.08; o.scale.set(s,s,s); });
+      renderCount++;
+      lastIdleRender=nowMs;
+      renderer.render(scene,camera);
     }
-    lampMeshes.forEach(function(o,i){ var s=1+Math.sin(t*2+i)*0.08; o.scale.set(s,s,s); });
-    renderer.render(scene,camera);
   }catch(err){
     showErr('渲染出错：'+err.message);
   }
 }
+/* debug handle for testing and review (not part of the UI): read-only
+   snapshots of the interaction state — mode, walk position, tour stop,
+   focus, pixel ratio and renderer.info. A review can drive the page
+   through the normal UI and read the state back here. */
+window.__2121={
+  get mode(){ return mode; },
+  get walkPos(){ return walk.pos.toArray(); },
+  get walkLevel(){ return walk.level; },
+  get walkTarget(){ return walk.clickTarget; },
+  get tourIdx(){ return tour.idx; },
+  get tourDwell(){ return tour.dwellDur; },
+  get tourPhase(){ return tour.phase; },
+  get exhibit(){ return currentEx?currentEx.key:null; },
+  get focus(){ return focusState?(focusState.mode+':'+(focusState.ex?focusState.ex.key:'')):null; },
+  get pixelRatio(){ return renderer.getPixelRatio(); },
+  get renderInfo(){ var i=renderer.info.render; return {calls:i.calls,triangles:i.triangles}; },
+  get frames(){ return renderCount; },
+  get hash(){ return location.hash; },
+  get clickBlocked(){ return walk.clickBlocked; },
+  /* read-only collision probes (debug only) */
+  canStandAt: function(x,z){ return canStand(x,z); },
+  wallGuard: function(fx,fz,tx,tz){
+    var dx=tx-fx, dz=tz-fz, dist=Math.hypot(dx,dz);
+    if(dist<0.01||!solidMeshes.length) return {blocked:false};
+    ray.set(new THREE.Vector3(fx,walk.pos.y-0.45,fz),new THREE.Vector3(dx/dist,0,dz/dist));
+    ray.far=dist+0.4;
+    var hits=ray.intersectObjects(solidMeshes,false);
+    ray.far=Infinity;
+    return {blocked:hits.length>0, hit: hits.length?{name:hits[0].object.name,dist:+hits[0].distance.toFixed(2)}:null};
+  },
+  project: function(x,y,z){
+    var v=new THREE.Vector3(x,y,z).project(camera);
+    return {x:(v.x*0.5+0.5)*window.innerWidth, y:(-v.y*0.5+0.5)*window.innerHeight, behind:v.z>1};
+  },
+  /* read-only pick probe: what would a tap at (sx,sy) hit? (debug only)
+     floor mirrors floorHitAt: the first hit whose world normal faces up. */
+  debugPick: function(sx,sy){
+    var r=renderer.domElement.getBoundingClientRect();
+    ptr.x=((sx-r.left)/r.width)*2-1; ptr.y=-((sy-r.top)/r.height)*2+1;
+    ray.setFromCamera(ptr,camera);
+    var eh=ray.intersectObjects(pickMeshes,false);
+    var sh=ray.intersectObjects(solidMeshes,false);
+    var fl=null;
+    for(var i=0;i<sh.length;i++){
+      var n=sh[i].face?sh[i].face.normal:null;
+      var wn=n?n.clone().transformDirection(sh[i].object.matrixWorld):null;
+      if(wn&&wn.y>0.5){ fl={name:sh[i].object.name,point:sh[i].point.toArray().map(function(v){ return +v.toFixed(2); })}; break; }
+    }
+    return {
+      ex: eh.length?{name:eh[0].object.name,ex:eh[0].object.userData.exhibit?eh[0].object.userData.exhibit.key:null,dist:+eh[0].distance.toFixed(2)}:null,
+      solid: sh.length?{name:sh[0].object.name,dist:+sh[0].distance.toFixed(2)}:null,
+      floor: fl
+    };
+  }
+};
 animate();
 })();
 </script>
