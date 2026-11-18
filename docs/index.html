@@ -7,6 +7,7 @@
 <link rel="icon" href="data:,"/>
 <title>21_21 DESIGN SIGHT 3D — 可进入的建筑与展厅</title>
 <script src="assets/three.min.js"></script>
+<script src="assets/meshopt_decoder.js"></script>
 <style>
   /* ============================================================
      21_21 DESIGN SIGHT — interface as a drawing sheet's margins.
@@ -507,7 +508,12 @@ renderer.shadowMap.type=THREE.PCFShadowMap;
    500+ casters every frame — a large per-frame saving on weak GPUs. */
 renderer.shadowMap.autoUpdate=false;
 if('outputColorSpace' in renderer) renderer.outputColorSpace=THREE.SRGBColorSpace; else renderer.outputEncoding=THREE.sRGBEncoding;
-renderer.toneMapping=THREE.ACESFilmicToneMapping;
+/* #4: AgX instead of ACES — ACES pushed the concrete warm and the G2 red
+   sphere oversaturated; AgX keeps Ando's greys neutral and the red in
+   gamut. A/B-tested against NeutralToneMapping (same cameras, same
+   moments); AgX kept the sky and the steel roof closer to the reference
+   photos, Neutral read slightly flat on the concrete. */
+renderer.toneMapping=THREE.AgXToneMapping;
 renderer.toneMappingExposure=1.05;
 stage.appendChild(renderer.domElement);
 
@@ -606,6 +612,73 @@ function setupEnvironment(){
     if('environmentIntensity' in scene) scene.environmentIntensity=isNightRef()?0.1:0.5;
   }catch(e){ /* IBL is an enhancement; direct lights still carry the scene */ }
 }
+/* #4: real-HDRI environment — Overcast Soil (Pure Sky), Poly Haven,
+   CC0 1.0 (no attribution required), 1K, 1024x512 Radiance .hdr.
+   No Tokyo overcast/dusk HDRI exists on Poly Haven (all 998 screened;
+   the only japan-tagged one is a Nagoya garden at sunrise), so a
+   location-neutral pure sky is used for scene.environment ONLY — the
+   visible sky stays the painted canvas (day) / solid colours (dusk,
+   night), so one HDRI serves all four moments. 39% of its pixels are
+   above 1.0, so an 8-bit PNG conversion would clip the dynamic range;
+   the true .hdr is decoded at runtime with this small RGBE decoder. */
+var hdriEnvTex=null;
+function decodeRGBE(buf){
+  var b=new Uint8Array(buf), pos=0;
+  function readLine(){
+    var s=pos;
+    while(pos<b.length&&b[pos]!==10) pos++;
+    var line='';
+    for(var i=s;i<pos;i++) line+=String.fromCharCode(b[i]);
+    pos++;
+    return line;
+  }
+  var w=0,h=0,line;
+  /* header lines run until the blank line; the resolution line
+     ("-Y 512 +X 1024") follows AFTER that blank line, not before it */
+  while((line=readLine())!==''){ /* skip header lines */ }
+  line=readLine();
+  var m=line.match(/-Y\s+(\d+)\s+\+X\s+(\d+)/);
+  if(m){ h=parseInt(m[1],10); w=parseInt(m[2],10); }
+  if(!w||!h) throw new Error('bad hdr header');
+  var data=new Float32Array(w*h*3), p=pos;
+  for(var y=0;y<h;y++){
+    if(b[p]!==2||b[p+1]!==2) throw new Error('hdr is not RLE');
+    p+=4;
+    var chs=[];
+    for(var c=0;c<4;c++){
+      var ch=new Uint8Array(w), x=0;
+      while(x<w){
+        var n=b[p++];
+        if(n>128){ var v=b[p++]; for(var k=0;k<n-128;k++) ch[x++]=v; }
+        else { for(var k2=0;k2<n;k2++) ch[x++]=b[p++]; }
+      }
+      chs.push(ch);
+    }
+    for(var x2=0;x2<w;x2++){
+      var e=chs[3][x2], f=(e===0)?0:Math.pow(2,e-136);
+      var idx=(y*w+x2)*3;
+      data[idx]=chs[0][x2]*f; data[idx+1]=chs[1][x2]*f; data[idx+2]=chs[2][x2]*f;
+    }
+  }
+  return {width:w,height:h,data:data};
+}
+function loadHDRIEnv(){
+  if(isSoftwareGL) return; /* PMREM in software GL stalls for many seconds */
+  fetch('assets/overcast_soil_puresky_1k.hdr').then(function(r){
+    if(!r.ok) throw new Error('hdr '+r.status);
+    return r.arrayBuffer();
+  }).then(function(buf){
+    var hdr=decodeRGBE(buf);
+    var tex=new THREE.DataTexture(hdr.data,hdr.width,hdr.height,THREE.RGBFormat,THREE.FloatType);
+    tex.mapping=THREE.EquirectangularReflectionMapping;
+    tex.needsUpdate=true;
+    var pm=new THREE.PMREMGenerator(renderer);
+    hdriEnvTex=pm.fromEquirectangular(tex).texture;
+    pm.dispose(); tex.dispose();
+    scene.environment=hdriEnvTex;
+    if('environmentIntensity' in scene) scene.environmentIntensity=currentEnvIntensity();
+  }).catch(function(){ setupEnvironment(); /* fallback: painted-sky env */ });
+}
 function isNightRef(){ return typeof isNight!=='undefined'&&isNight; }
 /* Sky painting + PMREM are deferred until AFTER the model has loaded
    (onModelLoaded calls them): they compete for the same main thread as
@@ -658,21 +731,27 @@ sun.shadow.camera.left=-70; sun.shadow.camera.right=70; sun.shadow.camera.top=70
 sun.shadow.camera.far=220; sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.03;
 scene.add(sun);
 var fill=new THREE.DirectionalLight(0xbfd4e6,0.3); fill.position.set(-40,24,-36); scene.add(fill);
-scene.add(new THREE.AmbientLight(0xffffff,0.06));
-/* interior lights for the basement galleries (the model is enclosed) */
+scene.add(new THREE.AmbientLight(0xffffff,0.08)); /* #4: 0.06 -> 0.08 — the baked
+   aoMap darkens the interior ~25% on average (mean 0.75); the ambient is
+   compensated x1.33 so the rooms keep their old brightness while the
+   baked gradient (bright near skylight/court, dark in corners) survives */
+/* #4: the nine PointLights are GONE. The baked lightmap (second UV,
+   occlusionTexture) now carries all the indirect light — skylight wash,
+   court light spilling underground, G2 wall washing — so the page only
+   keeps two narrow exhibit SpotLights (issue acceptance: PointLight <= 2;
+   here it is 0). three r155+ SpotLight intensity is in candela: ~150 cd
+   at ~8 m gives a visible pool on the exhibits without flattening the
+   baked gradient. No shadows on the spots — the sun already casts them. */
 var intLights=[];
-function addIntLight(x,y,z,color,intensity,dist){
-  var pl=new THREE.PointLight(color,intensity,dist); pl.position.set(x,y,z); scene.add(pl); intLights.push(pl); return pl;
+function addSpotLight(x,y,z,tx,ty,tz,color,intensity,angle,dist){
+  var sp=new THREE.SpotLight(color,intensity,dist,angle,0.5,1.2);
+  sp.position.set(x,y,z);
+  sp.target.position.set(tx,ty,tz);
+  scene.add(sp); scene.add(sp.target);
+  intLights.push(sp); return sp;
 }
-addIntLight(24,-1.1,-5.5,0xfff1da,0.85,36);   /* Gallery 2 west (v16: hall is the east rectangle) */
-addIntLight(38,-1.1,-7.5,0xfff1da,0.7,34);     /* Gallery 2 centre */
-addIntLight(47,-1.1,-9.5,0xfff1da,0.65,32);    /* Gallery 2 east end, to x=52 */
-addIntLight(38,-1.1,-13.5,0xfff1da,0.6,30);    /* Gallery 2 south band (04 panel wall) */
-addIntLight(28,-1.1,4.0,0xf2f6ff,0.7,32);     /* Gallery 1 skylight hall */
-addIntLight(15,-0.8,-2.0,0xffe9bb,0.65,24);   /* sunken courtyard (open pit, floor -4.8) */
-addIntLight(4,-0.4,1.5,0xfff1da,0.6,26);      /* atrium void (open -4.8 to +6.24) */
-addIntLight(2,2.4,-4.2,0xfff4e0,0.55,24);     /* entrance lobby: reception / elevator */
-addIntLight(-23,2.4,1.2,0xfff4e0,0.6,28);     /* Gallery 3 — west (cafe) wing */
+addSpotLight(38,2.5,-8, 38,-4.8,-8, 0xfff1da,150,0.55,30); /* Gallery 2 exhibit ring */
+addSpotLight(28,2.5,4,  28,-4.8,4,  0xf2f6ff,120,0.5,25);  /* Gallery 1 skylight hall */
 
 /* ================= Drifting sakura petals (exterior only) =================
    After Sakura River Valley: the scene should feel alive and seasonal.
@@ -1008,6 +1087,10 @@ function parseModel(){
     loadFailed(new Error('模型解析超时'));
   },PARSE_TIMEOUT_MS);
   var ld=new THREE.GLTFLoader();
+  /* #4: the shipped GLB is Meshopt-compressed (EXT_meshopt_compression,
+     via #3's pipeline); the decoder ships as assets/meshopt_decoder.js
+     (self-contained, wasm inlined). Without it the parse fails. */
+  if(window.MeshoptDecoder) ld.setMeshoptDecoder(MeshoptDecoder);
   try{
     ld.parse(asmBuffer.slice(0),'',function(gltf){
       if(settled) return;
@@ -1217,19 +1300,26 @@ function onModelLoaded(gltf){
   model.traverse(function(o){
     if(o.isMesh){
       o.castShadow=true; o.receiveShadow=true;
-      if(o.material&&!Array.isArray(o.material)&&'transmission' in o.material&&o.material.transmission>0){
-        /* KHR transmission forces a second full-scene render every frame —
-           measured here as the main thread blocking for ~70 s after the
-           download hit 100% under software GL, and a heavy per-frame cost
-           on phones. Replace it with plain transparent glass that still
-           picks up the sky environment reflection. */
+      var mn=o.material&&o.material.name;
+      if(mn==='MAT_Glass'){
+        /* #4: the baked GLB carries plain transparent glass (transmission
+           0, base alpha 0.18) — normalise to opacity 0.32 so the facade
+           reads as glass: visible and reflective, neither a solid wall
+           nor invisible. The GLB JSON is verified to contain no
+           KHR_materials_transmission (see the #4 PR). */
+        o.material=o.material.clone();
+        o.material.transparent=true;
+        o.material.opacity=0.32;
+        o.material.depthWrite=false;
+      }else if(o.material&&!Array.isArray(o.material)&&'transmission' in o.material&&o.material.transmission>0){
+        /* safety net: no transmission material may survive in the scene —
+           KHR transmission forces a second full-scene render every frame */
         o.material=o.material.clone();
         o.material.transmission=0;
         o.material.transparent=true;
         o.material.opacity=0.38;
         o.material.depthWrite=false;
       }
-      var mn=o.material&&o.material.name;
       if(mn==='MAT_Pendant_Light'&&o.material.emissive){ o.material=o.material.clone(); o.material.emissive=new THREE.Color(0xffc98a); o.material.emissiveIntensity=0.9; lampMeshes.push(o); }
       if((mn==='MAT_LightStrip'||mn==='MAT_Skylight')&&o.material.emissive){ o.material=o.material.clone(); o.material.emissive=new THREE.Color(0xfff3d0); o.material.emissiveIntensity=0.55; }
       /* capture group must keep the leading zero: exhibitMeshes is keyed
@@ -1317,7 +1407,7 @@ function onModelLoaded(gltf){
     });
   });
   /* now that the model is on screen, build the cloudy sky + IBL */
-  setTimeout(function(){ buildSky(); setupEnvironment(); },60);
+  setTimeout(function(){ buildSky(); setupEnvironment(); loadHDRIEnv(); },60); /* #4: real-HDRI env (falls back to the painted sky) */
 }
 startLoad();
 
@@ -1574,7 +1664,7 @@ function setMode(next,keepCam){
   document.querySelectorAll('#modebar button').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.mode===next?'true':'false'); });
   badge.textContent=modeNames[next];
   var inside=(next!=='exterior');
-  scene.fog=inside? null : new THREE.Fog(isNight?0x2b3442:0xd8e6f0,120,280);
+  scene.fog=inside? null : new THREE.Fog(MOMENTS[moment].fog,120,280); /* #4: fog follows the current light moment */
   applyLabels();
   walkHud.classList.toggle('show',next==='walk');
   document.body.classList.toggle('walking',next==='walk');
@@ -1605,51 +1695,122 @@ document.querySelectorAll('#modebar button').forEach(function(b){
   b.addEventListener('click',function(){ setMode(b.dataset.mode); });
 });
 /* exterior preset views — framed on the real two-wing model */
-var sunDay={pos:new THREE.Vector3(50,62,30),exp:1.05,sun:3.0,hemi:0.35};
-var isNight=false;
+/* #4: the four moments of light. One switch for the whole page: the
+   interface palette (body.day) and the scene's light change together.
+   The baked indoor lightmap does NOT change with the moment (indoor
+   light is moment-independent by design); only the outdoor sun, sky,
+   fog and exposure move. Morning+noon use the paper UI, dusk+night
+   the dark UI. Night is the default — the page opens on the black
+   version. Switching lerps every value over 2.5 s in the render loop
+   (stepMomentAnim, called from animate). */
+var MOMENTS={
+  morning:{label:'清晨',sunPos:[62,26,-18],sunColor:0xffd9a8,sun:2.2,hemi:0.30,exp:1.02,fog:0xe8e2d4,env:0.55,bg:'sky',dark:false},
+  noon:{label:'正午',sunPos:[50,62,30],sunColor:0xfff2dd,sun:3.0,hemi:0.35,exp:1.05,fog:0xd8e6f0,env:0.6,bg:'sky',dark:false},
+  dusk:{label:'黄昏',sunPos:[-58,14,20],sunColor:0xff9a5c,sun:1.6,hemi:0.20,exp:1.0,fog:0xe8c9a8,env:0.35,bg:0x3a2f28,dark:true},
+  night:{label:'夜',sunPos:[-40,30,-24],sunColor:0xbfd0e8,sun:0.55,hemi:0.14,exp:0.95,fog:0x2b3442,env:0.12,bg:0x2b3442,dark:true}
+};
+var MOMENT_ORDER=['morning','noon','dusk','night'];
+var moment='night';
+var isNight=true; /* derived: dusk or night — kept for isNightRef()/setMode */
 var themeBtn=document.getElementById('themeToggle');
 var nightViewBtn=document.querySelector('#side .views button[data-view="night"]');
-/* One switch for the whole page: the interface palette (body.day)
-   and the scene's light change together, so the sheet and the
-   building are never in different times of day. Night is the
-   default — the page opens on the black version. Interior lights
-   are scaled only on an actual change, so the two entry points
-   (the header's sun/moon button and the archive's dusk view) can
-   never drift the intensities apart. Fog follows the mode: there
-   is none indoors, and setMode re-derives it from isNight when
-   the visitor steps back outside. */
-function setNight(n){
-  n=!!n;
-  var changed=(n!==isNight);
-  isNight=n;
-  document.body.classList.toggle('day',!n);
-  themeBtn.setAttribute('aria-pressed',n?'true':'false');
-  themeBtn.setAttribute('aria-label',n?'切换到白天':'切换到夜晚');
-  if(nightViewBtn) nightViewBtn.textContent=n?'回到白天':'黄昏灯光';
-  var mc=document.querySelector('meta[name="color-scheme"]');
-  if(mc) mc.setAttribute('content',n?'dark':'light');
-  if(n){
-    scene.background=new THREE.Color(0x2b3442);
-    if(mode==='exterior') scene.fog=new THREE.Fog(0x2b3442,120,280);
-    sun.intensity=0.55; sun.position.set(-40,30,-24); hemi.intensity=0.14;
-    renderer.toneMappingExposure=0.95;
-    if(skyEnvTex) scene.environment=skyEnvTex;
-    if('environmentIntensity' in scene) scene.environmentIntensity=0.1;
-    if(changed) intLights.forEach(function(l){ l.intensity*=1.6; });
-  }else{
-    buildSky(); /* the day background is restored from the sky texture */
+var momentAnim=null;
+function currentEnvIntensity(){ return MOMENTS[moment].env; }
+function applyMomentValues(m){
+  var sp=m.sunPos;
+  sun.position.set(sp[0],sp[1],sp[2]);
+  sun.color.setHex(m.sunColor);
+  sun.intensity=m.sun;
+  hemi.intensity=m.hemi;
+  renderer.toneMappingExposure=m.exp;
+  if(m.bg==='sky'){
+    buildSky();
     scene.background=skyTex||new THREE.Color(0xa9c2dc);
-    if(mode==='exterior') scene.fog=new THREE.Fog(0xd8e6f0,120,280);
-    sun.intensity=sunDay.sun; sun.position.copy(sunDay.pos); hemi.intensity=sunDay.hemi;
-    renderer.toneMappingExposure=sunDay.exp;
-    if(skyEnvTex) scene.environment=skyEnvTex;
-    if('environmentIntensity' in scene) scene.environmentIntensity=0.5;
-    if(changed) intLights.forEach(function(l){ l.intensity/=1.6; });
+  }else{
+    scene.background=new THREE.Color(m.bg);
+  }
+  if(mode==='exterior') scene.fog=new THREE.Fog(m.fog,120,280);
+  if(hdriEnvTex) scene.environment=hdriEnvTex;
+  else if(skyEnvTex) scene.environment=skyEnvTex;
+  if('environmentIntensity' in scene) scene.environmentIntensity=m.env;
+}
+function applyMomentUI(m){
+  document.body.classList.toggle('day',!m.dark);
+  var mc=document.querySelector('meta[name="color-scheme"]');
+  if(mc) mc.setAttribute('content',m.dark?'dark':'light');
+  var next=MOMENT_ORDER[(MOMENT_ORDER.indexOf(moment)+1)%MOMENT_ORDER.length];
+  themeBtn.setAttribute('aria-label','切换到'+MOMENTS[next].label);
+  themeBtn.setAttribute('aria-pressed',m.dark?'true':'false');
+  if(nightViewBtn) nightViewBtn.textContent=(moment==='dusk')?'回到夜晚':'黄昏灯光';
+}
+function setMoment(name,instant){
+  if(!MOMENTS[name]) return;
+  var from=MOMENTS[moment], to=MOMENTS[name];
+  var wasDark=from.dark, nowDark=to.dark;
+  moment=name;
+  isNight=nowDark;
+  applyMomentUI(to);
+  /* interior SpotLights are scaled only when crossing the light/dark
+     boundary, so repeated moment switches never drift them apart */
+  if(wasDark!==nowDark){
+    var f=nowDark?1.6:1/1.6;
+    intLights.forEach(function(l){ l.intensity*=f; });
+  }
+  if(instant){
+    momentAnim=null;
+    applyMomentValues(to);
+  }else{
+    /* leaving the painted sky for a solid-colour moment: swap the sky
+       texture for its average colour first, so the 2.5 s lerp has a
+       colour to start from instead of snapping at the end */
+    if(to.bg!=='sky'&&scene.background&&!scene.background.isColor){
+      scene.background=new THREE.Color(0xa9c2dc);
+    }
+    momentAnim={from:from,to:to,t0:performance.now(),d:2500,
+      sunPos0:sun.position.clone(),sunCol0:sun.color.clone(),
+      sun0:sun.intensity,hemi0:hemi.intensity,exp0:renderer.toneMappingExposure,
+      env0:('environmentIntensity' in scene)?scene.environmentIntensity:to.env,
+      fog0:(scene.fog&&mode==='exterior')?scene.fog.color.clone():new THREE.Color(to.fog),
+      bg0:(scene.background&&scene.background.isColor)?scene.background.clone():new THREE.Color(to.bg)};
   }
   renderer.shadowMap.needsUpdate=true; /* sun moved — re-bake shadows */
 }
-themeBtn.addEventListener('click',function(){ setNight(!isNight); });
-setNight(true); /* night is the default */
+function stepMomentAnim(nowMs){
+  if(!momentAnim) return;
+  var a=momentAnim, k=Math.min(1,(nowMs-a.t0)/a.d);
+  var e=k<0.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2; /* easeInOutCubic */
+  var to=a.to;
+  sun.position.lerpVectors(a.sunPos0,new THREE.Vector3(to.sunPos[0],to.sunPos[1],to.sunPos[2]),e);
+  sun.color.copy(a.sunCol0).lerp(new THREE.Color(to.sunColor),e);
+  sun.intensity=a.sun0+(to.sun-a.sun0)*e;
+  hemi.intensity=a.hemi0+(to.hemi-a.hemi0)*e;
+  renderer.toneMappingExposure=a.exp0+(to.exp-a.exp0)*e;
+  if('environmentIntensity' in scene) scene.environmentIntensity=a.env0+(to.env-a.env0)*e;
+  if(mode==='exterior'){
+    var fogCol=a.fog0.clone().lerp(new THREE.Color(to.fog),e);
+    scene.fog=new THREE.Fog(fogCol.getHex(),120,280);
+  }
+  if(to.bg==='sky'){
+    /* lerp the flat colour toward the sky's average, then swap in the
+       painted texture at the end (the colour already matches, so the
+       swap is not a visible snap) */
+    if(scene.background&&scene.background.isColor){
+      scene.background.copy(a.bg0).lerp(new THREE.Color(0xa9c2dc),e);
+    }
+    if(e>=1){ buildSky(); scene.background=skyTex||new THREE.Color(0xa9c2dc); }
+  }else if(scene.background&&scene.background.isColor){
+    scene.background.copy(a.bg0).lerp(new THREE.Color(to.bg),e);
+  }
+  if(k>=1){ momentAnim=null; applyMomentValues(to); renderer.shadowMap.needsUpdate=true; }
+}
+/* setNight kept as a thin wrapper (the archive dusk view and the theme
+   button used to call it); the moment system is the real switch. */
+function setNight(n){ setMoment(n?'night':'noon'); }
+themeBtn.addEventListener('click',function(){
+  var i=MOMENT_ORDER.indexOf(moment);
+  setMoment(MOMENT_ORDER[(i+1)%MOMENT_ORDER.length]);
+});
+setMoment('night',true); /* night is the default */
 document.querySelectorAll('#side .views button').forEach(function(b){
   b.addEventListener('click',function(){
     if(mode!=='exterior') setMode('exterior',true);
@@ -1659,7 +1820,7 @@ document.querySelectorAll('#side .views button').forEach(function(b){
     if(v==='aerial') flyTo(new THREE.Vector3(4,74,-34),new THREE.Vector3(4,0,-2));
     if(v==='court') flyTo(new THREE.Vector3(-13,3.4,-20),new THREE.Vector3(-5,1.2,1));
     if(v==='night'){
-      setNight(!isNight);
+      setMoment(moment==='dusk'?'night':'dusk'); /* archive dusk view: goes straight to dusk, not a toggle */
       flyTo(new THREE.Vector3(28,8.5,-44),new THREE.Vector3(10,2,-2));
     }
   });
@@ -1998,6 +2159,7 @@ function animate(){
     var nowMs=performance.now();
     var dt=Math.min((nowMs-lastNow)/1000,0.05); lastNow=nowMs; elapsed+=dt;
     var t=elapsed;
+    stepMomentAnim(nowMs); /* #4: 2.5 s light-moment transition */
     if(camAnim&&mode!=='walk'&&mode!=='tour'){
       var k=Math.min(1,(performance.now()-camAnim.s)/camAnim.d);
       var e=1-Math.pow(1-k,3);
@@ -2033,6 +2195,27 @@ function animate(){
   }
 }
 animate();
+/* #4: read-only debug hook for automated verification (does not affect the
+   UI). Lets a test drive moments/modes and read renderer state without
+   reaching into the closure. */
+window.__2121={
+  setMoment:function(n){ setMoment(n); },
+  setMode:function(n,k){ setMode(n,k); },
+  getMoment:function(){ return moment; },
+  getState:function(){
+    var ri=renderer.info?renderer.info.render:null;
+    return {
+      moment:moment,
+      toneMapping:renderer.toneMapping,
+      pointLights:scene.children.filter(function(o){ return o.isPointLight; }).length,
+      spotLights:scene.children.filter(function(o){ return o.isSpotLight; }).length,
+      hasEnv:!!scene.environment,
+      loadDone:loadDone,
+      drawCalls:ri?ri.calls:null,
+      triangles:ri?ri.triangles:null
+    };
+  }
+};
 })();
 </script>
 </body>
