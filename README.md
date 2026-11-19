@@ -36,57 +36,114 @@ Private project. Not published.
 ```
 21-21-DESIGN-SIGHT/
 ├── README.md
+├── .gitattributes               # model/**/*.glb -> Git LFS (see below; docs/ GLBs stay plain git)
 ├── .gitignore
-├── web/
-│   └── 21-21-design-sight-3d.html   # self-contained page (model embedded, 11.3 MB)
 ├── model/
-│   ├── design2121_v16.glb           # source model — see "Adding the model file"
-│   ├── build_2121_v16.py            # Blender build script (v16)
-│   └── verify_2121_v16.py           # Blender verification renders
-└── docs/
+│   ├── design2121_v16.glb       # source model (10.46 MB, Blender source of truth)
+│   ├── build_2121_v16.py        # Blender build script (v16)
+│   └── verify_2121_v16.py       # Blender verification renders
+└── docs/                        # the website source (GitHub Pages serves this folder)
+    ├── index.html               # page shell: CSS + HTML + import map + module entry
+    ├── assets/
+    │   ├── design2121.glb       # served model: baked + compressed build, 4,573,688 bytes
+    │   ├── three.module.min.js  # three.js r186, ES module build
+    │   ├── three.core.js        # three.js r186 core (imported by three.module.min.js)
+    │   ├── addons/              # three.js addons actually used (see below)
+    │   │   ├── loaders/GLTFLoader.js
+    │   │   ├── controls/OrbitControls.js
+    │   │   └── utils/{BufferGeometryUtils,SkeletonUtils}.js
+    │   └── js/                  # page code, one module per concern (issue #8)
+    │       ├── scene.js         # renderer, sky, model loading, model fixes, render loop
+    │       ├── lighting.js      # four light moments (palette + scene light together)
+    │       ├── camera.js        # current mode, preset cameras, fly-to, mode switching
+    │       ├── tour.js          # the 14-stop automatic tour
+    │       ├── walk.js          # walk mode: zones, collision, stair, picking
+    │       ├── ui.js            # exhibit card, G3 viewpoints, sidebar, hide-all
+    │       └── labels.js        # exhibit catalogue + 3D signage sprites
     ├── DESIGN2121_RESEARCH_REVIEW.md
     ├── DESIGN2121_EXPORT_RECORD.md
     └── underground-structure-research/
-        └── report.md                # basement-plan research (no dimensioned BF plan exists online)
+        └── report.md            # basement-plan research (no dimensioned BF plan exists online)
 ```
+
+`web/` (the old copy of the page) is **gone**: it duplicated `docs/` byte for
+byte, and its copy could not even load the model on its own (it had no GLB).
+Only `docs/` is the site source now. (The deletion itself is a local git
+step — see the PR for issue #8; the connector used for that PR cannot
+delete files.)
 
 ## How to use
 
-**View the exhibition:** open `web/21-21-design-sight-3d.html` in a browser.
-It is fully self-contained — the slimmed model (7.55 MB) is embedded in the
-page as base64, so no separate files are needed. Orbit / zoom, walk the
-galleries, or run the 14-stop auto tour. Night mode is the default; the
-sun/moon button in the header switches to day.
+**View the exhibition:** the live site is GitHub Pages (main branch,
+`/docs` folder). Locally, serve `docs/` over HTTP — the page is ES modules
+now, and browsers refuse module imports from `file://` (CORS):
+
+```sh
+cd docs && python3 -m http.server
+# then open http://127.0.0.1:8000/
+```
+
+Orbit / zoom, walk the galleries, or run the 14-stop auto tour. Night is
+the default of four light moments (morning / noon / dusk / night); the
+header button cycles through them.
 
 **Rebuild the model:** run `model/build_2121_v16.py` in Blender 5.2.2
-(headless, Cycles GPU). It regenerates `design2121_v16.glb` from the
-procedural build. Verify with `model/verify_2121_v16.py`.
+(headless, Cycles GPU). It regenerates `model/design2121_v16.glb` from the
+procedural build. Verify with `model/verify_2121_v16.py`. The served file
+`docs/assets/design2121.glb` is a baked + compressed build of that model
+(Cycles lightmap + AO on a second UV set, then the same dedup / meshopt /
+WebP compression pass); re-bake and re-compress it after any re-export —
+the page loads it by relative path, so it is **not** embedded in the HTML.
 
 ## Adding the model file
 
-`model/design2121_v16.glb` (10.46 MB) is **not** in the initial text-only
-commit — the GitHub connector used for this upload handles text files only
-and cannot transfer binary files. Add it with a direct commit, which is the
-normal practice for a single model file of this size:
+Both GLBs are binary and cannot be pushed through the GitHub connector
+(text files only). Add them with a direct commit or the GitHub web UI,
+which is the normal practice for files of this size (GitHub allows 100 MB
+per file, 25 MB per web upload):
 
-- GitHub allows individual files up to **100 MB** per push (warning at
-  50 MB), and browser uploads up to **25 MB** per file — 10.46 MB is well
-  inside both limits.
-- Easiest: on github.com, open the `model/` folder → **Add file → Upload
-  files** → drop in `design2121_v16.glb` → Commit. Done in a minute, no
-  tools needed.
-- Or from a local clone: `git add model/design2121_v16.glb && git commit -m
-  "Add v16 model" && git push`.
+- `model/design2121_v16.glb` (10.46 MB) — the Blender source model.
+- `docs/assets/design2121.glb` (4,573,688 bytes) — the baked + compressed build the page loads.
+  **The page depends on this file**: opening `docs/index.html` without it
+  shows the loading screen forever.
 
-The web page does **not** depend on this file (its model is embedded), so
-the page works before and after the upload. The GLB is the Blender source
-for future model revisions.
+## Git LFS for `model/**/*.glb` (only)
 
-**If model revisions accumulate:** consider Git LFS for `*.glb`
-(`git lfs install && git lfs track "*.glb"`, then commit the generated
-`.gitattributes`). Each re-export stores a whole new copy in plain git
-history, so LFS keeps the clone small over many versions. Not enabled by
-default — direct commit is the right call for a single current model.
+`.gitattributes` tracks only `model/**/*.glb` in Git LFS, so future source-model
+revisions do not bloat the clone. `docs/assets/design2121.glb` — the file the
+live site actually serves — must stay plain git: GitHub Pages serves the
+deployment branch as plain files and does not resolve LFS pointers, so an
+LFS-tracked web GLB would ship as a pointer file and the live site could
+not load it. Any `model/**/*.glb` committed **after** that file exists is
+stored in LFS automatically. The GLBs already in history are still plain git
+objects until they are migrated — a one-off local step (the connector
+cannot run it):
+
+```sh
+git lfs install
+git lfs migrate import --include="model/**/*.glb" --above=1MB
+git push --force   # rewrites history: do this only when no PR branch
+                   # is based on the old history, or rebase them after
+```
+
+## Page architecture (issue #8)
+
+- **three.js r186**, loaded as ES modules through an import map in
+  `docs/index.html` (`"three"` → `./assets/three.module.min.js`,
+  `"three/addons/"` → `./assets/addons/`). The version is pinned; the
+  build is local, so the page makes **zero external requests**.
+- Of the old 865 KB bundle's 17 addons, only **two** are actually used and
+  kept: `GLTFLoader` and `OrbitControls` (plus the two utils GLTFLoader
+  itself imports). The other 15 were dead weight.
+- The former ~134 KB inline script (2,528 lines, after the #9–#14 chain) is split into the seven modules under
+  `docs/assets/js/` (see the layout above). The split is behaviour-only:
+  same cameras, same tour, same walk mode, same loader. Each PR touches
+  one module where possible, so reviews stay small.
+- Shared state lives in exactly one module each (see the header comment of
+  each file): `mode` + cameras in `camera.js`, the light moment in `lighting.js`,
+  exhibit selection in `ui.js`, `walk` in `walk.js`, the tour in `tour.js`,
+  the renderer/scene/model in `scene.js`, the exhibit catalogue in
+  `labels.js`.
 
 ## Notes / known limits
 
