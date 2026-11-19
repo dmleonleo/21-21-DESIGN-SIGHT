@@ -49,8 +49,8 @@ export const tourStops=[
    desc:'走到展厅东侧深处，是 05《器物 · 陶罐》：拉坯的曲线没有一处多余。再往东到尽头，是 07《Akari 纸灯》的暖光。21_21 常把最日常的器物放上展台——设计就在每天端起的那只杯子里。',
    cam:new THREE.Vector3(43,-3.18,-7.6), tgt:new THREE.Vector3(46,-3.9,-10.0)},
   {title:'下沉庭院 · 露天深坑',dwell:3400,
-   desc:'三角形下沉庭院是一个真正的露天坑，坑底就是地下层地面。庭院和中庭把阳光送进地下展厅——这是这栋地下建筑真正的「立面」。站在 Gallery 2 里，隔着整面玻璃正对坑底。',
-   cam:new THREE.Vector3(15.67,1.07,-3.78), tgt:new THREE.Vector3(10,1.5,0)}, /* #7: pit-floor-looking-up is impossible — OrbitControls maxPolarAngle (PI*0.52) clamps the camera to level with the target; this IS the clamped position, verified by screenshot (pit opening, west-wall skylight slit, stair, sky) */
+   desc:'三角形下沉庭院是一个真正的露天坑，坑底就是地下层地面，坑里种了一棵雪松。往西望：大堂地面已经补上，原来直通地下层的空洞只剩一条楼梯口——光和人流都从那里下去。',
+   cam:new THREE.Vector3(15,2.2,-4.6), tgt:new THREE.Vector3(4.5,-0.5,4.0)}, /* v17 (#17): from above the pit looking west-down over the new lobby floor to the stairwell slot — the atrium void is floored now, so the old westward shot's background (the open void) is gone; the pit + tree stay in the foreground, the stair slot is the subject. The old #7 clamped position is retired. */
   {title:'前往西翼 · 越过草坪',dwell:1400,
    desc:'地下参观到此结束。镜头升上草坪上空，越过下沉庭院，飞往西侧咖啡翼——Gallery 3 在那里。',
    cam:new THREE.Vector3(-2,24,-28), tgt:new THREE.Vector3(-20,1,1)},

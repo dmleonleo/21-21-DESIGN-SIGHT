@@ -630,103 +630,13 @@ function loadFailed(err){
   },delay);
 }
 
-/* ================= G3 ceiling / cafe-roof clip fix =================
-   In the v16 GLB the west wing's sloped white ceiling (SM_G3_Ceiling)
-   rises through the folded cafe roof along its north band (measured
-   against the roof surface: up to 0.46 m proud, x −24…−15.5, z 2.4…5.0),
-   and its two downlights (SM_G3_Downlight_1/2) poke through with it —
-   from outside they read as a big white wedge and two white shards
-   lying on the roof. The GLB is a baked asset, so the correction is
-   applied here at load: build a height field of SM_Cafe_Roof, pull
-   every ceiling vertex that crosses it to just under the roof surface
-   (the ceiling then hugs the roof underside, as built ceilings do),
-   and drop each rigid downlight by its own worst penetration. Only
-   vertices above the roof move; the interior — including the low
-   ceiling edge at the south glass — is untouched. */
-function fixG3RoofClip(){
-  var roof=model.getObjectByName('SM_Cafe_Roof');
-  var ceil=model.getObjectByName('SM_G3_Ceiling');
-  if(!roof||!ceil||!roof.geometry||!ceil.geometry) return;
-  model.updateWorldMatrix(true,true);
-  /* height field of the cafe roof: topmost roof Y per 0.2 m XZ cell */
-  var CELL=0.2, GX0=-34.6, GZ0=-6.6, GNX=128, GNZ=66;
-  var grid=new Float32Array(GNX*GNZ); for(var gi=0;gi<grid.length;gi++) grid[gi]=-1e9;
-  (function(){
-    var pos=roof.geometry.attributes.position, idx=roof.geometry.index;
-    var m=roof.matrixWorld, v=[new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()];
-    var nTri=idx?idx.count/3:pos.count/3;
-    for(var t=0;t<nTri;t++){
-      for(var k=0;k<3;k++){
-        var vi=idx?idx.getX(t*3+k):t*3+k;
-        v[k].fromBufferAttribute(pos,vi).applyMatrix4(m);
-      }
-      var mnx=Math.min(v[0].x,v[1].x,v[2].x), mxx=Math.max(v[0].x,v[1].x,v[2].x);
-      var mnz=Math.min(v[0].z,v[1].z,v[2].z), mxz=Math.max(v[0].z,v[1].z,v[2].z);
-      var ix0=Math.max(0,Math.floor((mnx-GX0)/CELL)), ix1=Math.min(GNX-1,Math.floor((mxx-GX0)/CELL));
-      var iz0=Math.max(0,Math.floor((mnz-GZ0)/CELL)), iz1=Math.min(GNZ-1,Math.floor((mxz-GZ0)/CELL));
-      var d=v[1].clone().sub(v[0]), e=v[2].clone().sub(v[0]);
-      var den=d.x*e.z-e.x*d.z; if(Math.abs(den)<1e-12) continue;
-      for(var ix=ix0;ix<=ix1;ix++) for(var iz=iz0;iz<=iz1;iz++){
-        var px=GX0+(ix+0.5)*CELL, pz=GZ0+(iz+0.5)*CELL;
-        var rx=px-v[0].x, rz=pz-v[0].z;
-        var bu=(rx*e.z-rz*e.x)/den, bv=(d.x*rz-d.z*rx)/den, bw=1-bu-bv;
-        if(bu<-0.02||bv<-0.02||bw<-0.02) continue;
-        var y=bw*v[0].y+bu*v[1].y+bv*v[2].y, cell=iz*GNX+ix;
-        if(y>grid[cell]) grid[cell]=y;
-      }
-    }
-  })();
-  function roofY(x,z){
-    var ix=Math.floor((x-GX0)/CELL), iz=Math.floor((z-GZ0)/CELL), best=null;
-    for(var r=0;r<=2;r++){
-      for(var dx=-r;dx<=r;dx++) for(var dz=-r;dz<=r;dz++){
-        if(r>0&&Math.max(Math.abs(dx),Math.abs(dz))!==r) continue;
-        var cx=ix+dx, cz=iz+dz;
-        if(cx<0||cz<0||cx>=GNX||cz>=GNZ) continue;
-        var val=grid[cz*GNX+cx];
-        if(val>-1e8&&(best===null||val<best)) best=val;
-      }
-      if(best!==null) return best;
-    }
-    return null;
-  }
-  var MARGIN=0.05, tmp=new THREE.Vector3();
-  function clampMesh(mesh){
-    if(!mesh||!mesh.geometry) return;
-    mesh.updateWorldMatrix(true,false);
-    var pos=mesh.geometry.attributes.position;
-    var inv=new THREE.Matrix4().copy(mesh.matrixWorld).invert(), hit=false;
-    for(var i=0;i<pos.count;i++){
-      tmp.fromBufferAttribute(pos,i).applyMatrix4(mesh.matrixWorld);
-      var rh=roofY(tmp.x,tmp.z);
-      if(rh!==null&&tmp.y>rh-MARGIN){
-        tmp.y=rh-MARGIN; tmp.applyMatrix4(inv); pos.setXYZ(i,tmp.x,tmp.y,tmp.z); hit=true;
-      }
-    }
-    if(hit){ pos.needsUpdate=true; mesh.geometry.computeBoundingSphere(); }
-  }
-  function lowerFixture(obj){
-    if(!obj||!obj.geometry) return;
-    obj.updateWorldMatrix(true,false);
-    var pos=obj.geometry.attributes.position, worst=0;
-    for(var i=0;i<pos.count;i++){
-      tmp.fromBufferAttribute(pos,i).applyMatrix4(obj.matrixWorld);
-      var rh=roofY(tmp.x,tmp.z);
-      if(rh!==null) worst=Math.max(worst,tmp.y-(rh-MARGIN));
-    }
-    if(worst>0){
-      obj.getWorldPosition(tmp); tmp.y-=worst;
-      if(obj.parent){ obj.parent.updateWorldMatrix(true,false); obj.parent.worldToLocal(tmp); }
-      obj.position.copy(tmp); obj.updateWorldMatrix(true,false);
-    }
-  }
-  clampMesh(ceil);
-  ['SM_G3_CoveStrip','SM_G3_PR_Ceiling','SM_G3_Kit_WallS'].forEach(function(nm){
-    clampMesh(model.getObjectByName(nm));
-  });
-  lowerFixture(model.getObjectByName('SM_G3_Downlight_1'));
-  lowerFixture(model.getObjectByName('SM_G3_Downlight_2'));
-}
+/* ================= G3 roof clip fix — REMOVED in v17 (#17) =================
+   The v16 GLB's sloped G3 ceiling rose through the folded cafe roof along
+   its north band, and a load-time function used to pull its vertices back
+   under the roof. The v17 model clamps the ceiling to roof-0.30 m in
+   Blender (probe: 0 ceiling-above-roof violations across the whole G3
+   quad) and rebuilds the roof as a folded plate, so the page-side
+   correction is deleted — the model is correct on its own now. */
 /* ================= Stair-foot wall fix =================
    In the v16 GLB the x=8 atrium wall line runs straight across the
    foot of the 30-step stair: SM_Atrium_Wall_East_A (x 7.85-8.15,
@@ -981,7 +891,6 @@ function onModelLoaded(gltf){
       if(core) spinnerPivot.attach(core);
     }
   }catch(e){ /* spinner is decorative */ }
-  try{ fixG3RoofClip(); }catch(e){ /* roof correction is an enhancement */ }
   try{ fixStairFootWall(); }catch(e){ /* stair correction is an enhancement */ }
   try{ pruneExteriorTrees(); }catch(e){ /* tree pruning is an enhancement */ }
   try{ applyAestheticMaterials(); }catch(e){ /* aesthetic material pass is an enhancement */ }
