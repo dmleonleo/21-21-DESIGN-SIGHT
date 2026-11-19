@@ -7,6 +7,7 @@
 <link rel="icon" href="data:,"/>
 <title>21_21 DESIGN SIGHT 3D — 可进入的建筑与展厅</title>
 <script src="assets/three.min.js"></script>
+<script src="assets/meshopt_decoder.js"></script>
 <style>
   /* ============================================================
      21_21 DESIGN SIGHT — interface as a drawing sheet's margins.
@@ -63,15 +64,17 @@
      current-state only — the one exception is the brand's red
      square, kept as Leon's approved logo mark (see issue #6).
      ============================================================ */
-  /* ---- #6.3 webfonts: subsetted Noto Serif JP / Noto Sans JP ----
+  /* ---- #6.3 webfonts: subsetted Noto Serif SC / Noto Sans SC ----
+     (Hark #13-1: the JP subsets missed 123 of the page's 535 CJK chars;
+      the SC subsets cover all 535 + kana の — files in docs/assets/fonts/)
      Variable-weight woff2, served locally from assets/fonts/ — zero
      external requests, works offline. Generated from the variable
      fonts with pyftsubset, covering exactly the glyphs this page
      uses (source + unicodes list live in page-design/fonts/).
      font-display:swap + full system fallbacks: if the files are not
      yet uploaded, the page falls back silently and nothing blocks. */
-  @font-face{font-family:'Noto Serif JP';font-style:normal;font-weight:200 900;font-display:swap;src:url('assets/fonts/noto-serif-jp.woff2') format('woff2')}
-  @font-face{font-family:'Noto Sans JP';font-style:normal;font-weight:100 900;font-display:swap;src:url('assets/fonts/noto-sans-jp.woff2') format('woff2')}
+  @font-face{font-family:'Noto Serif SC';font-style:normal;font-weight:200 900;font-display:swap;src:url('assets/fonts/noto-serif-sc.woff2') format('woff2')}
+  @font-face{font-family:'Noto Sans SC';font-style:normal;font-weight:100 900;font-display:swap;src:url('assets/fonts/noto-sans-sc.woff2') format('woff2')}
   :root{
     /* Night is the default ground (Leon's direction): the sheet is
        near-black, the ink a warm off-white, and the grey ladder runs
@@ -86,7 +89,7 @@
     --line:rgba(236,234,227,.16); --line2:rgba(236,234,227,.34);
     --onink:#111113; --verm:#e8503a; --ghost:rgba(236,234,227,.06);
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    --serif:"Noto Serif JP","Hiragino Mincho ProN","YuMincho","Yu Mincho","Noto Serif SC","Songti SC",serif;
+    --serif:"Noto Serif SC","Noto Serif JP","Hiragino Mincho ProN","YuMincho","Yu Mincho","Songti SC",serif;
     --edge:22px;
     color-scheme:dark;
     /* Type that rests directly on the scene is plain white with ONE
@@ -98,17 +101,28 @@
     --shade:0 1px 2px rgba(5,7,5,.45);
   }
   /* the day palette — the same ladder on paper, reached only from
-     the sun/moon switch, never from the system setting */
+     the sun/moon switch, never from the system setting.
+     Type that rests directly on the scene is DARK in day mode, not
+     white: white header text on a pale day sky was unreadable
+     (issue #2.5). --wt* flip to ink-on-paper values and the tight
+     shade flips to a light one, so the header, chips, badge, vertical
+     margin text, prologue and walk tip all read against bright sky
+     and lawn. (The in-scene 3D labels keep their own white-on-dark
+     canvas treatment — they sit on the building, not the sky.) */
   body.day{
     --ink:#1c1c1e; --ink2:#62615c; --ink3:#8f8c84;
     --paper:#f4f3ef; --sheet:rgba(246,245,241,.97); --sheet2:rgba(246,245,241,.94);
     --line:rgba(28,28,30,.16); --line2:rgba(28,28,30,.34);
     --onink:#f4f3ef; --verm:#b3402f; --ghost:rgba(28,28,30,.05);
+    --wt:#1c1c1e; --wt2:rgba(28,28,30,.78); --wt3:rgba(28,28,30,.58);
+    --wline:rgba(28,28,30,.45);
+    --shade:0 1px 2px rgba(255,255,255,.55);
     color-scheme:light;
   }
+  body.day .chip:focus-visible,body.day .themeBtn:focus-visible{outline-color:var(--ink)}
   *{box-sizing:border-box}
   html,body{height:100%}
-  body{margin:0;font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","YuGothic","PingFang SC","Microsoft YaHei",sans-serif;background:#0d0d0f;color:var(--ink);overflow:hidden;font-weight:400;-webkit-font-smoothing:antialiased}
+  body{margin:0;font-family:"Noto Sans SC","Noto Sans JP","Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","YuGothic","PingFang SC","Microsoft YaHei",sans-serif;background:#0d0d0f;color:var(--ink);overflow:hidden;font-weight:400;-webkit-font-smoothing:antialiased}
   body.day{background:#dfe3dc}
   button,[role="button"],select,summary,input:not([type="checkbox"],[type="radio"]){min-height:36px}
   button{font:inherit;cursor:pointer;color:inherit}
@@ -211,6 +225,9 @@
   #vertical.on{opacity:.8}
   #err{position:absolute;left:12px;top:110px;z-index:50;max-width:520px;background:#2b1611;border:1px solid #71402f;color:#f2bda9;padding:10px 12px;border-radius:0;font-size:13px;line-height:1.5;display:none;white-space:pre-wrap}
   body.day #err{background:#fdf3f1;border-color:#e3c4bd;color:#8a3b2e}
+  /* ---- debug HUD (issue #3): renderer.info readout, hidden unless ?debug=1 / #debug / Shift+D ---- */
+  #dbgHud{position:absolute;left:12px;bottom:12px;z-index:60;display:none;font-family:var(--mono);font-size:11px;line-height:1.7;letter-spacing:.04em;color:#f4f2ea;background:rgba(10,12,10,.55);padding:6px 10px;pointer-events:none;white-space:pre}
+  body.debug #dbgHud{display:block}
 
   /* ---- loading: a sheet of paper, one thin ink line ---- */
   #loading{position:absolute;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:var(--paper);transition:opacity .5s}
@@ -223,6 +240,23 @@
   #loadBarWrap{width:min(300px,70vw);height:1px;background:var(--line);overflow:hidden;display:none}
   #loadBar{height:100%;width:0%;background:var(--ink);transition:width .25s}
   #loadRetry{display:none;border:1px solid var(--line2);background:transparent;border-radius:0;padding:8px 18px;font-size:12px;letter-spacing:.1em}
+  /* ---- no-WebGL error state (issue #2.9) ----
+     The loading screen and the error screen used to be identical
+     (same paper, same 21_21 mark, same message slot), so a visitor
+     whose browser has no WebGL read the error as "still loading" —
+     and every button was dead, because the script returned before
+     wiring any of them. The error state is deliberately a different
+     page: warm dark ground instead of paper, a red error title, a
+     static line drawing of the building in place of the 3D scene,
+     an explanation, and a working reload button. */
+  #errArt{display:none;width:min(320px,72vw);margin:2px 0 4px;color:var(--ink2)}
+  #loading.error{background:#171210}
+  #loading.error .mark{color:#f2e8e0}
+  #loading.error .mark i{color:#d8a08f}
+  #loading.error .lmicro{color:#c98a7a}
+  #loading.error #errArt{display:block}
+  #loading.error #loadMsg{color:#e8c9bd;max-width:min(420px,84vw);text-align:center;line-height:1.8}
+  #loading.error #loadRetry{display:inline-block;border-color:#a8604c;color:#f2e8e0}
 
   /* ---- mode index: a strip along the bottom edge of the sheet.
      Six chapters in a row, divided by hairlines. The current one is
@@ -300,6 +334,14 @@
   #exhibitCard .row button:hover{color:var(--ink)}
   #exhibitCard .row button.go{background:transparent;color:var(--ink);border-color:var(--line);font-weight:500}
 
+  /* in walk mode the card is raised clear of the direction pad
+     (issue #2.4): the pad tops out ~212px from the bottom edge, and
+     the card used to sit at 88px, so the pad covered its left side
+     and the centred WASD tip crossed it. Raised, the card clears the
+     pad and the tip passes underneath it instead. (Mobile already did
+     this at 232px; this is the desktop equivalent.) */
+  body.walking #exhibitCard{bottom:224px}
+
   /* ---- walk controls: quiet square keys at the sheet's corners ---- */
   #walkHud{position:absolute;inset:auto 0 76px 0;z-index:24;display:none;justify-content:space-between;align-items:flex-end;padding:0 var(--edge);pointer-events:none}
   #walkHud.show{display:flex}
@@ -309,6 +351,10 @@
   .pad .up{grid-column:2}.pad .left{grid-column:1;grid-row:2}.pad .down{grid-column:2;grid-row:2}.pad .right{grid-column:3;grid-row:2}
   .lookpad{pointer-events:auto;display:flex;gap:1px;background:var(--line);border:1px solid var(--line2);align-items:center}
   .lookpad button{border:0}
+  /* item 6: optional pointer lock (desktop walk mode only) */
+  #lockBtn{width:auto;padding:0 12px;font-size:11.5px;letter-spacing:.1em;white-space:nowrap}
+  #lockBtn[aria-pressed="true"]{background:var(--ink);color:var(--onink)}
+  @media (pointer:coarse){ #lockBtn{display:none} }
   #walkTip{position:absolute;left:50%;transform:translateX(-50%);bottom:140px;z-index:23;background:transparent;border:0;color:var(--wt);font-size:11.5px;letter-spacing:.05em;padding:7px 12px;border-radius:0;display:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis;text-shadow:var(--shade)}
   #walkTip.show{display:block}
   #cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;color:rgba(255,255,255,.85);font-size:15px;font-weight:300;display:none;text-shadow:var(--shade)}
@@ -403,6 +449,9 @@
     #exhibitCard .row button{font-size:11.5px;padding:10px 2px 0}
     body.walking #exhibitCard{bottom:calc(180px + env(safe-area-inset-bottom))}
     #walkHud{bottom:calc(56px + env(safe-area-inset-bottom));padding:0 var(--edge)}
+    /* item 1: on phones the direction pad is hidden by default —
+       tap-to-move is the way around; the turn buttons stay. */
+    #walkHud .pad{display:none}
     .pad{grid-template-columns:38px 38px 38px;grid-template-rows:38px 38px 38px}
     .pad button,.lookpad button{width:38px;height:38px;min-height:38px;font-size:14px}
     #walkTip{top:54px;bottom:auto;left:8px;right:8px;transform:none;width:auto;white-space:normal;text-align:center;font-size:11px;line-height:1.55;padding:6px 10px}
@@ -442,7 +491,8 @@
   <div id="vertical" aria-hidden="true">一枚の布、一筋の光</div>
 
   <div id="err" role="alert"></div>
-  <div id="loading"><div class="mark">21_21 <i>DESIGN SIGHT</i></div><div class="lmicro">TOKYO MIDTOWN · TADAO ANDO</div><p id="loadMsg">正在载入建筑模型…</p><div id="loadBarWrap"><div id="loadBar"></div></div><button id="loadRetry" type="button">重新加载</button></div>
+  <div id="dbgHud" aria-hidden="true"></div>
+  <div id="loading"><div class="mark">21_21 <i>DESIGN SIGHT</i></div><div class="lmicro">TOKYO MIDTOWN · TADAO ANDO</div><div id="errArt" aria-hidden="true"><svg viewBox="0 0 320 118" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 96 L62 44 L104 74 L152 30 L200 74 L248 44 L306 96"/><path d="M14 96 L306 96"/><path d="M40 96 V78 M80 96 V70 M120 96 V70 M160 96 V66 M200 96 V70 M240 96 V70 M280 96 V78" stroke-width="0.8" opacity="0.65"/><path d="M152 30 L152 14" opacity="0.65"/><circle cx="152" cy="10" r="3.5"/><path d="M30 108 H290" opacity="0.5"/><path d="M52 108 v6 M268 108 v6" opacity="0.5"/></svg></div><p id="loadMsg">正在载入建筑模型…</p><div id="loadBarWrap"><div id="loadBar"></div></div><button id="loadRetry" type="button">重新加载</button></div>
   <div id="cross">+</div>
   <div id="skipOpening">点按任意处跳过</div>
   <div id="walkTip">W A S D 或左下按钮移动 · 拖动画面转头 · 楼梯口可上下层 · 穿暖帘门洞去 Gallery 2 · 下沉庭院隔着玻璃看 · 过庭院去西翼 Gallery 3</div>
@@ -508,7 +558,7 @@
     </div>
     <h3 id="tourTitle">—</h3>
     <p id="tourDesc">—</p>
-    <div id="tourTrack"><div id="tourFill"></div></div>
+    <div id="tourTrack" tabindex="0" role="slider" aria-label="游览进度" aria-valuemin="1" aria-valuemax="14" aria-valuenow="1" aria-valuetext="第 1 站"><div id="tourFill"></div></div>
     <div id="tourDots" aria-label="游览站点"></div>
     <div class="trow">
       <button type="button" id="tourPrev">← 上一站</button>
@@ -528,6 +578,7 @@
     <div class="lookpad" aria-label="转头">
       <button type="button" data-look="1" aria-label="向左看">⟲</button>
       <button type="button" data-look="-1" aria-label="向右看">⟳</button>
+      <button type="button" id="lockBtn" aria-pressed="false" aria-label="锁定视角">锁定</button>
     </div>
   </div>
 
@@ -553,11 +604,52 @@ window.addEventListener('unhandledrejection',function(e){ showErr('页面出错�
 var stage=document.getElementById('stage');
 var renderer;
 try{
-  renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+  /* item 8: preserveDrawingBuffer — on-demand rendering freezes the
+     frame when the exterior is idle, and without preserve the canvas
+     reads back black in screenshots (and after a compositor surface
+     loss) until the next interaction redraws it. Verified: with the
+     freeze on, an idle exterior screenshotted black even 8 s after a
+     fresh frame had rendered. The cost is one retained buffer; the
+     power saving (no redraws while idle) is unaffected. */
+  renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance',preserveDrawingBuffer:true});
 }catch(e){
   /* No WebGL (old webview, GPU blocklist, software fallback removed):
-     say so on the loading screen instead of spinning on it forever. */
-  document.getElementById('loadMsg').textContent='无法启动 3D：此浏览器或设备未提供 WebGL。请换用最新版 Safari / Chrome 打开本页。';
+     show a DISTINCT error state, not the loading screen — different
+     ground, error title, static line drawing, explanation, working
+     reload (issue #2.9). The loading screen and the error screen
+     used to be identical, so this read as "still loading", and every
+     button was dead because the script returned before wiring them.
+     The pure-interface controls (theme, archive, hide) are wired here
+     with minimal handlers so the page is not dead without WebGL. */
+  var loadingEl=document.getElementById('loading');
+  loadingEl.classList.add('error');
+  var errMark=loadingEl.querySelector('.mark'); if(errMark) errMark.textContent='3D 无法启动';
+  var errMicro=loadingEl.querySelector('.lmicro'); if(errMicro) errMicro.textContent='WEBGL UNAVAILABLE';
+  document.getElementById('loadMsg').textContent='此浏览器或设备未提供 WebGL，3D 展厅无法启动。请换用最新版 Safari / Chrome 打开本页，或在电脑上查看。';
+  var retryBtn=document.getElementById('loadRetry');
+  retryBtn.style.display='inline-block';
+  retryBtn.textContent='重新加载';
+  retryBtn.addEventListener('click',function(){ location.reload(); });
+  (function(){
+    var tb=document.getElementById('themeToggle');
+    if(tb) tb.addEventListener('click',function(){
+      var day=document.body.classList.toggle('day');
+      tb.setAttribute('aria-pressed',day?'false':'true');
+      tb.setAttribute('aria-label',day?'切换到夜晚':'切换到白天');
+    });
+    var st=document.getElementById('sideToggle'), sd=document.getElementById('side');
+    if(st&&sd) st.addEventListener('click',function(){
+      if(window.innerWidth<=760){ sd.classList.remove('closed'); sd.classList.toggle('open'); }
+      else sd.classList.toggle('closed');
+    });
+    var sh=document.getElementById('sideHide');
+    if(sh&&sd) sh.addEventListener('click',function(){ sd.classList.remove('open'); sd.classList.add('closed'); });
+    var ut=document.getElementById('uiToggle');
+    if(ut) ut.addEventListener('click',function(){
+      var hidden=document.body.classList.toggle('ui-hidden');
+      ut.textContent=hidden?'显示':'隐藏';
+    });
+  })();
   return;
 }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
@@ -579,7 +671,12 @@ renderer.shadowMap.type=THREE.PCFShadowMap;
    500+ casters every frame — a large per-frame saving on weak GPUs. */
 renderer.shadowMap.autoUpdate=false;
 if('outputColorSpace' in renderer) renderer.outputColorSpace=THREE.SRGBColorSpace; else renderer.outputEncoding=THREE.sRGBEncoding;
-renderer.toneMapping=THREE.ACESFilmicToneMapping;
+/* #4: AgX instead of ACES — ACES pushed the concrete warm and the G2 red
+   sphere oversaturated; AgX keeps Ando's greys neutral and the red in
+   gamut. A/B-tested against NeutralToneMapping (same cameras, same
+   moments); AgX kept the sky and the steel roof closer to the reference
+   photos, Neutral read slightly flat on the concrete. */
+renderer.toneMapping=THREE.AgXToneMapping;
 renderer.toneMappingExposure=1.05;
 stage.appendChild(renderer.domElement);
 
@@ -678,6 +775,86 @@ function setupEnvironment(){
     if('environmentIntensity' in scene) scene.environmentIntensity=isNightRef()?0.1:0.5;
   }catch(e){ /* IBL is an enhancement; direct lights still carry the scene */ }
 }
+/* #4: real-HDRI environment — Overcast Soil (Pure Sky), Poly Haven,
+   CC0 1.0 (no attribution required), 1K, 1024x512 Radiance .hdr.
+   No Tokyo overcast/dusk HDRI exists on Poly Haven (all 998 screened;
+   the only japan-tagged one is a Nagoya garden at sunrise), so a
+   location-neutral pure sky is used for scene.environment ONLY — the
+   visible sky stays the painted canvas (day) / solid colours (dusk,
+   night), so one HDRI serves all four moments. 39% of its pixels are
+   above 1.0, so an 8-bit PNG conversion would clip the dynamic range;
+   the true .hdr is decoded at runtime with this small RGBE decoder. */
+var hdriEnvTex=null;
+function decodeRGBE(buf){
+  var b=new Uint8Array(buf), pos=0;
+  function readLine(){
+    var s=pos;
+    while(pos<b.length&&b[pos]!==10) pos++;
+    var line='';
+    for(var i=s;i<pos;i++) line+=String.fromCharCode(b[i]);
+    pos++;
+    return line;
+  }
+  var w=0,h=0,line;
+  /* header lines run until the blank line; the resolution line
+     ("-Y 512 +X 1024") follows AFTER that blank line, not before it */
+  while((line=readLine())!==''){ /* skip header lines */ }
+  line=readLine();
+  var m=line.match(/-Y\s+(\d+)\s+\+X\s+(\d+)/);
+  if(m){ h=parseInt(m[1],10); w=parseInt(m[2],10); }
+  if(!w||!h) throw new Error('bad hdr header');
+  var data=new Float32Array(w*h*3), p=pos;
+  for(var y=0;y<h;y++){
+    if(b[p]!==2||b[p+1]!==2) throw new Error('hdr is not RLE');
+    p+=4;
+    var chs=[];
+    for(var c=0;c<4;c++){
+      var ch=new Uint8Array(w), x=0;
+      while(x<w){
+        var n=b[p++];
+        if(n>128){ var v=b[p++]; for(var k=0;k<n-128;k++) ch[x++]=v; }
+        else { for(var k2=0;k2<n;k2++) ch[x++]=b[p++]; }
+      }
+      chs.push(ch);
+    }
+    for(var x2=0;x2<w;x2++){
+      var e=chs[3][x2], f=(e===0)?0:Math.pow(2,e-136);
+      var idx=(y*w+x2)*3;
+      data[idx]=chs[0][x2]*f; data[idx+1]=chs[1][x2]*f; data[idx+2]=chs[2][x2]*f;
+    }
+  }
+  return {width:w,height:h,data:data};
+}
+function loadHDRIEnv(){
+  if(isSoftwareGL) return; /* PMREM in software GL stalls for many seconds */
+  fetch('assets/overcast_soil_puresky_1k.hdr').then(function(r){
+    if(!r.ok) throw new Error('hdr '+r.status);
+    return r.arrayBuffer();
+  }).then(function(buf){
+    var hdr=decodeRGBE(buf);
+    /* #11 review (Hark 2026-11-19): RGBFormat + FloatType is a
+       float-linear-filtered texture, which many iOS devices do not
+       support. Convert the decoded RGB floats to RGBA half-floats
+       (alpha 1): half-float linear filtering IS supported on iOS,
+       and RGBA is the filterable HDR layout. decodeRGBE is untouched
+       (its output was validated in Node during #4). */
+    var half=new Uint16Array(hdr.width*hdr.height*4);
+    for(var i=0,j=0;i<hdr.data.length;i+=3,j+=4){
+      half[j]=THREE.DataUtils.toHalfFloat(hdr.data[i]);
+      half[j+1]=THREE.DataUtils.toHalfFloat(hdr.data[i+1]);
+      half[j+2]=THREE.DataUtils.toHalfFloat(hdr.data[i+2]);
+      half[j+3]=THREE.DataUtils.toHalfFloat(1);
+    }
+    var tex=new THREE.DataTexture(half,hdr.width,hdr.height,THREE.RGBAFormat,THREE.HalfFloatType);
+    tex.mapping=THREE.EquirectangularReflectionMapping;
+    tex.needsUpdate=true;
+    var pm=new THREE.PMREMGenerator(renderer);
+    hdriEnvTex=pm.fromEquirectangular(tex).texture;
+    pm.dispose(); tex.dispose();
+    scene.environment=hdriEnvTex;
+    if('environmentIntensity' in scene) scene.environmentIntensity=currentEnvIntensity();
+  }).catch(function(){ setupEnvironment(); /* fallback: painted-sky env */ });
+}
 function isNightRef(){ return typeof isNight!=='undefined'&&isNight; }
 /* Sky painting + PMREM are deferred until AFTER the model has loaded
    (onModelLoaded calls them): they compete for the same main thread as
@@ -717,7 +894,9 @@ var controls=new THREE.OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true; controls.dampingFactor=0.06;
 controls.maxPolarAngle=Math.PI*0.52; controls.minDistance=4; controls.maxDistance=260;
 controls.target.set(4,1.5,-1);
-controls.addEventListener('start',function(){ if(mode==='exterior') extDefault=false; });
+controls.addEventListener('start',function(){
+  if(mode==='exterior'){ extDefault=false; if(currentView){ currentView=null; syncHash(); } }
+});
 
 /* lights — strong directional sun with sharp shadows, sky IBL (scene.environment)
    for ambient/reflections; low fills so the contrast stays photographic */
@@ -730,21 +909,39 @@ sun.shadow.camera.left=-70; sun.shadow.camera.right=70; sun.shadow.camera.top=70
 sun.shadow.camera.far=220; sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.03;
 scene.add(sun);
 var fill=new THREE.DirectionalLight(0xbfd4e6,0.3); fill.position.set(-40,24,-36); scene.add(fill);
-scene.add(new THREE.AmbientLight(0xffffff,0.06));
-/* interior lights for the basement galleries (the model is enclosed) */
+scene.add(new THREE.AmbientLight(0xffffff,0.08)); /* #4: 0.06 -> 0.08, kept
+   after the #11 review: the baked atlas moved from aoMap to lightMap
+   (see onModelLoaded), so the 0.08 is now a brightness floor under the
+   lightMap + fill lights, not an aoMap compensation; if real-device
+   shots show washout, this is the first knob to turn down. */
+/* #11 review (Hark 2026-11-19): the nine PointLights are NOT all gone
+   any more. The baked lightmap (second UV, now on material.lightMap)
+   carries the indirect light — skylight wash, court light spilling
+   underground, G2 wall washing — but until the lightMap is confirmed
+   on a real device (SwiftShader skips the HDRI env path), 4 low-intensity
+   interior PointLights stay as fill so the basement galleries are not
+   dark on a real GPU. No shadows on them — the sun already casts them.
+   They join intLights, so the moment system scales them x1.6 at night
+   like the SpotLights. Intensities are ~half the originals (main
+   @62eeaac6): enough to lift the floor, not enough to flatten the baked
+   gradient. (This supersedes the #4 acceptance "PointLight <= 2".) */
 var intLights=[];
 function addIntLight(x,y,z,color,intensity,dist){
   var pl=new THREE.PointLight(color,intensity,dist); pl.position.set(x,y,z); scene.add(pl); intLights.push(pl); return pl;
 }
-addIntLight(24,-1.1,-5.5,0xfff1da,0.85,36);   /* Gallery 2 west (v16: hall is the east rectangle) */
-addIntLight(38,-1.1,-7.5,0xfff1da,0.7,34);     /* Gallery 2 centre */
-addIntLight(47,-1.1,-9.5,0xfff1da,0.65,32);    /* Gallery 2 east end, to x=52 */
-addIntLight(38,-1.1,-13.5,0xfff1da,0.6,30);    /* Gallery 2 south band (04 panel wall) */
-addIntLight(28,-1.1,4.0,0xf2f6ff,0.7,32);     /* Gallery 1 skylight hall */
-addIntLight(15,-0.8,-2.0,0xffe9bb,0.65,24);   /* sunken courtyard (open pit, floor -4.8) */
-addIntLight(4,-0.4,1.5,0xfff1da,0.6,26);      /* atrium void (open -4.8 to +6.24) */
-addIntLight(2,2.4,-4.2,0xfff4e0,0.55,24);     /* entrance lobby: reception / elevator */
-addIntLight(-23,2.4,1.2,0xfff4e0,0.6,28);     /* Gallery 3 — west (cafe) wing */
+addIntLight(38,-1.1,-7.5,0xfff1da,0.35,34); /* Gallery 2 centre (was 0.7) */
+addIntLight(47,-1.1,-9.5,0xfff1da,0.3,32); /* Gallery 2 east end (was 0.65) */
+addIntLight(28,-1.1,4.0,0xf2f6ff,0.35,32); /* Gallery 1 skylight hall (was 0.7) */
+addIntLight(4,-0.4,1.5,0xfff1da,0.3,26); /* atrium void (was 0.6) */
+function addSpotLight(x,y,z,tx,ty,tz,color,intensity,angle,dist){
+  var sp=new THREE.SpotLight(color,intensity,dist,angle,0.5,1.2);
+  sp.position.set(x,y,z);
+  sp.target.position.set(tx,ty,tz);
+  scene.add(sp); scene.add(sp.target);
+  intLights.push(sp); return sp;
+}
+addSpotLight(38,2.5,-8, 38,-4.8,-8, 0xfff1da,150,0.55,30); /* Gallery 2 exhibit ring */
+addSpotLight(28,2.5,4,  28,-4.8,4,  0xf2f6ff,120,0.5,25);  /* Gallery 1 skylight hall */
 
 /* ================= Drifting sakura petals (exterior only) =================
    After Sakura River Valley: the scene should feel alive and seasonal.
@@ -783,6 +980,22 @@ if(!reducedMotion&&!isSoftwareGL){
    glTF space: x east, y up, z south-ish; ground y=0, basement floor y=-4.8. */
 var model=null, modelReady=false;
 var pickMeshes=[];
+/* item 2: every mesh of the loaded GLB. The raycast collision guard,
+   the landing ring and the ground snap read colliderMeshes instead
+   (see below) — solidMeshes stays as the complete list for reference. */
+var solidMeshes=[];
+/* #12 review (Hark 2026-11-19): collision-only list. rayWallBlocked,
+   floorHitAt and the ground snap used to raycast solidMeshes (every
+   mesh: hidden trees, the 55k-tri steel roof, glass, exhibits) with
+   no BVH — slow on phones. The #10/#11 compression merged the 637
+   v16 objects into 125 meshes, so wall/column/ground geometry can no
+   longer be picked out by node name; the filter uses MATERIAL names
+   (the discriminator that survived the merge) plus the visible flag.
+   On the baked GLB: 131,624 tris -> ~32,880 (25%); roof, trees,
+   glass and exhibits are out. The zone tables (canStand) stay the
+   first layer; this ray guard is the second. */
+var COLLIDER_MATS=['MAT_Concrete','MAT_Concrete_Board','MAT_Concrete_Dark','MAT_White_Wall','MAT_Floor_Concrete','MAT_Granite','MAT_Wood_Floor','MAT_Grass','MAT_Paving','MAT_Paving_Dark','MAT_Dark_Door','MAT_G3_Frosted','MAT_FarGround'];
+var colliderMeshes=[];
 var exhibitMeshes={};   /* '01'..'12' -> [meshes] (all twelve are real objects in the v16 GLB) */
 var spinnerPivot=null, lampMeshes=[];
 var FLOOR_Y=-4.8, EYE=1.62, EYE_Y=FLOOR_Y+EYE;
@@ -798,19 +1011,21 @@ function applyLabels(){
   var vis=(typeof mode!=='undefined'&&mode!=='exterior')&&labelsOn&&!document.body.classList.contains('ui-hidden');
   labelSprites.forEach(function(sp){ sp.visible=vis; });
 }
-function labelSprite(text,x,y,z){
+function labelSprite(text,x,y,z,dark){
   var tex=canvasTexture(512,104,function(ctx,w,h){
     /* Fukasawa-quiet signage: no board, no colour block — just small
-       white lettering with a hairline beneath, like the museum's own
-       captions. Legibility comes from ONE tight dark shade (1px
-       offset, 2px blur), never a blurred light halo — the halo is
-       what made the lettering look lit up. */
-    ctx.font='300 33px "Noto Sans JP","Hiragino Kaku Gothic ProN","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.shadowColor='rgba(5,7,5,0.55)'; ctx.shadowBlur=2; ctx.shadowOffsetY=1;
-    ctx.fillStyle='rgba(255,255,255,0.96)';
+       lettering with a hairline beneath, like the museum's own
+       captions. Legibility comes from ONE tight shade (1px offset,
+       2px blur), never a blurred light halo — the halo is what made
+       the lettering look lit up. White ink for the dark basement
+       rooms; dark ink for the bright white G3 room (dark=true),
+       where white lettering would vanish against the white ceiling. */
+    ctx.font='300 33px "Noto Sans SC","Noto Sans JP","Hiragino Kaku Gothic ProN","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.shadowColor=dark?'rgba(255,255,255,0.55)':'rgba(5,7,5,0.55)'; ctx.shadowBlur=2; ctx.shadowOffsetY=1;
+    ctx.fillStyle=dark?'rgba(28,28,30,0.95)':'rgba(255,255,255,0.96)';
     ctx.fillText(text,4,42);
     ctx.shadowBlur=0; ctx.shadowOffsetY=0;
-    ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.fillRect(5,60,110,2);
+    ctx.fillStyle=dark?'rgba(28,28,30,0.55)':'rgba(255,255,255,0.55)'; ctx.fillRect(5,60,110,2);
   });
   var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:true,opacity:0.96}));
   sp.scale.set(2.7,0.55,1); sp.position.set(x,y,z); sp.renderOrder=5; sp.visible=false; scene.add(sp); labelSprites.push(sp); return sp;
@@ -844,13 +1059,15 @@ function restoreCreateImageBitmap(){
   _hiddenCIB=null;
 }
 /* Asset architecture: the model is NOT embedded in this page. The
-   7.55 MB GLB ships as its own file, assets/design2121.glb, and is
-   fetched by the relative path in fetchModel() below; three.min.js
-   is likewise an external file. This HTML therefore stays ~117 KB —
-   no base64 model blob, no data-URI geometry. (The single-file
-   11 MB HTML that the platform's export produces inlines these
-   assets at export time; that is an export packaging choice, not
-   how this page is written or served.)
+   ~1.99 MB Meshopt-compressed GLB ships as its own file,
+   assets/design2121.glb, and is fetched by the relative path in
+   fetchModel() below; three.min.js is likewise an external file,
+   as is the Meshopt decoder it needs (assets/meshopt_decoder.js,
+   registered on the loader in parseModel). This HTML therefore
+   stays ~120 KB — no base64 model blob, no data-URI geometry.
+   (The single-file 11 MB HTML that the platform's export produces
+   inlines these assets at export time; that is an export packaging
+   choice, not how this page is written or served.)
 
    Robust loading — final architecture, after the failure was finally
    reproduced end-to-end (headless Chromium against a gateway simulator
@@ -1080,6 +1297,10 @@ function parseModel(){
     loadFailed(new Error('模型解析超时'));
   },PARSE_TIMEOUT_MS);
   var ld=new THREE.GLTFLoader();
+  /* #4: the shipped GLB is Meshopt-compressed (EXT_meshopt_compression,
+     via #3's pipeline); the decoder ships as assets/meshopt_decoder.js
+     (self-contained, wasm inlined). Without it the parse fails. */
+  if(window.MeshoptDecoder) ld.setMeshoptDecoder(MeshoptDecoder);
   try{
     ld.parse(asmBuffer.slice(0),'',function(gltf){
       if(settled) return;
@@ -1286,15 +1507,60 @@ function onModelLoaded(gltf){
   restoreCreateImageBitmap(); /* parse finished — the texture decoder choice is locked in */
   clearTimeout(loadSlowTimer);
   model=gltf.scene; scene.add(model);
+  model.traverse(function(o){ if(o.isMesh){ solidMeshes.push(o); if(o.visible!==false&&o.material&&!Array.isArray(o.material)&&COLLIDER_MATS.indexOf(o.material.name)>=0) colliderMeshes.push(o); } });
+  /* The model's distant ground is a 400×400 m slab (MAT_FarGround,
+     flat dark green); from the air its rectangular edge reads as a
+     floating green board in the dark (issue #2.6). Extend the ground
+     with a page-side sheet in the slab's own colour
+     (baseColorFactor 0.16, 0.26, 0.12), 5 cm below the slab so it
+     never z-fights, running far past the fog so the lawn fades into
+     the fog instead of ending in a hard edge. It follows the scene
+     lighting like the slab itself, and it is added before the shadow
+     bake below, so the building's shadow falls on it too. (A single
+     big triangle fan showed radial shading seams in software
+     rendering, so the sheet is a subdivided grid instead.) */
+  /* #9 review (Hark 2026-11-19): the old single 1600 m sheet sat at
+     y=-0.05, coplanar with SM_Site_Ground's top (-0.05) -> z-fighting,
+     and face-up it covered the sunken court + atrium openings from
+     above (green sheet seen looking down the stair from the lobby).
+     Now only the ring OUTSIDE the model's own 95x65 m lawn is laid
+     (|x|>47.5 or |z|>32.5), at y=-0.15, 10 cm below the lawn top, so
+     the court (tri x 10..20, z -1..5) and atrium void (x 0..8,
+     z -5..5) stay open and nothing z-fights. */
+  var farGroundMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0.16,0.26,0.12),roughness:1,metalness:0});
+  var farGround=new THREE.Group();
+  function farStrip(w,d,cx,cz){
+    var m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),farGroundMat);
+    m.rotation.x=-Math.PI/2; m.position.set(cx,-0.15,cz);
+    /* no receiveShadow: the ring lies mostly outside the shadow
+       camera (-70..70), and shadow sampling across its large quads
+       left visible grid seams in software rendering; the model's own
+       slab keeps the building's shadow where it matters. */
+    m.receiveShadow=false;
+    farGround.add(m);
+  }
+  farStrip(1600,767.5,0,-416.25); /* north: z -800..-32.5 */
+  farStrip(1600,767.5,0,416.25); /* south: z 32.5..800 */
+  farStrip(752.5,65,-423.75,0); /* west: x -800..-47.5, z -32.5..32.5 */
+  farStrip(752.5,65,423.75,0); /* east: x 47.5..800, z -32.5..32.5 */
+  scene.add(farGround);
   model.traverse(function(o){
     if(o.isMesh){
       o.castShadow=true; o.receiveShadow=true;
-      if(o.material&&!Array.isArray(o.material)&&'transmission' in o.material&&o.material.transmission>0){
-        /* KHR transmission forces a second full-scene render every frame —
-           measured here as the main thread blocking for ~70 s after the
-           download hit 100% under software GL, and a heavy per-frame cost
-           on phones. Replace it with plain transparent glass that still
-           picks up the sky environment reflection. */
+      var mn=o.material&&o.material.name;
+      if(mn==='MAT_Glass'){
+        /* #4: the baked GLB carries plain transparent glass (transmission
+           0, base alpha 0.18) — normalise to opacity 0.32 so the facade
+           reads as glass: visible and reflective, neither a solid wall
+           nor invisible. The GLB JSON is verified to contain no
+           KHR_materials_transmission (see the #4 PR). */
+        o.material=o.material.clone();
+        o.material.transparent=true;
+        o.material.opacity=0.32;
+        o.material.depthWrite=false;
+      }else if(o.material&&!Array.isArray(o.material)&&'transmission' in o.material&&o.material.transmission>0){
+        /* safety net: no transmission material may survive in the scene —
+           KHR transmission forces a second full-scene render every frame */
         o.material=o.material.clone();
         o.material.transmission=0;
         o.material.transparent=true;
@@ -1302,7 +1568,28 @@ function onModelLoaded(gltf){
         o.material.depthWrite=false;
       }
       var mn=o.material&&o.material.name;
-      if(mn==='MAT_Pendant_Light'&&o.material.emissive){ o.material=o.material.clone(); o.material.emissive=new THREE.Color(0xffc98a); o.material.emissiveIntensity=0.9; lampMeshes.push(o); }
+      /* #11 review (Hark 2026-11-19): the baked atlas was attached as
+         aoMap (glTF occlusionTexture), which in three.js only DARKENS
+         the indirect/env light — "skylight wash, court light spilling
+         underground" never appears as light. At runtime the atlas is
+         moved to material.lightMap (channel 1 = the second UV set the
+         bake used), so it ADDS the baked indirect light; aoMap is
+         cleared (the atlas is a light map, not an occlusion map — a
+         separate soft AO would need a new bake). lightMapIntensity 1.0
+         keeps the atlas as authored. Idempotent: shared materials are
+         moved once, later meshes see aoMap already null and skip. */
+      if(o.material&&!Array.isArray(o.material)&&o.material.aoMap){
+        var lm=o.material.aoMap;
+        o.material.lightMap=lm;
+        if('channel' in lm) lm.channel=1;
+        o.material.lightMapIntensity=1.0;
+        o.material.aoMap=null;
+        o.material.needsUpdate=true;
+      }
+      /* Meshopt-quantized GLB bakes each mesh's half-extent into its node scale
+         (lamps 0.15, downlights 0.07); the pulse must multiply that base scale,
+         not overwrite it — overwriting inflates lamps ~6.7x / downlights ~14x. */
+      if(mn==='MAT_Pendant_Light'&&o.material.emissive){ o.material=o.material.clone(); o.material.emissive=new THREE.Color(0xffc98a); o.material.emissiveIntensity=0.9; o.userData.baseScale=o.scale.x; lampMeshes.push(o); }
       if((mn==='MAT_LightStrip'||mn==='MAT_Skylight')&&o.material.emissive){ o.material=o.material.clone(); o.material.emissive=new THREE.Color(0xfff3d0); o.material.emissiveIntensity=0.55; }
       /* capture group must keep the leading zero: exhibitMeshes is keyed
          '01'..'12' to match the exhibits data (key:'01'…). Capturing only
@@ -1381,7 +1668,7 @@ function onModelLoaded(gltf){
     labelSprite('10 · 漆器便当盒',15,-3.4,3.5);
     labelSprite('11 · 竹篮',28,-3.6,-4.0);
     labelSprite('12 · 茶碗与茶筅',6,-3.4,5.5);
-    labelSprite('G3 · Gallery 3（西翼）',-23,2.4,1.6);
+    labelSprite('G3 · Gallery 3（西翼）',-20,1.2,0.5,true);
   }catch(e){ /* labels are an enhancement */ }
   /* register exhibits for picking */
   exhibits.forEach(function(ex){
@@ -1390,7 +1677,9 @@ function onModelLoaded(gltf){
     });
   });
   /* now that the model is on screen, build the cloudy sky + IBL */
-  setTimeout(function(){ buildSky(); setupEnvironment(); beginOpening(); },60);
+  setTimeout(function(){ buildSky(); setupEnvironment(); loadHDRIEnv(); beginOpening(); },60); /* #4: real-HDRI env + #6.2: opening glide */
+  /* item 5: a shared link (#exhibit-07, #tour-5, ...) lands here */
+  try{ applyDeepLink(); }catch(e){ /* a bad hash must not break the page */ }
 }
 startLoad();
 
@@ -1510,9 +1799,9 @@ var cross=document.getElementById('cross');
 var modeNames={exterior:'外观 · 环视',lobby:'入口大堂',g3:'Gallery 3 · 西翼',gallery:'展厅 · 全景',walk:'展厅 · 步行中',tour:'自动游览 · 进行中'};
 /* Gallery 3 (v15: west / former cafe wing, ground floor) guided viewpoints */
 var g3Spots=[
-  {no:'G3 · 1 / 4',title:'Gallery 3 · 全景与三角接待台',
-   desc:'Gallery 3 在西翼（原咖啡翼，2017 年改建）——不在博物馆翼。从展厅西端望向东端，看清整个四边形展厅：北边长 15.0 米、深 8.0 米，约 111.7 m²，地面是深灰花岗岩；东端入口处两张三角形接待台（每张宽 1.73 米）与北墙平行。（旧机位贴在东端斜顶与 Private Room 隔墙之间，画面被墙面填满，现已移到西端开阔处。）',
-   cam:new THREE.Vector3(-31.5,1.7,4.6), tgt:new THREE.Vector3(-16,0.9,0.5)},
+  {no:'G3 · 1 / 4',title:'Gallery 3 · 全景与斜顶',
+   desc:'Gallery 3 在西翼（原咖啡翼，2017 年改建）——不在博物馆翼。从展厅南侧望向东端：四边形展厅约 111.7 m²，地面是深灰花岗岩，白色石膏斜顶顺着折叠钢板屋顶倾斜，最高 4.26 米；南侧整面玻璃外是 57 m² 的露台，东端是 Private Room 与 Kitchen 的隔墙。（旧机位贴在西端方柱与斜顶之间，画面被柱子挡住一半、顶部露出屋顶与吊顶之间的黑色楔形缝，现已移到南侧开阔处，楔形缝不在框内。）',
+   cam:new THREE.Vector3(-24,1.6,4.2), tgt:new THREE.Vector3(-13,0.8,-2.0)},
   {no:'G3 · 2 / 4',title:'Gallery 3 · 白石膏斜顶与轨道灯',
    desc:'白色石膏斜天花顺着折叠钢板屋顶的内侧倾斜，最高点 4.26 米。一条黑色轨道带 5 盏射灯贯穿展厅，筒灯与北墙上方的暖色灯槽补充照明——和地下展厅靠天窗采光不同，这里是完整的地上层光环境。',
    cam:new THREE.Vector3(-19,1.5,-1.4), tgt:new THREE.Vector3(-28,2.7,2.4)},
@@ -1533,6 +1822,7 @@ function showG3Spot(i){
   document.getElementById('exDesc').textContent=s.desc;
   document.getElementById('exGo').textContent='飞到这个位置';
   exhibitCard.classList.add('show'); setExFolded(true);
+  syncHash();
 }
 /* ================= Auto tour =================
    A fixed cinematic route through the whole building, reusing the same
@@ -1556,7 +1846,7 @@ var tourStops=[
    cam:new THREE.Vector3(-13,3.4,-20), tgt:new THREE.Vector3(-5,1.2,1)},
   {title:'入口大堂 · 接待台与电梯',dwell:3400,
    desc:'大堂在博物馆翼地面层：接待台立在实心楼板上，西南角是梯形平面的电梯。展厅在地下——接下来走楼梯下去。',
-   cam:new THREE.Vector3(-1.15,1.85,1.15), tgt:new THREE.Vector3(0.9,0.6,-5.5)},
+   cam:new THREE.Vector3(-1.8,1.9,4.8), tgt:new THREE.Vector3(2.0,0.4,-1.5)},
   {title:'30 级楼梯 · 下到地下层',dwell:3000,
    desc:'楼梯共 30 级、每级高 0.16 米，北侧是混凝土栏板、南侧是玻璃栏杆。顺着它下行 4.8 米，就到了地下展厅层。',
    cam:new THREE.Vector3(0.5,1.62,3.9), tgt:new THREE.Vector3(8.8,-2.8,4.0)},
@@ -1580,13 +1870,18 @@ var tourStops=[
    cam:new THREE.Vector3(11,-1.0,-3.5), tgt:new THREE.Vector3(17.5,-4.6,0.8)},
   {title:'前往西翼 · 越过草坪',dwell:1400,
    desc:'地下参观到此结束。镜头升上草坪上空，越过下沉庭院，飞往西侧咖啡翼——Gallery 3 在那里。',
-   cam:new THREE.Vector3(-2,16,-24), tgt:new THREE.Vector3(-20,1,1)},
+   cam:new THREE.Vector3(-2,24,-28), tgt:new THREE.Vector3(-20,1,1)},
   {title:'Gallery 3 · 西翼展厅',dwell:4000,
    desc:'Gallery 3 在西翼（原咖啡厅，2017 年改建），不在博物馆翼：四边形展厅约 111.7 m²，深灰花岗岩地面，白色石膏斜顶最高 4.26 米，北墙有窗缝与磨砂玻璃带，南侧整面玻璃外是 57 m² 露台。',
    cam:new THREE.Vector3(-20.5,1.55,-1.8), tgt:new THREE.Vector3(-28,1.2,2.8)},
   {title:'收尾 · 回到鸟瞰',dwell:5200,
    desc:'游览结束：从空中再看一次两栋建筑——一块布折成的屋顶、藏在地下的展厅、引光的庭院。想自己走走，可以点「进入展厅 · 步行参观」；想再看一遍，点「下一站」会从头开始。',
-   cam:new THREE.Vector3(4,46,-54), tgt:new THREE.Vector3(4,0,-2)}
+   /* the closing aerial is the verified aerial preset view (issue
+      #2.1): the old stop sat at (4,46,-54), and the flight into it
+      from stop 13 ran low over the museum roof, so the frame filled
+      with one grey roof slope. From the aerial preset the flight
+      climbs steeply and the closing frame is the whole site. */
+   cam:new THREE.Vector3(4,74,-34), tgt:new THREE.Vector3(4,0,-2)}
 ];
 var tourHud=document.getElementById('tourHud');
 var tourNoEl=document.getElementById('tourNo');
@@ -1603,6 +1898,21 @@ tourStops.forEach(function(s,i){
   b.addEventListener('click',function(){ tourJump(i); });
   tourDotsEl.appendChild(b); tourDots.push(b);
 });
+/* item 4: the progress bar itself is clickable — tap anywhere on the
+   track to jump to that stop. The dots already did this; the track
+   makes the whole bar a target, and it is keyboard-operable too. */
+var tourTrackEl=document.getElementById('tourTrack');
+tourTrackEl.addEventListener('click',function(e){
+  var r=tourTrackEl.getBoundingClientRect();
+  var frac=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+  tourJump(Math.min(tourStops.length-1,Math.floor(frac*tourStops.length)));
+});
+tourTrackEl.addEventListener('keydown',function(e){
+  if(e.key==='ArrowLeft'){ e.preventDefault(); tourJump(tour.idx-1); }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); tourJump(tour.idx+1); }
+  else if(e.key==='Home'){ e.preventDefault(); tourJump(0); }
+  else if(e.key==='End'){ e.preventDefault(); tourJump(tourStops.length-1); }
+});
 var tour={idx:0,phase:'travel',start:0,travelDur:3000,dwellDur:3400,
   fromPos:new THREE.Vector3(),fromTgt:new THREE.Vector3(),
   paused:false,pauseAt:0,drift:new THREE.Vector3()};
@@ -1613,6 +1923,11 @@ function tourShowCard(){
   tourTitleEl.textContent=s.title;
   tourDescEl.textContent=s.desc;
   tourFillEl.style.width=((tour.idx)/tourStops.length*100)+'%';
+  var trackEl=document.getElementById('tourTrack');
+  if(trackEl){
+    trackEl.setAttribute('aria-valuenow',String(tour.idx+1));
+    trackEl.setAttribute('aria-valuetext','第 '+(tour.idx+1)+' 站：'+s.title);
+  }
   tourDots.forEach(function(b,i){
     b.className=i<tour.idx?'done':(i===tour.idx?'now':'');
   });
@@ -1624,11 +1939,14 @@ function tourGoTo(idx,nowMs){
   tour.fromTgt.copy(controls.target);
   var dist=tour.fromPos.distanceTo(s.cam);
   tour.travelDur=Math.max(2600,Math.min(6800,dist*150));
-  tour.dwellDur=s.dwell||3400;
+  /* item 4: the dwell follows the narration length (6-10 s), not a
+     fixed 3.4 s — ~55 ms per character plus a 2 s base, clamped. */
+  tour.dwellDur=Math.max(6000,Math.min(10000,2000+Math.round(s.desc.length*55)));
   tour.phase='travel';
   tour.start=nowMs;
   tour.paused=false; tourPauseBtn.textContent='暂停';
   tourShowCard();
+  syncHash();
   flashVertical();
 }
 function tourJump(idx){ if(mode==='tour') tourGoTo(idx,performance.now()); }
@@ -1698,7 +2016,10 @@ function updateTour(nowMs){
     }
     tourGoTo(tour.idx+1,nowMs); return true;
   }
-  camera.position.copy(s.cam).addScaledVector(tour.drift,dk);
+  /* item 4: a very slow push-and-pull during the dwell — the camera
+     eases 0.55 m toward the subject and back over the whole dwell,
+     instead of a one-way drift that never returns. */
+  camera.position.copy(s.cam).addScaledVector(tour.drift,Math.sin(dk*Math.PI));
   controls.target.copy(s.tgt);
   return true;
 }
@@ -1713,10 +2034,13 @@ function setMode(next,keepCam){
   flashVertical();
   var activeBtn=document.querySelector('#modebar button[data-mode="'+next+'"]');
   if(activeBtn&&window.innerWidth<=760){ try{ activeBtn.scrollIntoView({inline:'center',block:'nearest'}); }catch(e){} }
+  /* item 5: a fresh mode entry drops any preset view; the hash
+     follows the new state (a view button sets currentView after). */
+  currentView=null;
   document.querySelectorAll('#modebar button').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.mode===next?'true':'false'); });
   badge.textContent=modeNames[next];
   var inside=(next!=='exterior');
-  scene.fog=inside? null : new THREE.Fog(isNight?0x2b3442:0xd8e6f0,120,280);
+  scene.fog=inside? null : new THREE.Fog(MOMENTS[moment].fog,120,280); /* #4: fog follows the current light moment */
   applyLabels();
   walkHud.classList.toggle('show',next==='walk');
   document.body.classList.toggle('walking',next==='walk');
@@ -1729,23 +2053,78 @@ function setMode(next,keepCam){
   controls.maxPolarAngle=(next==='exterior')?Math.PI*0.52:Math.PI*0.65;
   controls.maxDistance=(next==='exterior')?260:60;
   if(next==='exterior'&&!keepCam){ extDefault=true; flyTo(exteriorCamPos(),new THREE.Vector3(4,1.5,-1)); }
-  /* Lobby camera stands on the solid west strip just inside the entrance
-     (verified against the GLB: SM_Ground_Slab covers x -2..0.25 full depth).
-     The previous viewpoint (7.6,1.9,-0.4) hovered over the atrium/stair
-     opening in the slab (x 0.25..8, z -4.75..4.9), so the foreground was
-     the open drop to the basement and the lobby floor read as missing.
-     From the entrance the reception desk (0.5,-5.8) and the elevator door
-     (-0.44,-3.6) face the camera across solid floor. */
-  if(next==='lobby') flyTo(new THREE.Vector3(-1.15,1.85,1.15),new THREE.Vector3(0.9,0.6,-5.5));
+  /* Lobby camera stands in the south of the lobby, looking north-east
+     across the reception desk toward the atrium opening (issue #2.7).
+     The previous viewpoint (-1.15,1.85,1.15) faced the dark elevator
+     door dead-on at 4.2 m, so a tall black panel filled the centre of
+     the frame. From the south the trapezoidal elevator shaft is still
+     visible at the frame's right, but the black door itself is out of
+     frame; the reception desk, the south glass and the atrium opening
+     (with the basement stair below it) carry the shot. */
+  if(next==='lobby') flyTo(new THREE.Vector3(-1.8,1.9,4.8),new THREE.Vector3(2.0,0.4,-1.5));
   if(next==='g3'){ var gs=g3Spots[g3Idx]; flyTo(gs.cam,gs.tgt,1400); showG3Spot(g3Idx); }
   /* v16 Gallery 2: the east rectangle, x 24..52, z -15..1; camera inside the SW corner */
   if(next==='gallery') flyTo(new THREE.Vector3(27,-0.7,-14.8),new THREE.Vector3(46,-3.9,-2.5));
   if(next==='walk'){ updateWalkTip(); enterWalk(); }
   if(next==='tour'){ setTourFolded(true); startTour(); }
+  syncHash();
 }
 document.querySelectorAll('#modebar button').forEach(function(b){
   b.addEventListener('click',function(){ setMode(b.dataset.mode); });
 });
+/* ================= Deep links (item 5) =================
+   The URL hash carries the visit state so a shared link (or a
+   refresh) lands back in the same place: #exhibit-07, #tour-5,
+   #g3-2, #view-aerial, or a plain mode (#lobby, #gallery, #walk,
+   #exterior). The hash is written with replaceState — no history
+   spam as the tour advances — and read once the model is on screen
+   (see the applyDeepLink() call at the end of onModelLoaded). */
+var currentView=null;
+function syncHash(){
+  var h='';
+  if(mode==='tour') h='#tour-'+(tour.idx+1);
+  else if(mode==='g3') h='#g3-'+(g3Idx+1);
+  else if(mode==='walk'&&currentEx) h='#exhibit-'+currentEx.key;
+  else if(mode==='walk') h='#walk';
+  else if(mode==='lobby') h='#lobby';
+  else if(mode==='gallery') h='#gallery';
+  else if(mode==='exterior'&&currentView) h='#view-'+currentView;
+  else h='#exterior';
+  try{ history.replaceState(null,'',h); }catch(e){}
+}
+function applyDeepLink(){
+  var h=(location.hash||'').replace(/^#/,'');
+  if(!h||!modelReady) return;
+  var m;
+  if((m=h.match(/^exhibit-(\d{2})$/))){
+    var ex=null;
+    exhibits.forEach(function(e){ if(e.key===m[1]) ex=e; });
+    if(ex){ showExhibit(ex); goNearExhibit(ex); }
+    return;
+  }
+  if((m=h.match(/^tour-(\d+)$/))){
+    var ti=Math.max(0,Math.min(tourStops.length-1,parseInt(m[1],10)-1));
+    setMode('tour'); tourGoTo(ti,performance.now());
+    return;
+  }
+  if((m=h.match(/^g3-(\d+)$/))){
+    var gi=Math.max(0,Math.min(g3Spots.length-1,parseInt(m[1],10)-1));
+    setMode('g3'); showG3Spot(gi); var gs=g3Spots[gi]; flyTo(gs.cam,gs.tgt,1200);
+    return;
+  }
+  if((m=h.match(/^view-(aerial|front|court|night)$/))){
+    setMode('exterior',true); extDefault=false; currentView=m[1];
+    var v=m[1];
+    if(v==='front') flyTo(new THREE.Vector3(20,7,-44),new THREE.Vector3(19,2.2,-3));
+    if(v==='aerial') flyTo(new THREE.Vector3(4,74,-34),new THREE.Vector3(4,0,-2));
+    if(v==='court') flyTo(new THREE.Vector3(-13,3.4,-20),new THREE.Vector3(-5,1.2,1));
+    if(v==='night'){ setMoment('night'); flyTo(new THREE.Vector3(28,8.5,-44),new THREE.Vector3(10,2,-2)); } /* #12 review: a deep link must land on night, not toggle it */
+    syncHash();
+    return;
+  }
+  if(h==='lobby'||h==='gallery'||h==='walk'||h==='exterior'){ setMode(h); return; }
+}
+window.addEventListener('hashchange',function(){ applyDeepLink(); });
 /* ================= Opening (#6.2) =================
    After the model is on screen: the Sugimoto blur sharpens as the
    deferred sky / IBL work finishes, then a 7 s glide runs along the
@@ -1783,63 +2162,136 @@ function endOpening(instant){
   armIntro();
 }
 /* exterior preset views — framed on the real two-wing model */
-var sunDay={pos:new THREE.Vector3(50,62,30),exp:1.05,sun:3.0,hemi:0.35};
-var isNight=false;
+/* #4: the four moments of light. One switch for the whole page: the
+   interface palette (body.day) and the scene's light change together.
+   The baked indoor lightmap does NOT change with the moment (indoor
+   light is moment-independent by design); only the outdoor sun, sky,
+   fog and exposure move. Morning+noon use the paper UI, dusk+night
+   the dark UI. Night is the default — the page opens on the black
+   version. Switching lerps every value over 2.5 s in the render loop
+   (stepMomentAnim, called from animate). */
+var MOMENTS={
+  morning:{label:'清晨',sunPos:[62,26,-18],sunColor:0xffd9a8,sun:2.2,hemi:0.30,exp:1.02,fog:0xe8e2d4,env:0.55,bg:'sky',dark:false},
+  noon:{label:'正午',sunPos:[50,62,30],sunColor:0xfff2dd,sun:3.0,hemi:0.35,exp:1.05,fog:0xd8e6f0,env:0.6,bg:'sky',dark:false},
+  dusk:{label:'黄昏',sunPos:[-58,14,20],sunColor:0xff9a5c,sun:1.6,hemi:0.20,exp:1.0,fog:0xe8c9a8,env:0.35,bg:0x3a2f28,dark:true},
+  night:{label:'夜',sunPos:[-40,30,-24],sunColor:0xbfd0e8,sun:0.55,hemi:0.14,exp:0.95,fog:0x2b3442,env:0.12,bg:0x2b3442,dark:true}
+};
+var MOMENT_ORDER=['morning','noon','dusk','night'];
+var moment='night';
+var isNight=true; /* derived: dusk or night — kept for isNightRef()/setMode */
 var themeBtn=document.getElementById('themeToggle');
 var nightViewBtn=document.querySelector('#side .views button[data-view="night"]');
-/* One switch for the whole page: the interface palette (body.day)
-   and the scene's light change together, so the sheet and the
-   building are never in different times of day. Night is the
-   default — the page opens on the black version. Interior lights
-   are scaled only on an actual change, so the two entry points
-   (the header's sun/moon button and the archive's dusk view) can
-   never drift the intensities apart. Fog follows the mode: there
-   is none indoors, and setMode re-derives it from isNight when
-   the visitor steps back outside. */
-function setNight(n){
-  n=!!n;
-  var changed=(n!==isNight);
-  isNight=n;
-  document.body.classList.toggle('day',!n);
-  themeBtn.setAttribute('aria-pressed',n?'true':'false');
-  themeBtn.setAttribute('aria-label',n?'切换到白天':'切换到夜晚');
-  if(nightViewBtn) nightViewBtn.textContent=n?'回到白天':'黄昏灯光';
-  var mc=document.querySelector('meta[name="color-scheme"]');
-  if(mc) mc.setAttribute('content',n?'dark':'light');
-  if(n){
-    scene.background=new THREE.Color(0x2b3442);
-    if(mode==='exterior') scene.fog=new THREE.Fog(0x2b3442,120,280);
-    sun.intensity=0.55; sun.position.set(-40,30,-24); hemi.intensity=0.14;
-    renderer.toneMappingExposure=0.95;
-    if(skyEnvTex) scene.environment=skyEnvTex;
-    if('environmentIntensity' in scene) scene.environmentIntensity=0.1;
-    if(changed) intLights.forEach(function(l){ l.intensity*=1.6; });
-  }else{
-    buildSky(); /* the day background is restored from the sky texture */
+var momentAnim=null;
+function currentEnvIntensity(){ return MOMENTS[moment].env; }
+function applyMomentValues(m){
+  var sp=m.sunPos;
+  sun.position.set(sp[0],sp[1],sp[2]);
+  sun.color.setHex(m.sunColor);
+  sun.intensity=m.sun;
+  hemi.intensity=m.hemi;
+  renderer.toneMappingExposure=m.exp;
+  if(m.bg==='sky'){
+    buildSky();
     scene.background=skyTex||new THREE.Color(0xa9c2dc);
-    if(mode==='exterior') scene.fog=new THREE.Fog(0xd8e6f0,120,280);
-    sun.intensity=sunDay.sun; sun.position.copy(sunDay.pos); hemi.intensity=sunDay.hemi;
-    renderer.toneMappingExposure=sunDay.exp;
-    if(skyEnvTex) scene.environment=skyEnvTex;
-    if('environmentIntensity' in scene) scene.environmentIntensity=0.5;
-    if(changed) intLights.forEach(function(l){ l.intensity/=1.6; });
+  }else{
+    scene.background=new THREE.Color(m.bg);
+  }
+  if(mode==='exterior') scene.fog=new THREE.Fog(m.fog,120,280);
+  if(hdriEnvTex) scene.environment=hdriEnvTex;
+  else if(skyEnvTex) scene.environment=skyEnvTex;
+  if('environmentIntensity' in scene) scene.environmentIntensity=m.env;
+}
+function applyMomentUI(m){
+  document.body.classList.toggle('day',!m.dark);
+  var mc=document.querySelector('meta[name="color-scheme"]');
+  if(mc) mc.setAttribute('content',m.dark?'dark':'light');
+  var next=MOMENT_ORDER[(MOMENT_ORDER.indexOf(moment)+1)%MOMENT_ORDER.length];
+  themeBtn.setAttribute('aria-label','切换到'+MOMENTS[next].label);
+  themeBtn.setAttribute('aria-pressed',m.dark?'true':'false');
+  if(nightViewBtn) nightViewBtn.textContent=(moment==='dusk')?'回到夜晚':'黄昏灯光';
+}
+function setMoment(name,instant){
+  if(!MOMENTS[name]) return;
+  var from=MOMENTS[moment], to=MOMENTS[name];
+  var wasDark=from.dark, nowDark=to.dark;
+  moment=name;
+  isNight=nowDark;
+  applyMomentUI(to);
+  /* interior SpotLights are scaled only when crossing the light/dark
+     boundary, so repeated moment switches never drift them apart */
+  if(wasDark!==nowDark){
+    var f=nowDark?1.6:1/1.6;
+    intLights.forEach(function(l){ l.intensity*=f; });
+  }
+  if(instant){
+    momentAnim=null;
+    applyMomentValues(to);
+  }else{
+    /* leaving the painted sky for a solid-colour moment: swap the sky
+       texture for its average colour first, so the 2.5 s lerp has a
+       colour to start from instead of snapping at the end */
+    if(to.bg!=='sky'&&scene.background&&!scene.background.isColor){
+      scene.background=new THREE.Color(0xa9c2dc);
+    }
+    momentAnim={from:from,to:to,t0:performance.now(),d:2500,
+      sunPos0:sun.position.clone(),sunCol0:sun.color.clone(),
+      sun0:sun.intensity,hemi0:hemi.intensity,exp0:renderer.toneMappingExposure,
+      env0:('environmentIntensity' in scene)?scene.environmentIntensity:to.env,
+      fog0:(scene.fog&&mode==='exterior')?scene.fog.color.clone():new THREE.Color(to.fog),
+      bg0:(scene.background&&scene.background.isColor)?scene.background.clone():new THREE.Color(to.bg)};
   }
   renderer.shadowMap.needsUpdate=true; /* sun moved — re-bake shadows */
 }
-themeBtn.addEventListener('click',function(){ setNight(!isNight); });
-setNight(true); /* night is the default */
+function stepMomentAnim(nowMs){
+  if(!momentAnim) return;
+  var a=momentAnim, k=Math.min(1,(nowMs-a.t0)/a.d);
+  var e=k<0.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2; /* easeInOutCubic */
+  var to=a.to;
+  sun.position.lerpVectors(a.sunPos0,new THREE.Vector3(to.sunPos[0],to.sunPos[1],to.sunPos[2]),e);
+  sun.color.copy(a.sunCol0).lerp(new THREE.Color(to.sunColor),e);
+  sun.intensity=a.sun0+(to.sun-a.sun0)*e;
+  hemi.intensity=a.hemi0+(to.hemi-a.hemi0)*e;
+  renderer.toneMappingExposure=a.exp0+(to.exp-a.exp0)*e;
+  if('environmentIntensity' in scene) scene.environmentIntensity=a.env0+(to.env-a.env0)*e;
+  if(mode==='exterior'){
+    var fogCol=a.fog0.clone().lerp(new THREE.Color(to.fog),e);
+    scene.fog=new THREE.Fog(fogCol.getHex(),120,280);
+  }
+  if(to.bg==='sky'){
+    /* lerp the flat colour toward the sky's average, then swap in the
+       painted texture at the end (the colour already matches, so the
+       swap is not a visible snap) */
+    if(scene.background&&scene.background.isColor){
+      scene.background.copy(a.bg0).lerp(new THREE.Color(0xa9c2dc),e);
+    }
+    if(e>=1){ buildSky(); scene.background=skyTex||new THREE.Color(0xa9c2dc); }
+  }else if(scene.background&&scene.background.isColor){
+    scene.background.copy(a.bg0).lerp(new THREE.Color(to.bg),e);
+  }
+  if(k>=1){ momentAnim=null; applyMomentValues(to); renderer.shadowMap.needsUpdate=true; }
+}
+/* setNight kept as a thin wrapper (the archive dusk view and the theme
+   button used to call it); the moment system is the real switch. */
+function setNight(n){ setMoment(n?'night':'noon'); }
+themeBtn.addEventListener('click',function(){
+  var i=MOMENT_ORDER.indexOf(moment);
+  setMoment(MOMENT_ORDER[(i+1)%MOMENT_ORDER.length]);
+});
+setMoment('night',true); /* night is the default */
 document.querySelectorAll('#side .views button').forEach(function(b){
   b.addEventListener('click',function(){
     if(mode!=='exterior') setMode('exterior',true);
     extDefault=false;
     var v=b.dataset.view;
+    currentView=v;
     if(v==='front') flyTo(new THREE.Vector3(20,7,-44),new THREE.Vector3(19,2.2,-3));
     if(v==='aerial') flyTo(new THREE.Vector3(4,74,-34),new THREE.Vector3(4,0,-2));
     if(v==='court') flyTo(new THREE.Vector3(-13,3.4,-20),new THREE.Vector3(-5,1.2,1));
     if(v==='night'){
-      setNight(!isNight);
+      setMoment(moment==='dusk'?'night':'dusk'); /* archive dusk view: goes straight to dusk, not a toggle */
       flyTo(new THREE.Vector3(28,8.5,-44),new THREE.Vector3(10,2,-2));
     }
+    syncHash();
   });
 });
 document.getElementById('sideToggle').addEventListener('click',function(){
@@ -1879,6 +2331,7 @@ function showExhibit(ex){
   document.getElementById('exTitle').textContent=ex.title;
   document.getElementById('exDesc').textContent=ex.desc;
   exhibitCard.classList.add('show');
+  syncHash();
 }
 function stepExhibit(dir){
   var i=currentEx?exhibits.indexOf(currentEx):0;
@@ -1887,6 +2340,14 @@ function stepExhibit(dir){
 }
 function goNearExhibit(ex){
   if(mode!=='walk'){ setMode('walk'); }
+  /* a teleport cancels any in-progress tap-to-move, or the stale
+     target drags the visitor away from the stand on arrival */
+  walk.clickTarget=null; walk.clickBlocked=0; walk.focusEx=null; hideMoveRing();
+  /* a teleport also ends any previous focus session: without this, a
+     same-document hash navigation (e.g. a shared #exhibit-01 link
+     opened while focused on 07) leaves focusState pointing at the
+     old exhibit while the card shows the new one. */
+  focusState=null;
   walk.intro=null;
   walk.level='base';
   walk.inStair=false; /* teleported to a stand point, outside the stair rects */
@@ -1939,8 +2400,84 @@ function addDrawerSwipe(el,foldFn){
 addDrawerSwipe(exhibitCard,function(){ setExFolded(true); });
 addDrawerSwipe(tourHud,function(){ setTourFolded(true); });
 
-/* picking */
+/* picking + tap-to-move + exhibit focus (items 1, 2, 3) */
 var ray=new THREE.Raycaster(), ptr=new THREE.Vector2(), downAt=null;
+var pointerLocked=false;
+var focusState=null; /* the view before an exhibit focus, for Esc / empty-click exit */
+var moveRing=null;
+function initMoveRing(){
+  moveRing=new THREE.Group();
+  var ring=new THREE.Mesh(new THREE.RingGeometry(0.3,0.38,40),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.85,side:THREE.DoubleSide,depthWrite:false}));
+  ring.rotation.x=-Math.PI/2; moveRing.add(ring);
+  var dot=new THREE.Mesh(new THREE.CircleGeometry(0.08,24),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.9,side:THREE.DoubleSide,depthWrite:false}));
+  dot.rotation.x=-Math.PI/2; dot.position.y=0.01; moveRing.add(dot);
+  moveRing.visible=false; moveRing.renderOrder=6; scene.add(moveRing);
+}
+function showMoveRing(x,y,z,opacity){
+  if(!moveRing) return;
+  moveRing.position.set(x,y+0.03,z);
+  moveRing.visible=true;
+  moveRing.children.forEach(function(c){ c.material.opacity=opacity; });
+}
+function hideMoveRing(){ if(moveRing) moveRing.visible=false; }
+initMoveRing();
+function floorHitAt(cx,cy){
+  /* the first upward-facing surface under the cursor, or null — the
+     floor a tap-to-move target (or a hover ring) stands on */
+  var r=renderer.domElement.getBoundingClientRect();
+  ptr.x=((cx-r.left)/r.width)*2-1; ptr.y=-((cy-r.top)/r.height)*2+1;
+  ray.setFromCamera(ptr,camera);
+  var fh=ray.intersectObjects(colliderMeshes,false);
+  for(var i=0;i<fh.length;i++){
+    var n=fh[i].face?fh[i].face.normal:null;
+    var wn=n?n.clone().transformDirection(fh[i].object.matrixWorld):null;
+    if(wn&&wn.y>0.5) return fh[i].point;
+  }
+  return null;
+}
+function setClickTarget(x,y,z){
+  walk.clickTarget={x:x,z:z}; walk.clickBlocked=0;
+  showMoveRing(x,y,z,0.9);
+}
+function arriveClickTarget(){
+  var ex=walk.focusEx; walk.clickTarget=null; walk.clickBlocked=0; hideMoveRing();
+  if(ex){
+    walk.focusEx=null;
+    var dir=ex.focus.clone().sub(walk.pos);
+    walk.yaw=Math.atan2(-dir.x,-dir.z); walk.pitch=-0.05;
+    showExhibit(ex); setExFolded(false);
+  }
+}
+function focusExhibit(ex){
+  if(!ex) return;
+  showExhibit(ex); setExFolded(false);
+  if(mode==='walk'){
+    /* walk to the exhibit's stand point, then face it */
+    focusState={mode:'walk',ex:ex};
+    walk.focusEx=ex;
+    setClickTarget(ex.stand.x,ex.stand.y-1.62,ex.stand.z);
+    return;
+  }
+  /* orbit modes: remember the view, fly to a viewpoint in front of it */
+  focusState={mode:mode,ex:ex,pos:camera.position.clone(),tgt:controls.target.clone()};
+  flyTo(ex.stand.clone(),ex.focus.clone(),1400);
+}
+function exitFocus(){
+  if(!focusState) return;
+  var fs=focusState; focusState=null;
+  walk.focusEx=null; walk.clickTarget=null; hideMoveRing();
+  exhibitCard.classList.remove('show');
+  if(fs.mode==='walk') return; /* stay where you are; only the card closes */
+  flyTo(fs.pos,fs.tgt,1200);
+}
+window.addEventListener('keydown',function(e){
+  if(e.key!=='Escape') return;
+  /* Esc unlocks the pointer first (real browsers also exit pointer lock
+     natively on Esc, but a synthetic Esc — e.g. in a test — does not, so
+     exit explicitly; calling it when not locked is a no-op). */
+  if(document.pointerLockElement===renderer.domElement){ document.exitPointerLock(); return; }
+  if(focusState){ exitFocus(); }
+});
 renderer.domElement.addEventListener('pointerdown',function(e){ downAt=[e.clientX,e.clientY]; });
 renderer.domElement.addEventListener('pointerup',function(e){
   if(!downAt) return;
@@ -1950,7 +2487,39 @@ renderer.domElement.addEventListener('pointerup',function(e){
   ptr.x=((e.clientX-r.left)/r.width)*2-1; ptr.y=-((e.clientY-r.top)/r.height)*2+1;
   ray.setFromCamera(ptr,camera);
   var hits=ray.intersectObjects(pickMeshes,false);
-  if(hits.length&&hits[0].object.userData.exhibit) showExhibit(hits[0].object.userData.exhibit);
+  var exHit=hits.length?hits[0]:null;
+  /* occlusion: a wall or floor between the camera and the exhibit
+     hides it — without this, a tap on the lobby floor would "hit"
+     an exhibit in the basement below through the slab. colliderMeshes
+     holds walls/floors only (no exhibit meshes), so a clear sightline
+     gives no collider hit at all, and any collider hit strictly in
+     front of the exhibit (5 cm epsilon) means the exhibit is hidden
+     behind structure. */
+  var colliderHit=null;
+  if(exHit&&colliderMeshes.length){
+    var sh=ray.intersectObjects(colliderMeshes,false);
+    if(sh.length) colliderHit=sh[0];
+  }
+  if(exHit&&(!colliderHit||colliderHit.distance>=exHit.distance-0.05)){
+    focusExhibit(exHit.object.userData.exhibit);
+    return;
+  }
+  if(focusState){ exitFocus(); return; }
+  if(mode==='walk'&&!pointerLocked){
+    /* item 1: tap the floor to walk there */
+    var p=floorHitAt(e.clientX,e.clientY);
+    if(p&&canStand(p.x,p.z)) setClickTarget(p.x,p.y,p.z);
+  }
+});
+/* item 1: hover shows the landing ring where a tap would walk to */
+var hoverTick=0;
+renderer.domElement.addEventListener('pointermove',function(e){
+  if(mode!=='walk'||pointerLocked||!modelReady||walk.clickTarget) return;
+  var nowMs=performance.now();
+  if(nowMs-hoverTick<90) return; hoverTick=nowMs;
+  var p=floorHitAt(e.clientX,e.clientY);
+  if(p&&canStand(p.x,p.z)) showMoveRing(p.x,p.y,p.z,0.55);
+  else hideMoveRing();
 });
 
 /* ================= Walk mode (v16 layout, re-measured) =================
@@ -1984,7 +2553,8 @@ renderer.domElement.addEventListener('pointerup',function(e){
    The 30-step stair (x 0-8.1, z 3-5) links the levels; its trigger is
    edge-latched (see checkStairTrigger). */
 var GEYE=1.62;
-var walk={pos:new THREE.Vector3(-1.0,GEYE,-1.8),yaw:-2.88,pitch:0,keys:{},press:{},intro:null,level:'ground',inStair:false};
+var walk={pos:new THREE.Vector3(-1.0,GEYE,-1.8),yaw:-2.88,pitch:0,keys:{},press:{},intro:null,level:'ground',inStair:false,
+  clickTarget:null,clickBlocked:0,focusEx:null};
 function rectPoly(x1,z1,x2,z2){ return [[x1,z1],[x2,z1],[x2,z2],[x1,z2]]; }
 function inPoly(x,z,poly){
   var inside=false;
@@ -2050,10 +2620,27 @@ function canStand(x,z){
   for(var k=0;k<bl.length;k++){ var b=bl[k]; if(x>b[0]-r&&x<b[2]+r&&z>b[1]-r&&z<b[3]+r) return false; }
   return true;
 }
+function rayWallBlocked(fx,fz,tx,tz){
+  /* item 2: a geometry wall guard. Before a step, cast a short ray
+     at chest height in the step direction against the loaded GLB —
+     a wall (or glass, column, tall exhibit) inside the step plus a
+     0.4 m margin blocks the step, even if the hand-written zone
+     tables are stale. The ray is horizontal, so floors and ceilings
+     never intersect it. */
+  if(!colliderMeshes.length||!modelReady) return false;
+  var dx=tx-fx, dz=tz-fz;
+  var dist=Math.hypot(dx,dz);
+  if(dist<0.01) return false;
+  ray.set(new THREE.Vector3(fx,walk.pos.y-0.45,fz),new THREE.Vector3(dx/dist,0,dz/dist));
+  ray.far=dist+0.4;
+  var hits=ray.intersectObjects(colliderMeshes,false);
+  ray.far=Infinity;
+  return hits.length>0;
+}
 function attemptMove(nx,nz){
-  if(canStand(nx,nz)){ walk.pos.x=nx; walk.pos.z=nz; return true; }
-  if(canStand(nx,walk.pos.z)){ walk.pos.x=nx; return true; }
-  if(canStand(walk.pos.x,nz)){ walk.pos.z=nz; return true; }
+  if(canStand(nx,nz)&&!rayWallBlocked(walk.pos.x,walk.pos.z,nx,nz)){ walk.pos.x=nx; walk.pos.z=nz; return true; }
+  if(canStand(nx,walk.pos.z)&&!rayWallBlocked(walk.pos.x,walk.pos.z,nx,walk.pos.z)){ walk.pos.x=nx; return true; }
+  if(canStand(walk.pos.x,nz)&&!rayWallBlocked(walk.pos.x,walk.pos.z,walk.pos.x,nz)){ walk.pos.z=nz; return true; }
   return false;
 }
 function startStair(down){
@@ -2084,6 +2671,7 @@ function checkStairTrigger(){
 }
 function enterWalk(){
   camAnim=null;
+  walk.clickTarget=null; walk.clickBlocked=0; walk.focusEx=null; hideMoveRing();
   walk.level='ground';
   walk.intro={s:performance.now(),d:5600,
     pts:[new THREE.Vector3(-1.0,GEYE,-1.8), new THREE.Vector3(0.5,GEYE,3.9), new THREE.Vector3(8.8,EYE_Y,4.0)],
@@ -2136,13 +2724,36 @@ function nudge(k,dist){
 var lookDrag=null;
 renderer.domElement.addEventListener('pointerdown',function(e){ if(mode==='walk') lookDrag=[e.clientX,e.clientY]; });
 window.addEventListener('pointermove',function(e){
-  if(mode!=='walk'||!lookDrag) return;
+  if(mode!=='walk'||!lookDrag||pointerLocked) return;
   walk.yaw-=(e.clientX-lookDrag[0])*0.005;
   walk.pitch-=(e.clientY-lookDrag[1])*0.004;
   walk.pitch=Math.max(-0.9,Math.min(0.9,walk.pitch));
   lookDrag=[e.clientX,e.clientY];
 });
 window.addEventListener('pointerup',function(){ lookDrag=null; });
+/* item 6: optional pointer lock for desktop walk mode. A toggle
+   button in the walk HUD (hidden on touch devices) — click the
+   scene to lock, Esc to unlock. While locked, mouse movement turns
+   the view; tap-to-move is suspended (the cursor is hidden). */
+var lockBtn=document.getElementById('lockBtn');
+if(lockBtn){
+  lockBtn.addEventListener('click',function(){
+    if(document.pointerLockElement===renderer.domElement){ document.exitPointerLock(); return; }
+    if(mode!=='walk') return;
+    try{ renderer.domElement.requestPointerLock(); }catch(e){}
+  });
+  document.addEventListener('pointerlockchange',function(){
+    pointerLocked=(document.pointerLockElement===renderer.domElement);
+    lockBtn.setAttribute('aria-pressed',pointerLocked?'true':'false');
+    lockBtn.textContent=pointerLocked?'已锁定':'锁定';
+  });
+  document.addEventListener('mousemove',function(e){
+    if(!pointerLocked||mode!=='walk') return;
+    walk.yaw-=e.movementX*0.0025;
+    walk.pitch-=e.movementY*0.0025;
+    walk.pitch=Math.max(-0.9,Math.min(0.9,walk.pitch));
+  });
+}
 function updateWalk(dt,nowMs){
   if(!introPose(nowMs)){
     var sp=6.2*dt;
@@ -2156,8 +2767,45 @@ function updateWalk(dt,nowMs){
     if(walk.keys['q']) walk.yaw+=1.8*dt;
     if(walk.keys['e']) walk.yaw-=1.8*dt;
     var len=Math.hypot(mv.x,mv.z);
-    if(len>0){ attemptMove(walk.pos.x+mv.x/len*sp, walk.pos.z+mv.z/len*sp); }
+    if(len>0){
+      attemptMove(walk.pos.x+mv.x/len*sp, walk.pos.z+mv.z/len*sp);
+      /* any manual move input cancels a tap-to-move target */
+      walk.clickTarget=null; walk.clickBlocked=0; hideMoveRing();
+    }
+    /* item 1: glide toward a tapped floor point. attemptMove slides
+       along walls, so a straight-line target that clips a corner
+       still gets there by sliding. */
+    if(walk.clickTarget){
+      var cdx=walk.clickTarget.x-walk.pos.x, cdz=walk.clickTarget.z-walk.pos.z;
+      var cdd=Math.hypot(cdx,cdz);
+      if(cdd<0.35){ arriveClickTarget(); }
+      else{
+        var bx=walk.pos.x, bz=walk.pos.z;
+        attemptMove(walk.pos.x+cdx/cdd*sp, walk.pos.z+cdz/cdd*sp);
+        if(Math.hypot(walk.pos.x-bx,walk.pos.z-bz)<sp*0.15){
+          walk.clickBlocked=(walk.clickBlocked||0)+1;
+          if(walk.clickBlocked>45){ walk.clickTarget=null; walk.clickBlocked=0; hideMoveRing(); }
+        }else walk.clickBlocked=0;
+        checkStairTrigger();
+      }
+    }
     checkStairTrigger();
+    /* item 2: ground snap — keep the eye on the model's real floor.
+       Only within 0.6 m of the level's expected floor (0 / -4.8), so
+       a ray through the atrium opening can never drop the visitor. */
+    if(modelReady&&colliderMeshes.length){
+      ray.set(new THREE.Vector3(walk.pos.x,walk.pos.y+0.3,walk.pos.z),new THREE.Vector3(0,-1,0));
+      ray.far=2.2;
+      var gh=ray.intersectObjects(colliderMeshes,false);
+      ray.far=Infinity;
+      if(gh.length){
+        var fy=gh[0].point.y;
+        var expectY=(walk.level==='ground')?0:-4.8;
+        if(Math.abs(fy-expectY)<0.6){
+          walk.pos.y+=(fy+1.62-walk.pos.y)*Math.min(1,dt*8);
+        }
+      }
+    }
   }
   camera.position.copy(walk.pos);
   var look=new THREE.Vector3(
@@ -2190,12 +2838,41 @@ window.addEventListener('resize',resize); resize();
 camera.position.copy(exteriorCamPos());
 
 var lastNow=performance.now(), elapsed=0;
+/* ================= Debug HUD (issue #3) =================
+   Shows renderer.info (draw calls / triangles) for the model-
+   compression work. Hidden by default; enable with ?debug=1 in
+   the URL, #debug, or Shift+D. Updated at most twice a
+   second so it never costs a layout per frame. */
+var dbgHud=document.getElementById('dbgHud');
+var dbgLast=0;
+function setDebug(on){
+  document.body.classList.toggle('debug',!!on);
+  if(dbgHud&&!on) dbgHud.textContent='';
+}
+if(/[?&]debug=1/.test(location.search)||location.hash==='#debug') setDebug(true);
+/* #10 review (Hark 2026-11-19): bare D clashed with walk-mode WASD
+   (walk.keys['d'] = move right), so the panel no longer listens to
+   it. Shift+D still toggles (repeat-guarded); ?debug=1 / #debug
+   in the URL work as before. */
+window.addEventListener('keydown',function(e){
+  if(e.repeat) return;
+  if(e.key&&e.key.toLowerCase()==='d'&&e.shiftKey&&!e.metaKey&&!e.ctrlKey&&!e.altKey) setDebug(!document.body.classList.contains('debug'));
+});
+function updateDbgHud(nowMs){
+  if(!document.body.classList.contains('debug')||!dbgHud||!renderer) return;
+  if(nowMs-dbgLast<500) return;
+  dbgLast=nowMs;
+  var r=renderer.info.render, m=renderer.info.memory;
+  dbgHud.textContent='calls '+r.calls+' · tris '+r.triangles+' · geo '+m.geometries+' · tex '+m.textures;
+}
+var renderCount=0; /* frames actually drawn — the debug handle reads this */
 function animate(){
   requestAnimationFrame(animate);
   try{
     var nowMs=performance.now();
     var dt=Math.min((nowMs-lastNow)/1000,0.05); lastNow=nowMs; elapsed+=dt;
     var t=elapsed;
+    stepMomentAnim(nowMs); /* #4: 2.5 s light-moment transition */
     if(opening){
       /* #6.2 opening glide: ease along the roof edge, then hand over */
       var ok=(nowMs-opening.s)/opening.d;
@@ -2217,8 +2894,13 @@ function animate(){
       else if(mode==='tour'){ updateTour(nowMs); camera.lookAt(controls.target); }
       else controls.update();
     }
+    /* #12 review (Hark 2026-11-19): on-demand rendering +
+       adaptive DPR are removed from this PR into a separate PR
+       (extracted code: review-round2/chain/extracted-on-demand-dpr.md)
+       — the page now renders every frame, as before #5. */
     if(spinnerPivot) spinnerPivot.rotation.y=t*0.45;
     if(petals){
+
       var pTarget=(mode==='exterior')?0.75:0;
       petals.material.opacity+=(pTarget-petals.material.opacity)*Math.min(1,dt*2);
       petals.visible=petals.material.opacity>0.02;
@@ -2235,13 +2917,107 @@ function animate(){
         petals.geometry.attributes.position.needsUpdate=true;
       }
     }
-    lampMeshes.forEach(function(o,i){ var s=1+Math.sin(t*2+i)*0.08; o.scale.set(s,s,s); });
+    lampMeshes.forEach(function(o,i){ var s=1+Math.sin(t*2+i)*0.08; var b=o.userData.baseScale||1; o.scale.set(b*s,b*s,b*s); });
+    /* In-scene labels: cap their screen size at close range and fade
+       them out when the camera is right on top of them (issue #2.3).
+       A sprite's screen size grows as 1/distance, so standing at an
+       exhibit's stand point (2.6 m from its label) used to fill the
+       frame with a clipped fragment of the text. Below 8 m the sprite
+       is shrunk in proportion to distance, holding its angular size
+       at the value it has at 8 m; below 2 m it fades out, gone at 1 m. */
+    for(var li=0;li<labelSprites.length;li++){
+      var sp=labelSprites[li];
+      if(!sp.visible) continue;
+      var ld=camera.position.distanceTo(sp.position);
+      var ls=Math.min(1,ld/8);
+      sp.scale.set(2.7*ls,0.55*ls,1);
+      sp.material.opacity=0.96*Math.max(0,Math.min(1,(ld-1)/1));
+    }
+    renderCount++;
     renderer.render(scene,camera);
+    updateDbgHud(nowMs);
   }catch(err){
     showErr('渲染出错：'+err.message);
   }
 }
+/* debug handle for testing and review (not part of the UI): read-only
+   snapshots of the interaction state — mode, walk position, tour stop,
+   focus, pixel ratio and renderer.info. A review can drive the page
+   through the normal UI and read the state back here. */
+window.__2121={
+  get mode(){ return mode; },
+  get walkPos(){ return walk.pos.toArray(); },
+  get walkLevel(){ return walk.level; },
+  get walkTarget(){ return walk.clickTarget; },
+  get tourIdx(){ return tour.idx; },
+  get tourDwell(){ return tour.dwellDur; },
+  get tourPhase(){ return tour.phase; },
+  get exhibit(){ return currentEx?currentEx.key:null; },
+  get focus(){ return focusState?(focusState.mode+':'+(focusState.ex?focusState.ex.key:'')):null; },
+  get pixelRatio(){ return renderer.getPixelRatio(); },
+  get renderInfo(){ var i=renderer.info.render; return {calls:i.calls,triangles:i.triangles}; },
+  get frames(){ return renderCount; },
+  get colliders(){ return colliderMeshes.length; },
+  get hash(){ return location.hash; },
+  get clickBlocked(){ return walk.clickBlocked; },
+  /* read-only collision probes (debug only) */
+  canStandAt: function(x,z){ return canStand(x,z); },
+  wallGuard: function(fx,fz,tx,tz){
+    var dx=tx-fx, dz=tz-fz, dist=Math.hypot(dx,dz);
+    if(dist<0.01||!colliderMeshes.length) return {blocked:false};
+    ray.set(new THREE.Vector3(fx,walk.pos.y-0.45,fz),new THREE.Vector3(dx/dist,0,dz/dist));
+    ray.far=dist+0.4;
+    var hits=ray.intersectObjects(colliderMeshes,false);
+    ray.far=Infinity;
+    return {blocked:hits.length>0, hit: hits.length?{name:hits[0].object.name,dist:+hits[0].distance.toFixed(2)}:null};
+  },
+  project: function(x,y,z){
+    var v=new THREE.Vector3(x,y,z).project(camera);
+    return {x:(v.x*0.5+0.5)*window.innerWidth, y:(-v.y*0.5+0.5)*window.innerHeight, behind:v.z>1};
+  },
+  /* read-only pick probe: what would a tap at (sx,sy) hit? (debug only)
+     floor mirrors floorHitAt: the first hit whose world normal faces up. */
+  debugPick: function(sx,sy){
+    var r=renderer.domElement.getBoundingClientRect();
+    ptr.x=((sx-r.left)/r.width)*2-1; ptr.y=-((sy-r.top)/r.height)*2+1;
+    ray.setFromCamera(ptr,camera);
+    var eh=ray.intersectObjects(pickMeshes,false);
+    var sh=ray.intersectObjects(colliderMeshes,false);
+    var fl=null;
+    for(var i=0;i<sh.length;i++){
+      var n=sh[i].face?sh[i].face.normal:null;
+      var wn=n?n.clone().transformDirection(sh[i].object.matrixWorld):null;
+      if(wn&&wn.y>0.5){ fl={name:sh[i].object.name,point:sh[i].point.toArray().map(function(v){ return +v.toFixed(2); })}; break; }
+    }
+    return {
+      ex: eh.length?{name:eh[0].object.name,ex:eh[0].object.userData.exhibit?eh[0].object.userData.exhibit.key:null,dist:+eh[0].distance.toFixed(2)}:null,
+      solid: sh.length?{name:sh[0].object.name,dist:+sh[0].distance.toFixed(2)}:null,
+      floor: fl
+    };
+  }
+};
 animate();
+/* #4: read-only debug hook for automated verification (does not affect the
+   UI). Lets a test drive moments/modes and read renderer state without
+   reaching into the closure. */
+window.__2121={
+  setMoment:function(n){ setMoment(n); },
+  setMode:function(n,k){ setMode(n,k); },
+  getMoment:function(){ return moment; },
+  getState:function(){
+    var ri=renderer.info?renderer.info.render:null;
+    return {
+      moment:moment,
+      toneMapping:renderer.toneMapping,
+      pointLights:scene.children.filter(function(o){ return o.isPointLight; }).length,
+      spotLights:scene.children.filter(function(o){ return o.isSpotLight; }).length,
+      hasEnv:!!scene.environment,
+      loadDone:loadDone,
+      drawCalls:ri?ri.calls:null,
+      triangles:ri?ri.triangles:null
+    };
+  }
+};
 })();
 </script>
 </body>
