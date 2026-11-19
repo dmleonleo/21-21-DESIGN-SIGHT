@@ -12,6 +12,16 @@
 # page farGround ring, moves the G2 exhibit spotlight inside the
 # gallery (it pooled the elliptical bright spot on the lawn),
 # and sets background trees castShadow=false.
+# fix20 (Hark PR #20 review, see
+# issue17-18/fix-hark-review/20/patch/apply_fix20.py): far-ground
+# gradient v2 — centre = lawn final colour (baked grass average
+# desaturated 0.45, as the page does), outer = fog colour
+# 0xc8d3d6, ramp completes at 220 m, 1024 px + dither; far ground
+# enlarged 400 m -> 1600 m so its edge reads as the horizon.
+# White line (Hark PR #20 item 2): partition wall SM_Part_G1G2_C
+# top buried 0.0 -> -0.10 — its 21x0.2 m white cap poked 5 cm
+# above the lawn east of x~42 (roof ends there) and read as the
+# white line in aerial + exterior views (raycast-proven).
 # 21_21 DESIGN SIGHT — Blender build v17 (dm-6000ada, Blender 5.2.2 headless)
 # v17 = v16 + Issue #17 (Leon 2026-11-19 real-device feedback):
 #  (a) G3 cafe roof rebuilt as a FOLDED PLATE — high at both ends, valley
@@ -567,11 +577,29 @@ ground = ground_grid_with_holes("SM_Site_Ground", MAT_GRASS, MAT_CONCRETE_DARK, 
 # continuously across all four strips.
 _FAR_OBJS = []
 for _fname, _fc, _fs in [
-        ("SM_Site_FarGround_North", (0, -116.25), (400, 167.5)),
-        ("SM_Site_FarGround_South", (0, 116.25), (400, 167.5)),
-        ("SM_Site_FarGround_West", (-123.75, 0), (152.5, 65)),
-        ("SM_Site_FarGround_East", (123.75, 0), (152.5, 65))]:
-    _fob = box(_fname, (_fc[0], _fc[1], -0.10), (_fs[0], _fs[1], 0.06), MAT_FARGROUND, COL_SITE)
+        # #20: far ground enlarged 400 m -> 1600 m (Hark item 1): the
+        # 400 m edge sat ~2.1 deg above the true horizon and read as
+        # a floating straight edge; the 1600 m edge sits ~0.5 deg
+        # above it and reads as the horizon itself. Lawn hole
+        # unchanged (x -47.5..47.5, y -32.5..32.5).
+        ("SM_Site_FarGround_North", (0, -416.25), (1600, 767.5)),
+        ("SM_Site_FarGround_South", (0, 416.25), (1600, 767.5)),
+        ("SM_Site_FarGround_West", (-423.75, 0), (752.5, 65)),
+        ("SM_Site_FarGround_East", (423.75, 0), (752.5, 65))]:
+    # #20: flat plane, NOT a box. A ground plane has no underside;
+    # a thin box's bottom face becomes coplanar with the top in
+    # the web pipeline (join node scale 800 -> quantize collapses
+    # the 0.06 m thickness) and z-fights it; the bottom face
+    # carries default cube UVs that sample the fog region, so the
+    # foreground rendered light grey at grazing angles. Plane at
+    # the box's former top height (-0.07), CCW from +Z, with its
+    # own UVMap so the world-mapped UV loop below finds it.
+    _fob = mesh_from_pydata(_fname,
+        [(-_fs[0] / 2, -_fs[1] / 2, 0), (_fs[0] / 2, -_fs[1] / 2, 0),
+         (_fs[0] / 2, _fs[1] / 2, 0), (-_fs[0] / 2, _fs[1] / 2, 0)],
+        [(0, 1, 2, 3)], MAT_FARGROUND, COL_SITE)
+    _fob.location = (_fc[0], _fc[1], -0.07)
+    _fob.data.uv_layers.new(name="UVMap")
     _FAR_OBJS.append(_fob)
 # #18: top-face UVs from world position (texture spans 800 m).
 for _fob in _FAR_OBJS:
@@ -582,8 +610,8 @@ for _fob in _FAR_OBJS:
             if _fpoly.normal.z > 0.9:
                 for _fli in _fpoly.loop_indices:
                     _fv = _fme.vertices[_fme.loops[_fli].vertex_index].co
-                    _fuv.data[_fli].uv = ((_fob.location.x + _fv.x + 400.0) / 800.0,
-                                          (_fob.location.y + _fv.y + 400.0) / 800.0)
+                    _fuv.data[_fli].uv = ((_fob.location.x + _fv.x + 800.0) / 1600.0,  # #20: texture spans 1600 m now
+                                          (_fob.location.y + _fv.y + 800.0) / 1600.0)
 # Paved courtyard between the two wings (x -12..0) + forecourt south of museum
 # #18: tops flush with the lawn (top -0.03, 2 cm above lawn top
 # -0.05) — the old 9-11 cm proud edges read as white outline lines.
@@ -1518,7 +1546,7 @@ wall_varying("SM_Part_G1G2_A", (8, -1), (10, -1), -4.8, 0.0, -4.8, 0.0,
              MAT_WHITE, COL_INTER, thick=0.2)
 wall_varying("SM_Part_G1G2_B", (20, -1), (28, -1), -4.8, 0.0, -4.8, 0.0,
              MAT_WHITE, COL_INTER, thick=0.2)
-wall_varying("SM_Part_G1G2_C", (31, -1), (52, -1), -4.8, 0.0, -4.8, 0.0,
+wall_varying("SM_Part_G1G2_C", (31, -1), (52, -1), -4.8, -0.10, -4.8, -0.10,  # #20: top was 0.0; its 21x0.2 m white cap poked 5 cm above the lawn east of x~42 (roof ends there) and read as the white line in aerial + exterior views (raycast-proven). -0.10 sits inside the ground slab (x<42) / lawn slab (x>42).
              MAT_WHITE, COL_INTER, thick=0.2)
 # P2: the atrium/G1 wall is the atrium east wall itself (x=8, rebuilt above
 # with the stair-landing doorway at Y -3.4..-2.0); no separate x=12 wall —
@@ -2147,16 +2175,31 @@ for _mat_name, _size in BAKE_JOBS:
         _nt.links.new(_tex.outputs["Color"], _bsdf.inputs["Base Color"])
     scene.cycles.device = 'GPU'
 print("=== bake done ===")
-# ================= #18: far-ground radial gradient =================
-# One ground layer only (the page-side farGround ring is deleted in
-# scene.js). The 4 far-ground strips get a radial-gradient texture:
-# lawn colour near the building, fading to neutral fog grey-green by
-# ~250 m, so no square edge reads from the air. The centre colour is
-# sampled from the just-baked MAT_Grass texture so the lawn-to-far
-# seam matches the baked lawn, not the flat base value.
+# ================= #20: far-ground radial gradient v2 =================
+# Hark PR #20 item 1: the v18 gradient made the far ground MORE saturated
+# than the lawn ("carpet") and left a hard line at the 400 m horizon edge.
+# Two errors, both fixed here:
+#  (a) centre: v18 used the raw baked-grass average. The lawn's FINAL
+#      colour is that average AFTER the page's 0.45 desaturation
+#      (applyAestheticMaterials -> desaturateTexture, Rec.601 luma, sRGB
+#      bytes). Measured v18: grass mean (68.7,102.3,61.4) -> desat45
+#      (77.2,95.7,73.2). Centre must equal that, or the lawn reads as a
+#      dark square inside brighter far ground.
+#  (b) outer: v18 faded to (0.32,0.35,0.32) dark grey-green, NOT the fog
+#      colour. The edge then relied on three.js fog alone, and fog colour
+#      (0xc8d3d6) vs the sky just above the edge (~12% lighter) left a
+#      straight step. Now the texture itself reaches the exact fog colour
+#      (200,211,214) by 220 m, so the ground is fog-coloured long before
+#      its edge; the ground is also enlarged to 1600 m (see strips below)
+#      so the edge sits ~0.5 deg above the true horizon.
+# Colour-space note: Blender loads/saves these image pixels RAW
+# (byte/255, no sRGB conversion) — verified on the v18 gradient (saved
+# centre bytes (69,102,61) = grass PNG byte mean; edge bytes (82,89,82)
+# = (0.32,0.35,0.32)*255). All math below is in byte/255 space.
+# Dither: deterministic +/-1 LSB triangular noise, so the 8-bit ramp does
+# not quantise into the faint concentric rings seen in the v18 aerials.
 try:
     _fg_grass = bpy.data.images.load(os.path.join(TEX_DIR, "MAT_Grass.png"))
-    _fg_w, _fg_h = _fg_grass.size
     _fg_px = _fg_grass.pixels[:]
     _fg_n = 0
     _fg_r = _fg_g = _fg_b = 0.0
@@ -2165,33 +2208,39 @@ try:
         _fg_g += _fg_px[_fg_i + 1]
         _fg_b += _fg_px[_fg_i + 2]
         _fg_n += 1
-    _lawn = (_fg_r / _fg_n, _fg_g / _fg_n, _fg_b / _fg_n)
-    print(f"#18 far gradient: baked lawn avg linear RGB = {_lawn}")
+    _lawn_raw = (_fg_r / _fg_n, _fg_g / _fg_n, _fg_b / _fg_n)
+    _fg_luma = 0.299 * _lawn_raw[0] + 0.587 * _lawn_raw[1] + 0.114 * _lawn_raw[2]
+    _lawn = tuple(_c + (_fg_luma - _c) * 0.45 for _c in _lawn_raw)
+    print(f"#20 far gradient: baked lawn avg (raw) = {_lawn_raw}, desat45 = {_lawn}")
     if max(_lawn) < 0.03:
         raise ValueError("baked lawn sample implausibly dark")
 except Exception as _e:
-    print(f"#18 far gradient: grass sample failed ({_e}), using base colour")
-    _lawn = (0.06, 0.13, 0.05)
-_FOG_EDGE = (0.32, 0.35, 0.32)  # neutral fog grey-green (linear)
-_FG_SIZE = 512
+    print(f"#20 far gradient: grass sample failed ({_e}), using measured v18 value")
+    _lawn = (77 / 255, 96 / 255, 73 / 255)
+_FOG20 = (200 / 255, 211 / 255, 214 / 255)  # scene fog colour 0xc8d3d6
+_FG_SIZE = 1024
+_FG_SPAN = 1600.0  # texture spans the 1600 m far ground
 _fg_img = bpy.data.images.new("FarGround_Gradient", width=_FG_SIZE, height=_FG_SIZE, alpha=False)
 _fg_img.filepath_raw = os.path.join(TEX_DIR, "far_ground_gradient.png")
 _fg_img.file_format = 'PNG'
-_fg_pix = []
-for _fg_y in range(_FG_SIZE):
-    for _fg_x in range(_FG_SIZE):
-        _fg_dx = (_fg_x - _FG_SIZE / 2 + 0.5) / (_FG_SIZE / 2)
-        _fg_dy = (_fg_y - _FG_SIZE / 2 + 0.5) / (_FG_SIZE / 2)
-        _fg_r = math.sqrt(_fg_dx * _fg_dx + _fg_dy * _fg_dy) * 400.0  # texture spans 800 m
-        _fg_t = (_fg_r - 60.0) / (250.0 - 60.0)
-        _fg_t = 0.0 if _fg_t < 0.0 else (1.0 if _fg_t > 1.0 else _fg_t)
-        _fg_t = _fg_t * _fg_t * (3.0 - 2.0 * _fg_t)  # smoothstep
-        _fg_pix.extend((_lawn[0] + (_FOG_EDGE[0] - _lawn[0]) * _fg_t,
-                        _lawn[1] + (_FOG_EDGE[1] - _lawn[1]) * _fg_t,
-                        _lawn[2] + (_FOG_EDGE[2] - _lawn[2]) * _fg_t, 1.0))
-_fg_img.pixels = _fg_pix
+import numpy as _fg_np
+_fg_yy, _fg_xx = _fg_np.mgrid[0:_FG_SIZE, 0:_FG_SIZE]
+_fg_dx = (_fg_xx - _FG_SIZE / 2 + 0.5) / (_FG_SIZE / 2)
+_fg_dy = (_fg_yy - _FG_SIZE / 2 + 0.5) / (_FG_SIZE / 2)
+_fg_r = _fg_np.sqrt(_fg_dx * _fg_dx + _fg_dy * _fg_dy) * (_FG_SPAN / 2.0)
+_fg_t = (_fg_r - 60.0) / (220.0 - 60.0)
+_fg_t = _fg_np.clip(_fg_t, 0.0, 1.0)
+_fg_t = _fg_t * _fg_t * (3.0 - 2.0 * _fg_t)  # smoothstep
+_fg_rng = _fg_np.random.default_rng(20)
+_fg_pix = _fg_np.zeros((_FG_SIZE, _FG_SIZE, 4), dtype=_fg_np.float32)
+for _fg_i in range(3):
+    _fg_pix[:, :, _fg_i] = _lawn[_fg_i] + (_FOG20[_fg_i] - _lawn[_fg_i]) * _fg_t
+    _fg_pix[:, :, _fg_i] += (_fg_rng.random((_FG_SIZE, _FG_SIZE)) + _fg_rng.random((_FG_SIZE, _FG_SIZE)) - 1.0) / 255.0
+_fg_pix[:, :, 3] = 1.0
+_fg_pix = _fg_np.clip(_fg_pix, 0.0, 1.0)
+_fg_img.pixels = _fg_pix.reshape(-1).tolist()
 _fg_img.save()
-print(f"#18 far gradient saved -> {_fg_img.filepath_raw}")
+print(f"#20 far gradient saved -> {_fg_img.filepath_raw} (centre={tuple(round(_c * 255) for _c in _lawn)}, fog={tuple(round(_c * 255) for _c in _FOG20)})")
 # Wire it onto MAT_FarGround (base colour to white so the exporter does
 # not multiply the texture by the old flat factor).
 try:
@@ -2201,10 +2250,9 @@ try:
     _ftex = _fnt.nodes.new("ShaderNodeTexImage")
     _ftex.image = _fg_img
     _fnt.links.new(_ftex.outputs["Color"], _fbsdf.inputs["Base Color"])
-    print("#18 far gradient wired onto MAT_FarGround")
+    print("#20 far gradient wired onto MAT_FarGround")
 except Exception as _e:
-    print(f"#18 far gradient wiring failed: {_e}")
-
+    print(f"#20 far gradient wiring failed: {_e}")
 # UVs: cube projection (world-scale, 2 m tile) on every mesh so baked
 # textures map at a consistent scale; required for image textures in glTF.
 for _o in list(bpy.context.scene.objects):
@@ -2213,7 +2261,7 @@ for _o in list(bpy.context.scene.objects):
     if _o.name.startswith("SM_Tree_Card") or _o.name.startswith("SM_Tree_TopCard"):
         continue  # leaf cards already carry their own 0..1 UVs
     if _o.name.startswith("SM_Site_FarGround_"):
-        continue  # #18: far-ground strips keep their world-mapped UVs (u=(x+400)/800) for the radial-gradient texture; cube_project would tile it every 2 m into a dot grid
+        continue  # #18/#20: far-ground strips keep their world-mapped UVs (u=(x+800)/1600) for the radial-gradient texture; cube_project would tile it every 2 m into a dot grid
     bpy.context.view_layer.objects.active = _o
     _o.select_set(True)
     bpy.ops.object.mode_set(mode='EDIT')
