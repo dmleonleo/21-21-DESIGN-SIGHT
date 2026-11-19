@@ -1297,16 +1297,30 @@ function onModelLoaded(gltf){
      bake below, so the building's shadow falls on it too. (A single
      big triangle fan showed radial shading seams in software
      rendering, so the sheet is a subdivided grid instead.) */
-  var farGround=new THREE.Mesh(
-    new THREE.PlaneGeometry(1600,1600,24,24),
-    new THREE.MeshStandardMaterial({color:new THREE.Color(0.16,0.26,0.12),roughness:1,metalness:0})
-  );
-  farGround.rotation.x=-Math.PI/2; farGround.position.y=-0.05;
-  /* no receiveShadow: the sheet lies mostly outside the shadow
-     camera (-70..70), and shadow sampling across its large quads
-     left visible grid seams in software rendering; the model's own
-     slab keeps the building's shadow where it matters. */
-  farGround.receiveShadow=false;
+  /* #9 review (Hark 2026-11-19): the old single 1600 m sheet sat at
+     y=-0.05, coplanar with SM_Site_Ground's top (-0.05) -> z-fighting,
+     and face-up it covered the sunken court + atrium openings from
+     above (green sheet seen looking down the stair from the lobby).
+     Now only the ring OUTSIDE the model's own 95x65 m lawn is laid
+     (|x|>47.5 or |z|>32.5), at y=-0.15, 10 cm below the lawn top, so
+     the court (tri x 10..20, z -1..5) and atrium void (x 0..8,
+     z -5..5) stay open and nothing z-fights. */
+  var farGroundMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0.16,0.26,0.12),roughness:1,metalness:0});
+  var farGround=new THREE.Group();
+  function farStrip(w,d,cx,cz){
+    var m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),farGroundMat);
+    m.rotation.x=-Math.PI/2; m.position.set(cx,-0.15,cz);
+    /* no receiveShadow: the ring lies mostly outside the shadow
+       camera (-70..70), and shadow sampling across its large quads
+       left visible grid seams in software rendering; the model's own
+       slab keeps the building's shadow where it matters. */
+    m.receiveShadow=false;
+    farGround.add(m);
+  }
+  farStrip(1600,767.5,0,-416.25); /* north: z -800..-32.5 */
+  farStrip(1600,767.5,0,416.25); /* south: z 32.5..800 */
+  farStrip(752.5,65,-423.75,0); /* west: x -800..-47.5, z -32.5..32.5 */
+  farStrip(752.5,65,423.75,0); /* east: x 47.5..800, z -32.5..32.5 */
   scene.add(farGround);
   model.traverse(function(o){
     if(o.isMesh){
