@@ -1,18 +1,22 @@
-// camera.js — current mode, preset cameras, fly-to, mode switching.
-// Split from the single inline script of docs/index.html (main @62eeaac6).
+// camera.js — current mode, preset cameras, fly-to, mode switching,
+// deep links, opening glide.
+// Split from the single inline script of docs/index.html
+// (merged14: #9-#14 serial chain + round-2 review fixes).
 // Behaviour unchanged: only the module boundary is new.
 import * as THREE from 'three';
-import { scene, camera, controls } from './scene.js';
-import { isNight, setNight } from './lighting.js';
-import { startTour, setTourFolded } from './tour.js';
-import { enterWalk } from './walk.js';
-import { showG3Spot, g3Spots, g3Idx, captionDismissed } from './ui.js';
-import { applyLabels } from './labels.js';
+import { scene, camera, controls, reducedMotion, modelReady } from './scene.js';
+import { MOMENTS, moment, setMoment } from './lighting.js';
+import { startTour, setTourFolded, tourGoTo, tourStops, tour } from './tour.js';
+import { enterWalk, goNearExhibit } from './walk.js';
+import { showG3Spot, g3Spots, g3Idx, captionDismissed, flashVertical, updateWalkTip, armIntro, verticalEl, currentEx, showExhibit } from './ui.js';
+import { exhibits, applyLabels } from './labels.js';
 
 export const EXT_TARGET = new THREE.Vector3(4, 1.5, -1);
 export let extDefault = true;
 export function exteriorCamPos(){
-  if(camera.aspect>=0.85) return new THREE.Vector3(16,11,-60);
+  /* #7: pulled back along the same sightline so both wings still fit
+     at the 38° lens (distance x1.35 vs the 50° position) */
+  if(camera.aspect>=0.85) return new THREE.Vector3(20,14.5,-81);
   /* Portrait: the two wings span ~85 m along x, which overflows the narrow
      horizontal FOV of a portrait screen at any fixed distance. Solve the
      camera distance from the projected corners of the buildings' bounding
@@ -50,54 +54,157 @@ export function flyTo(pos,tgt,dur){
 }
 export function setMode(next,keepCam){
   mode=next;
+  document.body.dataset.mode=next;
+  flashVertical();
+  var activeBtn=document.querySelector('#modebar button[data-mode="'+next+'"]');
+  if(activeBtn&&window.innerWidth<=760){ try{ activeBtn.scrollIntoView({inline:'center',block:'nearest'}); }catch(e){} }
+  /* item 5: a fresh mode entry drops any preset view; the hash
+     follows the new state (a view button sets currentView after). */
+  currentView=null;
   document.querySelectorAll('#modebar button').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.mode===next?'true':'false'); });
   badge.textContent=modeNames[next];
   var inside=(next!=='exterior');
-  scene.fog=inside? null : new THREE.Fog(isNight?0x2b3442:0xd8e6f0,120,280);
+  scene.fog=inside? null : new THREE.Fog(MOMENTS[moment].fog,120,280); /* #4: fog follows the current light moment */
   applyLabels();
   walkHud.classList.toggle('show',next==='walk');
   document.body.classList.toggle('walking',next==='walk');
   walkTip.classList.toggle('show',next==='walk');
   cross.classList.toggle('show',next==='walk');
   tourHud.classList.toggle('show',next==='tour');
-  if(next==='tour') exhibitCard.classList.remove('show');
+  if(next!=='g3'&&next!=='walk') exhibitCard.classList.remove('show'); /* #6.1: the exhibit/spot card belongs to one mode only — a G3 spot must not linger into the gallery panorama (and vice versa); g3 re-shows it via showG3Spot(), walk via showExhibit()/proximity */
   caption.style.display=(next==='exterior'&&!captionDismissed)?'block':'none';
   controls.enabled=(next!=='walk'&&next!=='tour');
   controls.maxPolarAngle=(next==='exterior')?Math.PI*0.52:Math.PI*0.65;
   controls.maxDistance=(next==='exterior')?260:60;
   if(next==='exterior'&&!keepCam){ extDefault=true; flyTo(exteriorCamPos(),new THREE.Vector3(4,1.5,-1)); }
-  /* Lobby camera stands on the solid west strip just inside the entrance
-     (verified against the GLB: SM_Ground_Slab covers x -2..0.25 full depth).
-     The previous viewpoint (7.6,1.9,-0.4) hovered over the atrium/stair
-     opening in the slab (x 0.25..8, z -4.75..4.9), so the foreground was
-     the open drop to the basement and the lobby floor read as missing.
-     From the entrance the reception desk (0.5,-5.8) and the elevator door
-     (-0.44,-3.6) face the camera across solid floor. */
-  if(next==='lobby') flyTo(new THREE.Vector3(-1.15,1.85,1.15),new THREE.Vector3(0.9,0.6,-5.5));
+  /* Lobby camera stands in the south of the lobby, looking north-east
+     across the reception desk toward the atrium opening (issue #2.7).
+     The previous viewpoint (-1.15,1.85,1.15) faced the dark elevator
+     door dead-on at 4.2 m, so a tall black panel filled the centre of
+     the frame. From the south the trapezoidal elevator shaft is still
+     visible at the frame's right, but the black door itself is out of
+     frame; the reception desk, the south glass and the atrium opening
+     (with the basement stair below it) carry the shot. */
+  if(next==='lobby') flyTo(new THREE.Vector3(-1.8,1.9,4.8),new THREE.Vector3(2.0,0.4,-1.5));
   if(next==='g3'){ var gs=g3Spots[g3Idx]; flyTo(gs.cam,gs.tgt,1400); showG3Spot(g3Idx); }
   /* v16 Gallery 2: the east rectangle, x 24..52, z -15..1; camera inside the SW corner */
-  if(next==='gallery') flyTo(new THREE.Vector3(27,-0.7,-14.8),new THREE.Vector3(46,-3.9,-2.5));
-  if(next==='walk') enterWalk();
+  if(next==='gallery') flyTo(new THREE.Vector3(30,-0.9,-14.2),new THREE.Vector3(47,-3.9,-3.5)); /* #7: same reframe as tour stop 7 */
+  if(next==='walk'){ updateWalkTip(); enterWalk(); }
   if(next==='tour'){ setTourFolded(true); startTour(); }
+  syncHash();
+}
+/* ================= Deep links (item 5) =================
+   The URL hash carries the visit state so a shared link (or a
+   refresh) lands back in the same place: #exhibit-07, #tour-5,
+   #g3-2, #view-aerial, or a plain mode (#lobby, #gallery, #walk,
+   #exterior). The hash is written with replaceState — no history
+   spam as the tour advances — and read once the model is on screen
+   (see the applyDeepLink() call at the end of onModelLoaded). */
+let currentView = null;
+export function syncHash(){
+  var h='';
+  if(mode==='tour') h='#tour-'+(tour.idx+1);
+  else if(mode==='g3') h='#g3-'+(g3Idx+1);
+  else if(mode==='walk'&&currentEx) h='#exhibit-'+currentEx.key;
+  else if(mode==='walk') h='#walk';
+  else if(mode==='lobby') h='#lobby';
+  else if(mode==='gallery') h='#gallery';
+  else if(mode==='exterior'&&currentView) h='#view-'+currentView;
+  else h='#exterior';
+  try{ history.replaceState(null,'',h); }catch(e){}
+}
+export function applyDeepLink(){
+  var h=(location.hash||'').replace(/^#/,'');
+  if(!h||!modelReady) return;
+  var m;
+  if((m=h.match(/^exhibit-(\d{2})$/))){
+    var ex=null;
+    exhibits.forEach(function(e){ if(e.key===m[1]) ex=e; });
+    if(ex){ showExhibit(ex); goNearExhibit(ex); }
+    return;
+  }
+  if((m=h.match(/^tour-(\d+)$/))){
+    var ti=Math.max(0,Math.min(tourStops.length-1,parseInt(m[1],10)-1));
+    setMode('tour'); tourGoTo(ti,performance.now());
+    return;
+  }
+  if((m=h.match(/^g3-(\d+)$/))){
+    var gi=Math.max(0,Math.min(g3Spots.length-1,parseInt(m[1],10)-1));
+    setMode('g3'); showG3Spot(gi); var gs=g3Spots[gi]; flyTo(gs.cam,gs.tgt,1200);
+    return;
+  }
+  if((m=h.match(/^view-(aerial|front|court|night)$/))){
+    setMode('exterior',true); extDefault=false; currentView=m[1];
+    var v=m[1];
+    if(v==='front') flyTo(new THREE.Vector3(20,7,-44),new THREE.Vector3(19,2.2,-3));
+    if(v==='aerial') flyTo(new THREE.Vector3(4,74,-34),new THREE.Vector3(4,0,-2));
+    if(v==='court') flyTo(new THREE.Vector3(-13,3.4,-20),new THREE.Vector3(-5,1.2,1));
+    if(v==='night'){ setMoment('night'); flyTo(new THREE.Vector3(28,8.5,-44),new THREE.Vector3(10,2,-2)); } /* #12 review: a deep link must land on night, not toggle it */
+    syncHash();
+    return;
+  }
+  if(h==='lobby'||h==='gallery'||h==='walk'||h==='exterior'){ setMode(h); return; }
+}
+/* ================= Opening (#6.2) =================
+   After the model is on screen: the Sugimoto blur sharpens as the
+   deferred sky / IBL work finishes, then a 7 s glide runs along the
+   54 m folded roof's south edge, west to east, settling on the
+   standard exterior framing. Only the title + the vertical text are
+   on screen during the glide; the full interface appears when it
+   ends. Any input skips it. First visit only (localStorage), and
+   never under reduced motion — returning visitors go straight to
+   the exterior view. */
+export let opening = null;
+let openingDone = false;
+export function beginOpening(){
+  document.body.classList.remove('scene-blur');
+  var seen=false;
+  try{ seen=window.localStorage&&localStorage.getItem('2121-opening-seen')==='1'; }catch(e){}
+  if(seen||reducedMotion){ endOpening(true); return; }
+  opening={s:performance.now(),d:7000,
+    p0:new THREE.Vector3(-14,8.5,-34), p1:exteriorCamPos(),
+    t0:new THREE.Vector3(8,5,-2), t1:new THREE.Vector3(4,1.5,-1)};
+  camera.position.copy(opening.p0); controls.target.copy(opening.t0);
+  controls.enabled=false;
+  document.body.classList.add('opening');
+  if(verticalEl) verticalEl.classList.add('on');
+  var skip=function(){ if(opening) endOpening(false); };
+  window.addEventListener('pointerdown',skip,{once:true});
+  window.addEventListener('keydown',skip,{once:true});
+}
+export function endOpening(instant){
+  if(openingDone&&!opening) return;
+  opening=null; openingDone=true;
+  document.body.classList.remove('opening');
+  if(verticalEl) verticalEl.classList.remove('on');
+  controls.enabled=(mode!=='walk'&&mode!=='tour');
+  camera.position.copy(exteriorCamPos()); controls.target.copy(EXT_TARGET);
+  try{ if(window.localStorage) localStorage.setItem('2121-opening-seen','1'); }catch(e){}
+  armIntro();
 }
 
 export function initCamera(){
+  controls.addEventListener('start',function(){
+    if(mode==='exterior'){ extDefault=false; if(currentView){ currentView=null; syncHash(); } }
+  });
   document.querySelectorAll('#modebar button').forEach(function(b){
     b.addEventListener('click',function(){ setMode(b.dataset.mode); });
   });
+  window.addEventListener('hashchange',function(){ applyDeepLink(); });
   document.querySelectorAll('#side .views button').forEach(function(b){
     b.addEventListener('click',function(){
       if(mode!=='exterior') setMode('exterior',true);
       extDefault=false;
       var v=b.dataset.view;
+      currentView=v;
       if(v==='front') flyTo(new THREE.Vector3(20,7,-44),new THREE.Vector3(19,2.2,-3));
       if(v==='aerial') flyTo(new THREE.Vector3(4,74,-34),new THREE.Vector3(4,0,-2));
       if(v==='court') flyTo(new THREE.Vector3(-13,3.4,-20),new THREE.Vector3(-5,1.2,1));
       if(v==='night'){
-        setNight(!isNight);
+        setMoment(moment==='dusk'?'night':'dusk'); /* archive dusk view: goes straight to dusk, not a toggle */
         flyTo(new THREE.Vector3(28,8.5,-44),new THREE.Vector3(10,2,-2));
       }
+      syncHash();
     });
   });
-  controls.addEventListener('start',function(){ if(mode==='exterior') extDefault=false; });
 }

@@ -1,5 +1,6 @@
 // labels.js — exhibit catalogue, 3D signage sprites, label visibility.
-// Split from the single inline script of docs/index.html (main @62eeaac6).
+// Split from the single inline script of docs/index.html
+// (merged14: #9-#14 serial chain + round-2 review fixes).
 // Behaviour unchanged: only the module boundary is new.
 import * as THREE from 'three';
 import { canvasTexture, scene } from './scene.js';
@@ -11,25 +12,27 @@ import { mode } from './camera.js';
    still mid-evaluation at that point (circular import); scene.js and
    walk.js import them from here instead. */
 export const FLOOR_Y = -4.8, EYE = 1.62, EYE_Y = FLOOR_Y + EYE;
-var labelSprites=[];
+export const labelSprites=[];
 export const labelState = { on: true };
 export function applyLabels(){
   var vis=(typeof mode!=='undefined'&&mode!=='exterior')&&labelState.on&&!document.body.classList.contains('ui-hidden');
   labelSprites.forEach(function(sp){ sp.visible=vis; });
 }
-export function labelSprite(text,x,y,z){
+export function labelSprite(text,x,y,z,dark){
   var tex=canvasTexture(512,104,function(ctx,w,h){
     /* Fukasawa-quiet signage: no board, no colour block — just small
-       white lettering with a hairline beneath, like the museum's own
-       captions. Legibility comes from ONE tight dark shade (1px
-       offset, 2px blur), never a blurred light halo — the halo is
-       what made the lettering look lit up. */
-    ctx.font='300 33px "Hiragino Kaku Gothic ProN","Noto Sans JP","PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.shadowColor='rgba(5,7,5,0.55)'; ctx.shadowBlur=2; ctx.shadowOffsetY=1;
-    ctx.fillStyle='rgba(255,255,255,0.96)';
+       lettering with a hairline beneath, like the museum's own
+       captions. Legibility comes from ONE tight shade (1px offset,
+       2px blur), never a blurred light halo — the halo is what made
+       the lettering look lit up. White ink for the dark basement
+       rooms; dark ink for the bright white G3 room (dark=true),
+       where white lettering would vanish against the white ceiling. */
+    ctx.font='300 33px "Noto Sans SC","Noto Sans JP","Hiragino Kaku Gothic ProN","PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.shadowColor=dark?'rgba(255,255,255,0.55)':'rgba(5,7,5,0.55)'; ctx.shadowBlur=2; ctx.shadowOffsetY=1;
+    ctx.fillStyle=dark?'rgba(28,28,30,0.95)':'rgba(255,255,255,0.96)';
     ctx.fillText(text,4,42);
     ctx.shadowBlur=0; ctx.shadowOffsetY=0;
-    ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.fillRect(5,60,110,2);
+    ctx.fillStyle=dark?'rgba(28,28,30,0.55)':'rgba(255,255,255,0.55)'; ctx.fillRect(5,60,110,2);
   });
   var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:true,opacity:0.96}));
   sp.scale.set(2.7,0.55,1); sp.position.set(x,y,z); sp.renderOrder=5; sp.visible=false; scene.add(sp); labelSprites.push(sp); return sp;

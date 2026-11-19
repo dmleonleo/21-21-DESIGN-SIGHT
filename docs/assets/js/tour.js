@@ -1,9 +1,11 @@
 // tour.js — the 14-stop automatic tour (route, pacing, progress, controls).
-// Split from the single inline script of docs/index.html (main @62eeaac6).
+// Split from the single inline script of docs/index.html
+// (merged14: #9-#14 serial chain + round-2 review fixes).
 // Behaviour unchanged: only the module boundary is new.
 import * as THREE from 'three';
 import { camera, controls } from './scene.js';
-import { mode, exteriorCamPos, EXT_TARGET, setMode, camAnimBox } from './camera.js';
+import { mode, exteriorCamPos, EXT_TARGET, setMode, camAnimBox, syncHash } from './camera.js';
+import { flashVertical } from './ui.js';
 
 /* ================= Auto tour =================
    A fixed cinematic route through the whole building, reusing the same
@@ -15,7 +17,7 @@ import { mode, exteriorCamPos, EXT_TARGET, setMode, camAnimBox } from './camera.
    push-in) while its narration card is shown, then moves on. The visitor
    can pause, jump to the previous / next stop, tap a progress segment to
    jump, or exit at any time; picking any other mode also ends the tour. */
-var tourStops=[
+export const tourStops=[
   {title:'鸟瞰开场 · 两栋建筑',dwell:3400,
    desc:'先从空中看全貌：东侧是博物馆翼，一整张 54 米长的钢板折成屋顶；西侧较小的咖啡翼是 Gallery 3 所在。约八成空间藏在地下，草坪上只露出折叠的屋顶。',
    cam:new THREE.Vector3(10,26,-66), tgt:new THREE.Vector3(4,0,-2)},
@@ -27,7 +29,7 @@ var tourStops=[
    cam:new THREE.Vector3(-13,3.4,-20), tgt:new THREE.Vector3(-5,1.2,1)},
   {title:'入口大堂 · 接待台与电梯',dwell:3400,
    desc:'大堂在博物馆翼地面层：接待台立在实心楼板上，西南角是梯形平面的电梯。展厅在地下——接下来走楼梯下去。',
-   cam:new THREE.Vector3(-1.15,1.85,1.15), tgt:new THREE.Vector3(0.9,0.6,-5.5)},
+   cam:new THREE.Vector3(-1.8,1.9,4.8), tgt:new THREE.Vector3(2.0,0.4,-1.5)},
   {title:'30 级楼梯 · 下到地下层',dwell:3000,
    desc:'楼梯共 30 级、每级高 0.16 米，北侧是混凝土栏板、南侧是玻璃栏杆。顺着它下行 4.8 米，就到了地下展厅层。',
    cam:new THREE.Vector3(0.5,1.62,3.9), tgt:new THREE.Vector3(8.8,-2.8,4.0)},
@@ -36,7 +38,7 @@ var tourStops=[
    cam:new THREE.Vector3(14,-1.7,5.8), tgt:new THREE.Vector3(28,-3.4,3.8)},
   {title:'Gallery 2 · 全景（地下层已放大）',dwell:3400,
    desc:'Gallery 2 层高 4.8 米，是全馆最大的展厅。地下层按官方总楼面放大到约 1,336 m²，轮廓向东一直延到 x=52；0.55 米方柱成列排开，沿柱线有一条连续天窗缝。空间做大后展品也翻倍——全馆共 12 件：01–08 与 11 在这间东侧大厅里，09 暖帘挂在两厅之间，10 在 Gallery 1，12 在楼梯底旁。',
-   cam:new THREE.Vector3(27,-0.7,-14.8), tgt:new THREE.Vector3(46,-3.9,-2.5)},
+   cam:new THREE.Vector3(30,-0.9,-14.2), tgt:new THREE.Vector3(47,-3.9,-3.5)} /* #7: reframe — red fabric to the right edge as a frame, not a wall */,
   {title:'展品 01 · 一块布 / 02 · 光的织物',dwell:3800,
    desc:'01《一块布 · A-POC 织物》：一块布直接织造成衣，正是折叠钢板屋顶的灵感来源。02《光的织物》：七盏球形吊灯如经纬般垂落——地下展厅里，光本身就是展品。',
    cam:new THREE.Vector3(31,-3.18,-5.2), tgt:new THREE.Vector3(34,-2.4,-8.6)},
@@ -48,16 +50,21 @@ var tourStops=[
    cam:new THREE.Vector3(43,-3.18,-7.6), tgt:new THREE.Vector3(46,-3.9,-10.0)},
   {title:'下沉庭院 · 露天深坑',dwell:3400,
    desc:'三角形下沉庭院是一个真正的露天坑，坑底就是地下层地面。庭院和中庭把阳光送进地下展厅——这是这栋地下建筑真正的「立面」。站在 Gallery 2 里，隔着整面玻璃正对坑底。',
-   cam:new THREE.Vector3(11,-1.0,-3.5), tgt:new THREE.Vector3(17.5,-4.6,0.8)},
+   cam:new THREE.Vector3(15.67,1.07,-3.78), tgt:new THREE.Vector3(10,1.5,0)}, /* #7: pit-floor-looking-up is impossible — OrbitControls maxPolarAngle (PI*0.52) clamps the camera to level with the target; this IS the clamped position, verified by screenshot (pit opening, west-wall skylight slit, stair, sky) */
   {title:'前往西翼 · 越过草坪',dwell:1400,
    desc:'地下参观到此结束。镜头升上草坪上空，越过下沉庭院，飞往西侧咖啡翼——Gallery 3 在那里。',
-   cam:new THREE.Vector3(-2,16,-24), tgt:new THREE.Vector3(-20,1,1)},
+   cam:new THREE.Vector3(-2,24,-28), tgt:new THREE.Vector3(-20,1,1)},
   {title:'Gallery 3 · 西翼展厅',dwell:4000,
    desc:'Gallery 3 在西翼（原咖啡厅，2017 年改建），不在博物馆翼：四边形展厅约 111.7 m²，深灰花岗岩地面，白色石膏斜顶最高 4.26 米，北墙有窗缝与磨砂玻璃带，南侧整面玻璃外是 57 m² 露台。',
-   cam:new THREE.Vector3(-20.5,1.55,-1.8), tgt:new THREE.Vector3(-28,1.2,2.8)},
+   cam:new THREE.Vector3(-24,1.6,4.2), tgt:new THREE.Vector3(-13,0.8,-2.0)}, /* #14 review (Hark 2026-11-19): #7 had set this back to (-31.5,1.7,4.6), which shows the black wedge seam between roof and ceiling — restored to #9's G3 view 1, same as g3Spots[0] */
   {title:'收尾 · 回到鸟瞰',dwell:5200,
    desc:'游览结束：从空中再看一次两栋建筑——一块布折成的屋顶、藏在地下的展厅、引光的庭院。想自己走走，可以点「进入展厅 · 步行参观」；想再看一遍，点「下一站」会从头开始。',
-   cam:new THREE.Vector3(4,46,-54), tgt:new THREE.Vector3(4,0,-2)}
+   /* the closing aerial is the verified aerial preset view (issue
+      #2.1): the old stop sat at (4,46,-54), and the flight into it
+      from stop 13 ran low over the museum roof, so the frame filled
+      with one grey roof slope. From the aerial preset the flight
+      climbs steeply and the closing frame is the whole site. */
+   cam:new THREE.Vector3(4,74,-34), tgt:new THREE.Vector3(4,0,-2)}
 ];
 var tourHud=document.getElementById('tourHud');
 var tourNoEl=document.getElementById('tourNo');
@@ -74,7 +81,22 @@ tourStops.forEach(function(s,i){
   b.addEventListener('click',function(){ tourJump(i); });
   tourDotsEl.appendChild(b); tourDots.push(b);
 });
-var tour={idx:0,phase:'travel',start:0,travelDur:3000,dwellDur:3400,
+/* item 4: the progress bar itself is clickable — tap anywhere on the
+   track to jump to that stop. The dots already did this; the track
+   makes the whole bar a target, and it is keyboard-operable too. */
+var tourTrackEl=document.getElementById('tourTrack');
+tourTrackEl.addEventListener('click',function(e){
+  var r=tourTrackEl.getBoundingClientRect();
+  var frac=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+  tourJump(Math.min(tourStops.length-1,Math.floor(frac*tourStops.length)));
+});
+tourTrackEl.addEventListener('keydown',function(e){
+  if(e.key==='ArrowLeft'){ e.preventDefault(); tourJump(tour.idx-1); }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); tourJump(tour.idx+1); }
+  else if(e.key==='Home'){ e.preventDefault(); tourJump(0); }
+  else if(e.key==='End'){ e.preventDefault(); tourJump(tourStops.length-1); }
+});
+export const tour={idx:0,phase:'travel',start:0,travelDur:3000,dwellDur:3400,
   fromPos:new THREE.Vector3(),fromTgt:new THREE.Vector3(),
   paused:false,pauseAt:0,drift:new THREE.Vector3()};
 function tourEase(k){ return k<0.5 ? 4*k*k*k : 1-Math.pow(-2*k+2,3)/2; }
@@ -84,22 +106,31 @@ function tourShowCard(){
   tourTitleEl.textContent=s.title;
   tourDescEl.textContent=s.desc;
   tourFillEl.style.width=((tour.idx)/tourStops.length*100)+'%';
+  var trackEl=document.getElementById('tourTrack');
+  if(trackEl){
+    trackEl.setAttribute('aria-valuenow',String(tour.idx+1));
+    trackEl.setAttribute('aria-valuetext','第 '+(tour.idx+1)+' 站：'+s.title);
+  }
   tourDots.forEach(function(b,i){
     b.className=i<tour.idx?'done':(i===tour.idx?'now':'');
   });
 }
-function tourGoTo(idx,nowMs){
+export function tourGoTo(idx,nowMs){
   tour.idx=(idx+tourStops.length)%tourStops.length;
   var s=tourStops[tour.idx];
   tour.fromPos.copy(camera.position);
   tour.fromTgt.copy(controls.target);
   var dist=tour.fromPos.distanceTo(s.cam);
   tour.travelDur=Math.max(2600,Math.min(6800,dist*150));
-  tour.dwellDur=s.dwell||3400;
+  /* item 4: the dwell follows the narration length (6-10 s), not a
+     fixed 3.4 s — ~55 ms per character plus a 2 s base, clamped. */
+  tour.dwellDur=Math.max(6000,Math.min(10000,2000+Math.round(s.desc.length*55)));
   tour.phase='travel';
   tour.start=nowMs;
   tour.paused=false; tourPauseBtn.textContent='暂停';
   tourShowCard();
+  syncHash();
+  flashVertical();
 }
 function tourJump(idx){ if(mode==='tour') tourGoTo(idx,performance.now()); }
 export function startTour(){
@@ -157,7 +188,10 @@ export function updateTour(nowMs){
     }
     tourGoTo(tour.idx+1,nowMs); return true;
   }
-  camera.position.copy(s.cam).addScaledVector(tour.drift,dk);
+  /* item 4: a very slow push-and-pull during the dwell — the camera
+     eases 0.55 m toward the subject and back over the whole dwell,
+     instead of a one-way drift that never returns. */
+  camera.position.copy(s.cam).addScaledVector(tour.drift,Math.sin(dk*Math.PI));
   controls.target.copy(s.tgt);
   return true;
 }
@@ -169,8 +203,9 @@ export function initTour(){
   document.getElementById('tourNext').addEventListener('click',function(){ tourJump(tour.idx+1); });
   document.getElementById('tourExit').addEventListener('click',function(){ setMode('exterior'); });
   window.addEventListener('keydown',function(e){
-    if(mode!=='tour') return;
-    if(e.key===' '){ e.preventDefault(); setTourPaused(!tour.paused); }
-    if(e.key==='Escape') setMode('exterior');
+    if(mode==='tour'){
+      if(e.key===' '){ e.preventDefault(); setTourPaused(!tour.paused); }
+      if(e.key==='Escape') setMode('exterior');
+    }else if(mode==='walk'&&e.key==='Escape'){ setMode('exterior'); }
   });
 }
