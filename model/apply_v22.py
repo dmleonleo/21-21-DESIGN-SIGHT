@@ -271,6 +271,17 @@ def main():
         'GLB_PATH = os.path.join(OUT_DIR, "design2121_v22.glb")',
         "glb-name")
 
+    # ---- _point_in_tri tolerance (v22 fix, issue #26) ----
+    # Grid points exactly on a triangle edge got 1-a-b ~ -7e-18 from float
+    # rounding, were judged outside, and fell into the region-E fallback:
+    # 29 roof vertices sank ~2.5 m (26 north-row cols -> 2.35, 3 west-edge
+    # pts). Tolerance only; no geometry value changes.
+    text = replace_once(text,
+        "    return a >= 0 and b >= 0 and (1 - a - b) >= 0\n",
+        "    # v22: 1e-9 tolerance on edge points (float -7e-18, see above).\n"
+        "    return a >= -1e-9 and b >= -1e-9 and (1 - a - b) >= -1e-9\n",
+        "point-in-tri-tolerance")
+
     # ---- STAIR_RECT: flight extends to X 28.23 (42 steps) ----
     text = replace_once(text,
         "STAIR_RECT = (15.63, 27.26, -6.16, -3.29)",
@@ -798,7 +809,7 @@ def main():
         "bake-texdir")
     bake = replace_once(bake,
         '("MAT_Concrete",       2048, 6, 5),   # 30 cells >= 25 objs; atlas 1024->2048',
-        '("MAT_Concrete",       2048, 7, 7),   # 49 cells (v22: east + G3 walls added)',
+        '("MAT_Concrete",       2048, 6, 5),   # 30 cells >= 29 objs (v22 fix: 7x7 grid shrank UVCHECK total to 0.282 < 0.3; grid-size effect, UVs healthy)',
         "bake-concrete-grid")
     bake = replace_once(bake,
         '("MAT_Floor_Concrete", 2048, 4, 4),   # 16 cells = 16 objs; atlas 1024->2048',
@@ -808,7 +819,7 @@ def main():
     bake = replace_once(bake, '"design2121_v20_baked.glb"', '"design2121_v22_baked.glb"', "bake-baked-glb")
     bake = replace_once(bake,
         '# PR-C (v20): paths re-pointed to design2121_21C with _v20 outputs.',
-        '# PR-C (v20): paths re-pointed to design2121_21C with _v20 outputs.\n# v22: paths re-pointed to design2121_22D with _v22 outputs; Concrete 7x7, Floor 5x4.',
+        '# PR-C (v20): paths re-pointed to design2121_21C with _v20 outputs.\n# v22: paths re-pointed to design2121_22D with _v22 outputs; Concrete 6x5, Floor 5x4.\n# v22 fix: Concrete back to 6x5 — 7x7=49 cells shrank the UVCHECK total to 0.282 < 0.3 (grid-size effect, UVs healthy; 30 cells >= 29 objs).',
         "bake-header")
     BAKE_OUT.parent.mkdir(parents=True, exist_ok=True)
     BAKE_OUT.write_text(bake)

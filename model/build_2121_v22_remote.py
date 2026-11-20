@@ -658,7 +658,8 @@ def _point_in_tri(px, py, tri):
         return False
     a = ((y2 - y3) * (px - x3) + (x3 - x2) * (py - y3)) / d
     b = ((y3 - y1) * (px - x3) + (x1 - x3) * (py - y3)) / d
-    return a >= 0 and b >= 0 and (1 - a - b) >= 0
+    # v22: 1e-9 tolerance on edge points (float -7e-18, see above).
+    return a >= -1e-9 and b >= -1e-9 and (1 - a - b) >= -1e-9
 
 print("=== 21_21 build: header/materials/helpers done ===")
 

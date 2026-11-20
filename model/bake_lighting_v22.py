@@ -7,7 +7,8 @@
 # assertion added; paths re-pointed to design2121_21F with _fix outputs.
 # The fix19 pipeline itself is unchanged (Phase 1 all UVs, DESELECT, UVCHECK).
 # PR-C (v20): paths re-pointed to design2121_21C with _v20 outputs.
-# v22: paths re-pointed to design2121_22D with _v22 outputs; Concrete 7x7, Floor 5x4.
+# v22: paths re-pointed to design2121_22D with _v22 outputs; Concrete 6x5, Floor 5x4.
+# v22 fix: Concrete back to 6x5 — 7x7=49 cells shrank the UVCHECK total to 0.282 < 0.3 (grid-size effect, UVs healthy; 30 cells >= 29 objs).
 # Geometry delta is small (1 Jog wall in MAT_Concrete, 25 -> 26 objs,
 # grid 6x5 = 30 cells still fits; 54 Jog tie holes are MAT_TIEHOLE and
 # the reseated handrail MAT_BLACK — neither is a bake group), but the
@@ -193,7 +194,7 @@ def main():
     groups = [
         ("MAT_White_Wall",     2048, 7, 7),   # 49 cells >= 45 objs
         ("MAT_Concrete_Board", 2048, 9, 8),   # 72 cells >= 64 objs
-        ("MAT_Concrete",       2048, 7, 7),   # 49 cells (v22: east + G3 walls added)
+        ("MAT_Concrete",       2048, 6, 5),   # 30 cells >= 29 objs (v22 fix: 7x7 grid shrank UVCHECK total to 0.282 < 0.3; grid-size effect, UVs healthy)
         ("MAT_Floor_Concrete", 2048, 5, 4),   # 20 cells (v22: 16 objs + headroom)
         ("MAT_Granite",         512, 1, 1),   # 1 obj, was clean
         ("MAT_Ceiling_Gypsum", 1024, 3, 2),   # 6 cells >= 5 objs
