@@ -60,6 +60,10 @@
 #      holes are MAT_TIEHOLE (outside all bake groups), lightmaps
 #      bake indirect+AO only (albedo-independent). v20 atlases +
 #      UV1 reused via transfer_uv1.mjs (as PR-A reused v18).
+#  [Fix] G2 thick-wall (B1) tie holes u_range 41.5 -> 39.5:
+#      the wall stops at X=39.5 (doorway to the Z corridor),
+#      so the 5 easternmost cols (35 discs) floated in air;
+#      truncated to the wall end (47 cols, 329 discs).
 #  Outputs are design2121_v21_build.blend / design2121_v21.glb.
 # v19 changes in PR-A (materials only, NO geometry):
 #  A1 roof seams deleted (6 dark ribbons + MAT_Steel_Seam + the
@@ -1747,7 +1751,7 @@ wall_varying("SM_Basement_Wall_East", (48.56, -8.56), (48.56, 17.24), -6.75, -0.
 # Top at -0.10 (below the lawn plane at 0, so no Z-fight with the site ground).
 box("SM_G2_ThickWall", (28.77, 2.79, -3.425), (21.47, 0.92, 6.65), MAT_CONCRETE_BOARD, COL_INTER)
 # Tie-hole grid on the thick wall's north (court) face (P-con 450x600).
-tie_holes("SM_ThickWall_TieHole", 'y', 2.33, (18.5, 41.5), (-6.2, -2.6))
+tie_holes("SM_ThickWall_TieHole", 'y', 2.33, (18.5, 39.5), (-6.2, -2.6))  # D-fix: was (18.5, 41.5); wall stops at X=39.5, 35 discs floated in the doorway gap
 # Tie-hole grid on the basement north wall face (Y=-6.83), above the stair.
 tie_holes("SM_NorthWall_TieHole", 'y', -6.83, (16.2, 26.55), (-4.2, -0.6))  # 24 cols x 7 rows = 168
 # PR-C [Jog]: tie-hole grids on both faces of the new ground-floor
