@@ -300,7 +300,7 @@ var solidMeshes=[];
    On the baked GLB: 131,624 tris -> ~32,880 (25%); roof, trees,
    glass and exhibits are out. The zone tables (canStand) stay the
    first layer; this ray guard is the second. */
-var COLLIDER_MATS=['MAT_Concrete','MAT_Concrete_Board','MAT_Concrete_Dark','MAT_White_Wall','MAT_Floor_Concrete','MAT_Granite','MAT_Wood_Floor','MAT_Grass','MAT_Paving','MAT_Paving_Dark','MAT_Dark_Door','MAT_G3_Frosted','MAT_FarGround'];
+var COLLIDER_MATS=['MAT_Concrete','MAT_Concrete_Board','MAT_Concrete_Dark','MAT_White_Wall','MAT_Floor_Concrete','MAT_Granite','MAT_Wood_Floor','MAT_Grass','MAT_Paving','MAT_Dark_Door'  /* #18: MAT_Paving_Dark deleted in the GLB */,'MAT_G3_Frosted','MAT_FarGround'];
 export const colliderMeshes = [];
 var exhibitMeshes={};   /* '01'..'12' -> [meshes] (all twelve are real objects in the v16 GLB) */
 var spinnerPivot=null, lampMeshes=[];
@@ -734,10 +734,9 @@ function applyAestheticMaterials(){
       if(m.color) m.color.multiplyScalar(0.72);
     }
     if(mn==='MAT_Grass'&&m.map&&!done.grass){ done.grass=true; desaturateTexture(m.map,0.45); }
-    if(mn==='MAT_Flowers'&&m.map&&!done.flowers){ done.flowers=true; desaturateTexture(m.map,0.55); }
     if(mn==='MAT_FarGround'&&!done.far){
       done.far=true;
-      if(m.color) m.color.setRGB(0.20,0.22,0.19);
+      if(m.color) m.color.setRGB(1,1,1); /* #18: MAT_FarGround now carries a radial-gradient texture — keep the colour white so the texture is not multiplied down */
     }
   });
 }
@@ -748,45 +747,10 @@ function onModelLoaded(gltf){
   clearTimeout(loadSlowTimer);
   model=gltf.scene; scene.add(model);
   model.traverse(function(o){ if(o.isMesh){ solidMeshes.push(o); if(o.visible!==false&&o.material&&!Array.isArray(o.material)&&COLLIDER_MATS.indexOf(o.material.name)>=0) colliderMeshes.push(o); } });
-  /* The model's distant ground is a 400×400 m slab (MAT_FarGround,
-     flat dark green); from the air its rectangular edge reads as a
-     floating green board in the dark (issue #2.6). Extend the ground
-     with a page-side sheet in the slab's own colour
-     (baseColorFactor 0.16, 0.26, 0.12), 5 cm below the slab so it
-     never z-fights, running far past the fog so the lawn fades into
-     the fog instead of ending in a hard edge. It follows the scene
-     lighting like the slab itself, and it is added before the shadow
-     bake below, so the building's shadow falls on it too. (A single
-     big triangle fan showed radial shading seams in software
-     rendering, so the sheet is a subdivided grid instead.) */
-  /* #9 review (Hark 2026-11-19): the old single 1600 m sheet sat at
-     y=-0.05, coplanar with SM_Site_Ground's top (-0.05) -> z-fighting,
-     and face-up it covered the sunken court + atrium openings from
-     above (green sheet seen looking down the stair from the lobby).
-     Now only the ring OUTSIDE the model's own 95x65 m lawn is laid
-     (|x|>47.5 or |z|>32.5), at y=-0.15, 10 cm below the lawn top, so
-     the court (tri x 10..20, z -1..5) and atrium void (x 0..8,
-     z -5..5) stay open and nothing z-fights. */
-  var farGroundMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0.16,0.26,0.12),roughness:1,metalness:0});
-  var farGround=new THREE.Group();
-  function farStrip(w,d,cx,cz){
-    var m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),farGroundMat);
-    m.rotation.x=-Math.PI/2; m.position.set(cx,-0.15,cz);
-    /* no receiveShadow: the ring lies mostly outside the shadow
-       camera (-70..70), and shadow sampling across its large quads
-       left visible grid seams in software rendering; the model's own
-       slab keeps the building's shadow where it matters. */
-    m.receiveShadow=false;
-    farGround.add(m);
-  }
-  farStrip(1600,767.5,0,-416.25); /* north: z -800..-32.5 */
-  farStrip(1600,767.5,0,416.25); /* south: z 32.5..800 */
-  farStrip(752.5,65,-423.75,0); /* west: x -800..-47.5, z -32.5..32.5 */
-  farStrip(752.5,65,423.75,0); /* east: x 47.5..800, z -32.5..32.5 */
-  scene.add(farGround);
   model.traverse(function(o){
     if(o.isMesh){
       o.castShadow=true; o.receiveShadow=true;
+      if(o.name&&o.name.indexOf('SM_Tree_')===0) o.castShadow=false; /* #18: background tree belt casts no shadow */
       var mn=o.material&&o.material.name;
       if(mn==='MAT_Glass'){
         /* #4: the baked GLB carries plain transparent glass (transmission
@@ -1216,7 +1180,7 @@ export function initScene(){
   addIntLight(47,-1.1,-9.5,0xfff1da,0.3,32); /* Gallery 2 east end (was 0.65) */
   addIntLight(28,-1.1,4.0,0xf2f6ff,0.35,32); /* Gallery 1 skylight hall (was 0.7) */
   addIntLight(4,-0.4,1.5,0xfff1da,0.3,26); /* atrium void (was 0.6) */
-  addSpotLight(38,2.5,-8, 38,-4.8,-8, 0xfff1da,150,0.55,30); /* Gallery 2 exhibit ring */
+  addSpotLight(38,-1.1,-8, 38,-4.8,-8, 0xfff1da,66,0.88,30); /* #18: G2 spot was at y=2.5 above the OUTDOOR grass (Blender 38,8) — its cone pooled the elliptical bright spot on the lawn; now inside the gallery (y=-1.1), angle 0.55->0.88 + intensity 150->66 so the basement-floor pool keeps its size and brightness */
   addSpotLight(28,2.5,4,  28,-4.8,4,  0xf2f6ff,120,0.5,25);  /* Gallery 1 skylight hall */
   try{ reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ reducedMotion=false; }
   loadRetryBtn.addEventListener('click',restartLoad);
