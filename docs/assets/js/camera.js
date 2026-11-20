@@ -11,7 +11,7 @@ import { enterWalk, goNearExhibit } from './walk.js';
 import { showG3Spot, g3Spots, g3Idx, captionDismissed, flashVertical, updateWalkTip, armIntro, verticalEl, currentEx, showExhibit } from './ui.js';
 import { exhibits, applyLabels } from './labels.js';
 
-export const EXT_TARGET = new THREE.Vector3(4, 1.5, -1);
+export const EXT_TARGET = new THREE.Vector3(7, 1.5, -1);
 export let extDefault = true;
 export function exteriorCamPos(){
   /* #7: pulled back along the same sightline so both wings still fit
@@ -23,7 +23,7 @@ export function exteriorCamPos(){
      box (museum wing + cafe wing, ground slab excluded) so both wings fit
      fully in frame with margin on both sides, at any portrait aspect. */
   var dir=new THREE.Vector3(101,53.5,-141).normalize();
-  var box=new THREE.Box3(new THREE.Vector3(-38,0,-10),new THREE.Vector3(47,12,10));
+  var box=new THREE.Box3(new THREE.Vector3(-44,0,-21),new THREE.Vector3(49,7,9));
   var center=box.getCenter(new THREE.Vector3());
   var right=new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0),dir).normalize();
   var upv=new THREE.Vector3().crossVectors(dir,right).normalize();
@@ -76,19 +76,15 @@ export function setMode(next,keepCam){
   controls.enabled=(next!=='walk'&&next!=='tour');
   controls.maxPolarAngle=(next==='exterior')?Math.PI*0.52:Math.PI*0.65;
   controls.maxDistance=(next==='exterior')?260:60;
-  if(next==='exterior'&&!keepCam){ extDefault=true; flyTo(exteriorCamPos(),new THREE.Vector3(4,1.5,-1)); }
-  /* Lobby camera stands in the south of the lobby, looking north-east
-     across the reception desk toward the atrium opening (issue #2.7).
-     The previous viewpoint (-1.15,1.85,1.15) faced the dark elevator
-     door dead-on at 4.2 m, so a tall black panel filled the centre of
-     the frame. From the south the trapezoidal elevator shaft is still
-     visible at the frame's right, but the black door itself is out of
-     frame; the reception desk, the south glass and the atrium opening
-     (with the basement stair below it) carry the shot. */
-  if(next==='lobby') flyTo(new THREE.Vector3(-1.8,1.9,4.8),new THREE.Vector3(2.0,0.4,-1.5));
+  if(next==='exterior'&&!keepCam){ extDefault=true; flyTo(exteriorCamPos(),EXT_TARGET.clone()); }
+  /* #21B lobby camera: stands in the west lobby, looking east across
+     the reception desk and shop toward the atrium void and the main
+     stair below it. The trapezoidal elevator shaft is at the north
+     band, out of this frame; the south glass and the stair carry it. */
+  if(next==='lobby') flyTo(new THREE.Vector3(-6,1.9,2),new THREE.Vector3(2,0.4,-1));
   if(next==='g3'){ var gs=g3Spots[g3Idx]; flyTo(gs.cam,gs.tgt,1400); showG3Spot(g3Idx); }
-  /* v16 Gallery 2: the east rectangle, x 24..52, z -15..1; camera inside the SW corner */
-  if(next==='gallery') flyTo(new THREE.Vector3(30,-0.9,-14.2),new THREE.Vector3(47,-3.9,-3.5)); /* #7: same reframe as tour stop 7 */
+  /* #21B Gallery 2: x 15.08..48.56, z -17.24..-3.25, ceiling -1.95; camera inside the SW corner */
+  if(next==='gallery') flyTo(new THREE.Vector3(18,-1.2,-15),new THREE.Vector3(45,-4.5,-6)); /* #21B: same reframe as tour stop 6 */
   if(next==='walk'){ updateWalkTip(); enterWalk(); }
   if(next==='tour'){ setTourFolded(true); startTour(); }
   syncHash();
@@ -137,7 +133,7 @@ export function applyDeepLink(){
     setMode('exterior',true); extDefault=false; currentView=m[1];
     var v=m[1];
     if(v==='front') flyTo(new THREE.Vector3(20,7,-44),new THREE.Vector3(19,2.2,-3));
-    if(v==='aerial') flyTo(new THREE.Vector3(4,74,-34),new THREE.Vector3(4,0,-2));
+    if(v==='aerial') flyTo(new THREE.Vector3(7,74,-34),new THREE.Vector3(7,0,-4));
     if(v==='court') flyTo(new THREE.Vector3(-13,3.4,-20),new THREE.Vector3(-5,1.2,1));
     if(v==='night'){ setMoment('night'); flyTo(new THREE.Vector3(28,8.5,-44),new THREE.Vector3(10,2,-2)); } /* #12 review: a deep link must land on night, not toggle it */
     syncHash();
@@ -163,7 +159,7 @@ export function beginOpening(){
   if(seen||reducedMotion){ endOpening(true); return; }
   opening={s:performance.now(),d:7000,
     p0:new THREE.Vector3(-14,8.5,-34), p1:exteriorCamPos(),
-    t0:new THREE.Vector3(8,5,-2), t1:new THREE.Vector3(4,1.5,-1)};
+    t0:new THREE.Vector3(10,5,-2), t1:new THREE.Vector3(7,1.5,-1)};
   camera.position.copy(opening.p0); controls.target.copy(opening.t0);
   controls.enabled=false;
   document.body.classList.add('opening');
@@ -198,7 +194,7 @@ export function initCamera(){
       var v=b.dataset.view;
       currentView=v;
       if(v==='front') flyTo(new THREE.Vector3(20,7,-44),new THREE.Vector3(19,2.2,-3));
-      if(v==='aerial') flyTo(new THREE.Vector3(4,74,-34),new THREE.Vector3(4,0,-2));
+      if(v==='aerial') flyTo(new THREE.Vector3(7,74,-34),new THREE.Vector3(7,0,-4));
       if(v==='court') flyTo(new THREE.Vector3(-13,3.4,-20),new THREE.Vector3(-5,1.2,1));
       if(v==='night'){
         setMoment(moment==='dusk'?'night':'dusk'); /* archive dusk view: goes straight to dusk, not a toggle */
