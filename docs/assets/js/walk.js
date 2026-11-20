@@ -121,9 +121,11 @@ var hoverTick=0;
    sloped glass, and the sunken-courtyard pit — enclosed by glass and
    walls in the model — was covered by the G2 rectangle. Zone edges now
    sit ~0.35-0.5 m inside the real wall faces.
-   Ground (eye y=1.62): entrance lobby (solid slab west of the atrium
-   opening; the sloped south glass crosses eye height at z≈-5.23, so the
-   lobby stops at z=-4.95) -> entrance door -> covered passage -> paved
+   Ground (eye y=1.62): entrance lobby (v17 #17: the atrium void is
+   floored over, so the lobby now runs east to x=7.9 over the new slab,
+   stopping at z=2.9 short of the stairwell; the sloped south glass
+   crosses eye height at z≈-5.23, so the lobby stops at z=-4.95) ->
+   entrance door -> covered passage -> paved
    courtyard -> cafe door -> Gallery 3 hall (diagonal glass + diagonal
    west wall) and its terrace (reached from the courtyard around the
    terrace's east end, not through the glass). Basement (floor y=-4.8,
@@ -149,6 +151,7 @@ function inPoly(x,z,poly){
 }
 var GROUND_ZONES=[
   rectPoly(-2,-4.95,1.1,5.6),            /* lobby: solid slab west of the atrium opening */
+  rectPoly(1.1,-4.95,7.9,2.9),          /* v17 (#17): lobby east extension over the filled atrium slab (the stairwell z 2.9..5.0 stays open, so this rect stops at z=2.9; the stair-top trigger area is still covered by the rect above) */
   rectPoly(-3.4,-1.7,1.1,1.7),           /* entrance threshold */
   rectPoly(-10.6,-1.35,-2.2,1.35),       /* covered passage between the wings */
   rectPoly(-13.2,-8.6,-3.55,8),          /* paved courtyard west of the entrance blocks */
