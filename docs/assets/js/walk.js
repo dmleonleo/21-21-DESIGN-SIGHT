@@ -105,40 +105,25 @@ function exitFocus(){
 }
 /* item 1: hover shows the landing ring where a tap would walk to */
 var hoverTick=0;
-/* ================= Walk mode (v16 layout, re-measured) =================
+/* ================= Walk mode (#21B layout, re-measured from the v19 GLB) =================
    Two walkable levels, tested as point-in-polygon zones + AABB blockers.
-   These tables were re-derived from the v16 GLB's actual triangles —
-   mesh AABBs alone hide the plan diagonals — after walk mode was found
-   passing through walls the old tables got wrong: the z=1 partition's
-   only real opening is the noren doorway at x 28-31 (the old "gaps" at
-   x 18-21 and 23.5-24.5 are solid Part_G1G2_B / Court_Wall_North), the
-   x=8 atrium wall line opened only at z 2.0-3.4 (SM_Atrium_Wall_East_A
-   stood solid across the stair foot at z 3.4-5.0 — it is shifted north
-   at load, see fixStairFootWall — and the old x=12 blockers guarded a
-   wall that does not exist), the museum's NE diagonal wall and the G1/G3
-   diagonal walls cut straight through the old axis-aligned zones, the
-   lobby zone ran east over the atrium opening and south through the
-   sloped glass, and the sunken-courtyard pit — enclosed by glass and
-   walls in the model — was covered by the G2 rectangle. Zone edges now
-   sit ~0.35-0.5 m inside the real wall faces.
-   Ground (eye y=1.62): entrance lobby (v17 #17: the atrium void is
-   floored over, so the lobby now runs east to x=7.9 over the new slab,
-   stopping at z=2.9 short of the stairwell; the sloped south glass
-   crosses eye height at z≈-5.23, so the lobby stops at z=-4.95) ->
-   entrance door -> covered passage -> paved
-   courtyard -> cafe door -> Gallery 3 hall (diagonal glass + diagonal
-   west wall) and its terrace (reached from the courtyard around the
-   terrace's east end, not through the glass). Basement (floor y=-4.8,
-   eye -3.18): stair landing -> atrium vestibule -> the x=8 gap
-   (z 2.0-3.4) -> Gallery 1 trapezoid -> noren doorway -> Gallery 2
-   (NE corner cut by the diagonal exterior wall, NW corner cut around
-   the courtyard glass) -> lookout strip along the pit's west wall,
-   through the x=10 glass gap (z -3..-1) to the pocket between the two
-   glass walls. The pit itself is looked into, not entered.
-   The 30-step stair (x 0-8.1, z 3-5) links the levels; its trigger is
-   edge-latched (see checkStairTrigger). */
+   Zone edges sit ~0.35-0.5 m inside the real wall faces; a horizontal
+   ray at chest height (rayWallBlocked) guards against stale tables.
+   Ground (eye y=1.62): west lobby (solid slab west of the atrium void;
+   the void, court and stair openings cut the slab east of x=15.6) ->
+   entrance door in the slanted west edge -> paved courtyard -> forecourt
+   + walkway -> Gallery 3 hall (diagonal glass + diagonal west wall)
+   and its terrace (reached from the courtyard around the terrace's
+   east end, not through the glass). Basement (floor y=-6.75, eye
+   -5.13): platform (-5.85) -> wide steps (6) -> lower lobby -> Gallery 1
+   (inset quad, floor -7.20) -> noren doorway (x=15.08, z -8..-5) ->
+   Gallery 2 (x 15.08..48.56, 6 columns) -> Z corridor (x 36..44).
+   The court triangle and the atrium void are looked into, not entered.
+   The 39-step main stair (x 15.63-27.26, z 3.29-6.16) links the levels
+   via a 3-point ride (lobby top -> platform landing -> wide-steps
+   bottom); its trigger is edge-latched (see checkStairTrigger). */
 var GEYE=1.62;
-export const walk={pos:new THREE.Vector3(-1.0,GEYE,-1.8),yaw:-2.88,pitch:0,keys:{},press:{},intro:null,level:'ground',inStair:false,
+export const walk={pos:new THREE.Vector3(-3.5,GEYE,0.5),yaw:-2.88,pitch:0,keys:{},press:{},intro:null,level:'ground',inStair:false, /* FIX [1]: spawn on the open ground just inside the entrance (was (-1.0,-1.8), a 0.35 m strip between the shop counter and the south glass) */
   clickTarget:null,clickBlocked:0,focusEx:null};
 function rectPoly(x1,z1,x2,z2){ return [[x1,z1],[x2,z1],[x2,z2],[x1,z2]]; }
 function inPoly(x,z,poly){
@@ -150,53 +135,56 @@ function inPoly(x,z,poly){
   return inside;
 }
 var GROUND_ZONES=[
-  rectPoly(-2,-4.95,1.1,5.6),            /* lobby: solid slab west of the atrium opening */
-  rectPoly(1.1,-4.95,7.9,2.9),          /* v17 (#17): lobby east extension over the filled atrium slab (the stairwell z 2.9..5.0 stays open, so this rect stops at z=2.9; the stair-top trigger area is still covered by the rect above) */
-  rectPoly(-3.4,-1.7,1.1,1.7),           /* entrance threshold */
-  rectPoly(-10.6,-1.35,-2.2,1.35),       /* covered passage between the wings */
-  rectPoly(-13.2,-8.6,-3.55,8),          /* paved courtyard west of the entrance blocks */
-  rectPoly(-10.6,-8.6,1,-7.35),          /* apron south of the glass foot (glass meets floor at z=-7) */
+  rectPoly(-10,-2.33,15.6,7),            /* west lobby: solid slab west of the void / court / stair openings */
+  rectPoly(-6,-1.6,-3,1.6),              /* entrance threshold (doorway in the slanted west edge) */
+  rectPoly(-14,-7,-5,7),                 /* paved courtyard between the wings */
+  rectPoly(-5,-15,25,-7),                /* forecourt paving south of the museum */
+  rectPoly(-8.5,-31,-3.5,-13),           /* walkway south to the site edge */
+  rectPoly(-10,-7,44,-2.33),             /* lawn apron along the south glass */
   [[-24.75,-3.17],[-10.5,0.4],[-10.5,5.5],[-31.85,5.5]],  /* Gallery 3 hall, inset from its diagonal west wall and plan-diagonal south glass */
   [[-25,-8.1],[-13.5,-8.1],[-13.5,-1.29],[-25,-4.16]],    /* G3 terrace, outside the glass line */
   rectPoly(-13.7,-2.4,-12.6,-1.3)        /* terrace <-> courtyard link at the terrace's east end */
 ];
 var BASE_ZONES=[
-  rectPoly(-1.8,-5,7.6,6.45),            /* atrium vestibule (north edge inset from the z=6.82 wall) */
-  rectPoly(7.4,2.9,9.7,5.1),             /* stair landing, east of the atrium wall line */
-  rectPoly(7.4,2.4,12,3.0),              /* doorway corridor through the x=8 gap (z 2.0-3.4) */
-  [[8.45,1.45],[34.11,1.45],[21.73,6.43],[8.45,6.43]],  /* Gallery 1 trapezoid, inset from partition / north lining / NE diagonal */
-  [[10.35,-15.45],[51.45,-15.45],[51.45,0.5],[42.45,0.5],[42.45,-1.85],[36.8,0.28],[20.18,0.5],[15.35,-5.29],[10.35,-5.75]],  /* Gallery 2: NE corner cut by the diagonal exterior wall (SW face z=-0.4x+15.62), NW corner cut around the courtyard glass */
-  rectPoly(28.3,0.4,30.7,1.55),          /* noren doorway (exhibit 09), G1 <-> G2 */
-  rectPoly(8.35,-6.2,10.35,0.55),        /* pocket between the atrium glass (x=8) and the atrium/G2 glass (x=10) */
-  [[10.35,-5.75],[14.8,-5.45],[9.79,0.55],[10.35,0.55]] /* lookout strip along the pit's west wall, inset from it */
+  rectPoly(-1,3.29,15.63,7),             /* platform west (top -5.85) */
+  rectPoly(15.63,6.16,27.26,7),          /* platform north strip (top -5.85) */
+  rectPoly(27.26,5.39,29.44,6.16),       /* platform landing (top -5.85) */
+  rectPoly(-10,-13.77,2.43,3.29),        /* lower lobby west strip (west of G1) */
+  [[2.43,3.29],[15.08,3.29],[15.08,0.46],[2.43,-2.21]],  /* lower lobby north strip (platform edge -> G1 north edge) */
+  [[-10,-17.24],[15.08,-17.24],[15.08,-12.04],[7.21,-13.77],[-10,-13.77]],  /* lower lobby south strip (south of G1) */
+  [[7.48,-13.08],[3.18,-2.68],[14.57,-0.28],[14.57,-11.53]],  /* Gallery 1 inset quad (floor -7.20) */
+  rectPoly(15.5,-16.8,48.1,-3.7),        /* Gallery 2 (6 columns, skylight slot) */
+  rectPoly(36,-3,44,1),                  /* Z corridor */
+  rectPoly(14.5,-8,15.7,-5),             /* noren doorway (exhibit 09), G1 <-> G2 */
+  rectPoly(29.44,6.5,39.39,8.2)          /* lookout strip along the void's north edge */
 ];
 var GROUND_BLOCKERS=[
-  [-1.15,-6.35,5.5,-5.05],   /* reception desk + shop counter */
-  [-0.4,-4.8,2,-2.4],        /* elevator shaft */
-  [-3.25,-7.5,-1.95,-1.6],[-3.25,1.6,-1.95,7.5],  /* entrance blocks S / N */
-  [-9.72,-1.42,-9.28,-0.98],[-9.72,0.98,-9.28,1.42],[-2.72,-1.42,-2.28,-0.98],[-2.72,0.98,-2.28,1.42],  /* passage posts */
+  [-5.60,1.50,-2.40,2.50],   /* reception desk (measured from the v19 GLB) */
+  [-2.50,-1.45,0.50,-0.55],  /* shop counter */
+  [-1.51,3.68,0.40,5.79],    /* elevator shaft */
   [-13.4,5.78,-11.85,6.22],  /* cafe north wall, east tip (from the courtyard side) */
   [-18,2.8,-11.4,5.7],       /* Private Room + Kitchen block (G3 east end) */
   [-13.85,0.45,-12.15,2.55], /* WC block */
   [-22.05,4.62,-18.2,5.38],  /* G3 reception desks */
   [-28.85,2.68,-28.15,3.32],[-25.07,0.18,-24.43,0.82]  /* G3 square columns */
 ];
+/* #21B hall columns (ground): 0.45 m square, x = 0/12/24/34, z = -1.2 */
+[0,12,24,34].forEach(function(cx){ GROUND_BLOCKERS.push([cx-0.225,-1.425,cx+0.225,-0.975]); });
 var BASE_BLOCKERS=[
-  [-0.4,-4.8,2,-2.4],        /* elevator shaft */
-  [-0.2,2.95,6.5,5.05],      /* under the stair flight (incl. the bookshelf) */
-  [6.85,-4.05,7.55,0.55],    /* atrium benches along the east glass */
-  [1.6,5.1,2.4,5.9],[5.6,5.1,6.4,5.9],  /* atrium tables */
-  [7.8,-5.2,8.2,2.0],        /* x=8 line: atrium glass (z -5..1) + wall B (z 1..2) */
-  [7.8,5.0,8.2,7.0],         /* x=8 line: wall A (shifted north at load to z 5..6.6) + G1 west wall (z 5..7) — the stair foot (z 3.4..5) and the gap z 2.0..3.4 (the G1 door) are open */
-  [9.8,-5.1,10.2,-3.0],[9.8,-1.0,10.2,1.05],  /* x=10 atrium/G2 glass — the gap z -3..-1 is the opening */
-  [8,0.82,28,1.18],[31,0.82,52,1.18],  /* z=1 partition + courtyard north wall — the noren opening x 28..31 is the only break */
-  /* v16 exhibit footprints (measured from the GLB): 01..12 */
-  [29.4,-10.3,34.6,-8.95],[33,-9,37,-5],[39.9,-8.8,44.1,-7.6],[34,-15.95,42,-15.7],
-  [44.4,-10.7,48.0,-9.3],[34.9,-3.6,37.1,-1.4],[47.4,-5.1,48.6,-3.9],[46.35,-13.85,47.65,-13.15],
-  [14.5,3.2,15.5,3.8],[27.55,-4.45,28.45,-3.55],[5.79,5.35,6.21,5.65]
+  [-1.51,3.68,0.40,5.79],    /* elevator shaft */
+  [15.63,3.29,27.26,6.16],   /* main stair flight (ride uses the trigger, not walking) */
+  [11.72,-1.50,12.28,0.50],[11.72,-4.00,12.28,-2.00],  /* atrium benches */
+  [5.65,-4.35,6.35,-3.65],[9.65,-3.35,10.35,-2.65],    /* atrium round tables */
+  [6.39,-4.71,8.72,-4.24],   /* curved bookshelf arc (centre (8,-7), r 2.8) */
+  /* #21B exhibit footprints (measured from the v19 GLB AABBs): 01,02,03,05,06,07,08,10,11.
+     04 is a wall panel (zone inset keeps visitors off it); 09 is the noren
+     curtain the visitor walks through; 12 sits on atrium table 0. */
+  [22.15,-13.12,27.15,-11.94],[26.17,-12.25,30.23,-8.25],[34.50,-11.89,38.70,-10.69],
+  [39.89,-13.47,43.60,-12.27],[28.33,-7.41,30.53,-5.21],[43.18,-8.66,44.38,-7.46],
+  [41.93,-16.26,43.23,-15.61],[8.53,-6.30,9.47,-5.70],[19.41,-8.07,20.31,-7.17]
 ];
-/* v16 Gallery 2 colonnade: 0.55 m columns at z=-1.8, x = 26..50 step 4 */
-[26,30,34,38,42,46,50].forEach(function(cx){ BASE_BLOCKERS.push([cx-0.3,-2.1,cx+0.3,-1.5]); });
+/* #21B Gallery 2 colonnade: 0.55 m columns at z=-5.55, x = 19.09/23.25/27.39/31.52/35.68/39.84 */
+[19.09,23.25,27.39,31.52,35.68,39.84].forEach(function(cx){ BASE_BLOCKERS.push([cx-0.275,-5.83,cx+0.275,-5.275]); });
 export function canStand(x,z){
   var zones=(walk.level==='ground')?GROUND_ZONES:BASE_ZONES;
   var ok=false;
@@ -230,10 +218,14 @@ function attemptMove(nx,nz){
   return false;
 }
 function startStair(down){
-  var top=new THREE.Vector3(0.2,GEYE,4.0), bot=new THREE.Vector3(8.8,EYE_Y,4.0);
-  walk.intro={s:performance.now(),d:3000,
-    pts:down?[top,bot]:[bot,top],
-    yaws:down?[Math.atan2(-8.6,-0.1)]:[Math.atan2(8.6,0.1)],
+  /* #21B 3-point ride: lobby top (stair head, GL) -> platform landing
+     (-5.85) -> wide-steps bottom (B1 floor -6.75). Yaws are per leg. */
+  var top=new THREE.Vector3(15.0,0.3,4.7),
+      land=new THREE.Vector3(28.0,-5.85,5.8),
+      bot=new THREE.Vector3(10.86,-6.75,1.0);
+  walk.intro={s:performance.now(),d:4200,
+    pts:down?[top,land,bot]:[bot,land,top],
+    yaws:down?[-1.57,1.30]:[-1.84,1.49],
     endLevel:down?'base':'ground'};
   walk.pos.copy(walk.intro.pts[0]); walk.yaw=walk.intro.yaws[0]; walk.pitch=0;
 }
@@ -241,11 +233,11 @@ function checkStairTrigger(){
   if(walk.intro) return;
   var p=walk.pos;
   var inRect=(walk.level==='ground')
-    ? (p.x>-0.3&&p.x<2.2&&p.z>3.0&&p.z<5.0)
-    : (p.x>6.5&&p.x<9.8&&p.z>3.0&&p.z<5.0);
+    ? (p.x>14.5&&p.x<16.0&&p.z>3.5&&p.z<6.0)
+    : (p.x>9.68&&p.x<12.04&&p.z>1.49&&p.z<3.29);
   if(!inRect){ walk.inStair=false; return; }
-  /* Edge-latched: a descent ARRIVES inside the basement rect (8.8,4.0)
-     and an ascent inside the ground rect (0.2,4.0), so the plain level
+  /* Edge-latched: a descent ARRIVES inside the basement rect (10.86,1.0)
+     and an ascent inside the ground rect (15.0,4.7), so the plain level
      test re-fired the stair on the arrival frame and ping-ponged the
      visitor between floors every 3 s with no input at all (verified by
      simulating updateWalk). Fire only on entering the rect; the latch
@@ -259,9 +251,9 @@ export function enterWalk(){
   camAnimBox.current=null;
   walk.clickTarget=null; walk.clickBlocked=0; walk.focusEx=null; hideMoveRing();
   walk.level='ground';
-  walk.intro={s:performance.now(),d:5600,
-    pts:[new THREE.Vector3(-1.0,GEYE,-1.8), new THREE.Vector3(0.5,GEYE,3.9), new THREE.Vector3(8.8,EYE_Y,4.0)],
-    yaws:[Math.atan2(-1.5,-5.7), Math.atan2(-8.3,-0.1)],
+  walk.intro={s:performance.now(),d:8000,
+    pts:[new THREE.Vector3(-3.5,GEYE,0.5), new THREE.Vector3(15.0,0.3,4.7), new THREE.Vector3(28.0,-5.85,5.8), new THREE.Vector3(10.86,-6.75,1.0)], /* FIX [1]: intro starts at the new spawn */
+    yaws:[-1.96,-1.57,1.30],
     endLevel:'base'};
   walk.pos.copy(walk.intro.pts[0]); walk.yaw=walk.intro.yaws[0]; walk.pitch=0;
   if(!currentEx) showExhibit(exhibits[0]);
@@ -337,8 +329,9 @@ export function updateWalk(dt,nowMs){
     }
     checkStairTrigger();
     /* item 2: ground snap — keep the eye on the model's real floor.
-       Only within 0.6 m of the level's expected floor (0 / -4.8), so
-       a ray through the atrium opening can never drop the visitor. */
+       Only within tolerance of the level's expected floor (0 / -6.75),
+       so a ray through the atrium opening can never drop the visitor.
+       Base tolerance 1.0 covers the platform (-5.85) and G1 (-7.20). */
     if(modelReady&&colliderMeshes.length){
       ray.set(new THREE.Vector3(walk.pos.x,walk.pos.y+0.3,walk.pos.z),new THREE.Vector3(0,-1,0));
       ray.far=2.2;
@@ -346,8 +339,9 @@ export function updateWalk(dt,nowMs){
       ray.far=Infinity;
       if(gh.length){
         var fy=gh[0].point.y;
-        var expectY=(walk.level==='ground')?0:-4.8;
-        if(Math.abs(fy-expectY)<0.6){
+        var expectY=(walk.level==='ground')?0:-6.75;
+        var tol=(walk.level==='ground')?0.6:1.0;
+        if(Math.abs(fy-expectY)<tol){
           walk.pos.y+=(fy+1.62-walk.pos.y)*Math.min(1,dt*8);
         }
       }

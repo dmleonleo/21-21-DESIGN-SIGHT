@@ -637,55 +637,28 @@ function loadFailed(err){
    Blender (probe: 0 ceiling-above-roof violations across the whole G3
    quad) and rebuilds the roof as a folded plate, so the page-side
    correction is deleted — the model is correct on its own now. */
-/* ================= Stair-foot wall fix =================
-   In the v16 GLB the x=8 atrium wall line runs straight across the
-   foot of the 30-step stair: SM_Atrium_Wall_East_A (x 7.85-8.15,
-   z 3.4-5.0, full height y -4.8..0, its twenty-eight form-tie discs
-   SM_Atrium_TieHole_00..27 on its west face) stands across most of
-   the stair's width (z 3-5) exactly where the flight lands — the
-   tour's stair stop looks straight into it, the walk-mode stair
-   ride and the enter-walk descent fly through it, and on foot the
-   only way past was a 0.4 m sliver at z 3.0-3.4 between the wall's
-   north edge and the balustrade. The segment belongs one bay
-   further north, continuing the Gallery 1 west wall
-   (SM_G1_Wall_West_North, x 7.9-8.1, z 5-7, same concrete, same
-   height). The GLB is a baked asset, so at load the segment and
-   its tie discs are shifted +1.6 m in z: it then spans z 5.0-6.6,
-   merged into the G1 wall run, and the stair foot (z 3.4-5.0)
-   opens onto the landing. BASE_BLOCKERS below matches the shift. */
-function fixStairFootWall(){
-  var wall=model.getObjectByName('SM_Atrium_Wall_East_A');
-  if(wall) wall.position.z+=1.6;
-  /* #21A: the atrium-east wall now carries 28 tie discs (00..27, re-grid
-     450x600); loop until the name is missing instead of hard-coding 8,
-     so a future re-grid cannot leave discs floating at the stair foot.
-     In the web GLB the 28 discs are merged into one node (Pass A), so
-     only the first lookup hits; in a source-GLB load all 28 shift. */
-  for(var i=0;;i++){
-    var th=model.getObjectByName('SM_Atrium_TieHole_'+(i<10?'0':'')+i);
-    if(!th) break;
-    th.position.z+=1.6;
-  }
-}
 /* ================= Exterior trees: keep only three =================
-   The v16 GLB plants 18 trees on the grounds (each one a trunk plus
+   The v19 GLB plants 21 trees on the grounds (each one a trunk plus
    four side cards and two top cards, named SM_Tree_Trunk_<key>,
    SM_Tree_Card_<key>_<n>, SM_Tree_TopCard_<key>_<n>). At Leon's
    request only three stay — a single calm, evenly spaced row along
-   the south lawn, west / centre / east, so the folded roofs read
+   the north lawn belt, west / centre / east, so the folded roofs read
    against open grass instead of a thicket of leaf cards:
-     west   x -20.5, z 13.9
-     centre x  11.6, z 13.1
-     east   x  34.6, z 15.8
-   The other fifteen grounds trees are hidden (visible=false, so
+     west   x -20.5, z 22.9
+     centre x  11.6, z 22.1
+     east   x  34.6, z 24.8
+   (#21B: the belt moved 9 m north in the rebuild, so the kept keys
+   are the same three trunks with y -9; the old keys no longer exist
+   in the GLB and keeping them would hide all three.)
+   The other eighteen grounds trees are hidden (visible=false, so
    they neither render nor cast shadows). The one tree inside the
-   sunken courtyard planter (key 15_1.5, trunk base at basement
+   sunken courtyard planter (key 31.3_-0.56, trunk base at basement
    level) is not a grounds tree and is left untouched. */
 var KEEP_TREE_KEYS={
-  '-20.506536543695546_-13.861288898608986':true,
-  '11.640643481283298_-13.104740129882714':true,
-  '34.563058939808485_-15.770751238658896':true,
-  '15_1.5':true /* sunken-courtyard planter tree — not a grounds tree */
+  '-20.506536543695546_-22.861288898608986':true,
+  '11.640643481283298_-22.104740129882714':true,
+  '34.563058939808485_-24.770751238658896':true,
+  '31.3_-0.56':true /* sunken-courtyard planter tree — not a grounds tree */
 };
 function pruneExteriorTrees(){
   model.traverse(function(o){
@@ -863,7 +836,6 @@ function onModelLoaded(gltf){
       if(core) spinnerPivot.attach(core);
     }
   }catch(e){ /* spinner is decorative */ }
-  try{ fixStairFootWall(); }catch(e){ /* stair correction is an enhancement */ }
   try{ pruneExteriorTrees(); }catch(e){ /* tree pruning is an enhancement */ }
   try{ applyAestheticMaterials(); }catch(e){ /* aesthetic material pass is an enhancement */ }
   /* exhibit labels */
@@ -1177,19 +1149,19 @@ export function initScene(){
   controls = new OrbitControls(camera,renderer.domElement);
   controls.enableDamping=true; controls.dampingFactor=0.06;
   controls.maxPolarAngle=Math.PI*0.52; controls.minDistance=4; controls.maxDistance=260;
-  controls.target.set(4,1.5,-1);
+  controls.target.set(7,1.5,-1);
   sun.position.set(50,62,30); sun.castShadow=true;
   sun.shadow.mapSize.set(2048,2048);
   if(isSoftwareGL) sun.shadow.mapSize.set(1024,1024);
   sun.shadow.camera.left=-70; sun.shadow.camera.right=70; sun.shadow.camera.top=70; sun.shadow.camera.bottom=-70;
   sun.shadow.camera.far=220; sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.03;
   scene.add(sun);
-  addIntLight(38,-1.1,-7.5,0xfff1da,0.35,34); /* Gallery 2 centre (was 0.7) */
-  addIntLight(47,-1.1,-9.5,0xfff1da,0.3,32); /* Gallery 2 east end (was 0.65) */
-  addIntLight(28,-1.1,4.0,0xf2f6ff,0.35,32); /* Gallery 1 skylight hall (was 0.7) */
-  addIntLight(4,-0.4,1.5,0xfff1da,0.3,26); /* atrium void (was 0.6) */
-  addSpotLight(38,-1.1,-8, 38,-4.8,-8, 0xfff1da,66,0.88,30); /* #18: G2 spot was at y=2.5 above the OUTDOOR grass (Blender 38,8) — its cone pooled the elliptical bright spot on the lawn; now inside the gallery (y=-1.1), angle 0.55->0.88 + intensity 150->66 so the basement-floor pool keeps its size and brightness */
-  addSpotLight(28,2.5,4,  28,-4.8,4,  0xf2f6ff,120,0.5,25);  /* Gallery 1 skylight hall */
+  addIntLight(31.8,-2.6,-10.2,0xfff1da,0.35,34); /* #21B Gallery 2 centre (was 0.7) */
+  addIntLight(44,-2.6,-10,0xfff1da,0.3,32); /* #21B Gallery 2 east end (was 0.65) */
+  addIntLight(9.5,-3.0,-6.5,0xf2f6ff,0.35,32); /* #21B Gallery 1 skylight hall (was 0.7) */
+  addIntLight(6,-1.0,-4,0xfff1da,0.3,26); /* #21B lower lobby / atrium void (was 0.6) */
+  addSpotLight(32,-2.6,-10, 32,-6.75,-10, 0xfff1da,66,0.88,30); /* #21B G2 spot (was 38,-1.1,-8 -> 38,-4.8,-8); #18 note: the spot must sit inside the gallery, not above the outdoor grass */
+  addSpotLight(9.5,-1.0,-6.5,  9.5,-7.2,-6.5,  0xf2f6ff,120,0.5,25);  /* FIX [2]: was y=2.5, above ground OUTDOORS south of the glass — its cone painted the sharp white disc on the lawn (proven by experiment, see fix/STATUS.md). Now just above the G1 skylight panels (-1.1), below the ground slab (0.02); same target/intensity/angle, still lights the G1 floor. Same precedent as the #18 G2-spot move. */
   try{ reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ reducedMotion=false; }
   loadRetryBtn.addEventListener('click',restartLoad);
   window.addEventListener('online',function(){ if(!loadDone&&loadExhausted) restartLoad(); });

@@ -10,7 +10,7 @@ import { flashVertical } from './ui.js';
 /* ================= Auto tour =================
    A fixed cinematic route through the whole building, reusing the same
    verified camera positions as the lobby / G3 / gallery / walk modes:
-   aerial -> facade -> courtyard -> lobby -> 30-step stair -> Gallery 1 ->
+   aerial -> facade -> courtyard -> lobby -> 39-step stair -> Gallery 1 ->
    Gallery 2 overview -> exhibits 01/02 -> 06 -> 05 -> sunken courtyard ->
    up and over the lawn -> Gallery 3 (west wing) -> closing aerial.
    Each leg flies smoothly to the stop, then dwells there (with a slow
@@ -20,37 +20,37 @@ import { flashVertical } from './ui.js';
 export const tourStops=[
   {title:'鸟瞰开场 · 两栋建筑',dwell:3400,
    desc:'先从空中看全貌：东侧是博物馆翼，一整张 54 米长的钢板折成屋顶；西侧较小的咖啡翼是 Gallery 3 所在。约八成空间藏在地下，草坪上只露出折叠的屋顶。',
-   cam:new THREE.Vector3(10,26,-66), tgt:new THREE.Vector3(4,0,-2)},
+   cam:new THREE.Vector3(12,26,-66), tgt:new THREE.Vector3(7,0,-4)},
   {title:'正面 · 玻璃立面',dwell:3400,
    desc:'博物馆翼的南立面几乎全是玻璃，清水混凝土墙与折叠钢板屋顶在这里交汇。透过玻璃能隐约看到入口大堂——游览的下一站就在里面。',
    cam:new THREE.Vector3(20,5.5,-36), tgt:new THREE.Vector3(19,2,-3)},
   {title:'两栋之间 · 铺地庭院',dwell:3200,
    desc:'两栋建筑之间的铺地庭院是地面的交通核：向东进博物馆翼大堂，穿过庭院向西，就是 Gallery 3 的入口。',
    cam:new THREE.Vector3(-13,3.4,-20), tgt:new THREE.Vector3(-5,1.2,1)},
-  {title:'入口大堂 · 接待台与电梯',dwell:3400,
-   desc:'大堂在博物馆翼地面层：接待台立在实心楼板上，西南角是梯形平面的电梯。展厅在地下——接下来走楼梯下去。',
-   cam:new THREE.Vector3(-1.8,1.9,4.8), tgt:new THREE.Vector3(2.0,0.4,-1.5)},
-  {title:'30 级楼梯 · 下到地下层',dwell:3000,
-   desc:'楼梯共 30 级、每级高 0.16 米，北侧是混凝土栏板、南侧是玻璃栏杆。顺着它下行 4.8 米，就到了地下展厅层。',
-   cam:new THREE.Vector3(0.5,1.62,3.9), tgt:new THREE.Vector3(8.8,-2.8,4.0)},
+  {title:'入口大堂 · 玻璃与楼梯',dwell:3400,
+   desc:'从入口进来就是大堂：左手边是整面南玻璃，商店柜台在手边，前面是下沉庭院的玻璃幕墙与 39 级楼梯——展厅在地下，接下来走楼梯下去。',
+   cam:new THREE.Vector3(-3.5,1.9,0.0), tgt:new THREE.Vector3(14,0.4,-1.0)}, /* FIX [1]: old cam (-6,1.9,2) was inside the entrance wall (raycast-proven); new cam on the open ground just inside the entrance, verified by screenshot */
+  {title:'39 级楼梯 · 下到地下层',dwell:3000,
+   desc:'楼梯共 39 级、每级高 0.15 米，北侧是混凝土墙加钢扶手、南侧是玻璃栏板。顺着它下行 5.85 米，就到了地下展厅层。',
+   cam:new THREE.Vector3(28,-4.2,5.8), tgt:new THREE.Vector3(15,0.5,4.7)},
   {title:'Gallery 1 · 天窗斜板厅',dwell:3400,
-   desc:'Gallery 1 约 132 m²，梯形平面，靠 6 块斜向半透明板把天光引进来，白色天花下有一扇深色方窗。这里是地下层最明亮的房间。',
-   cam:new THREE.Vector3(14,-1.7,5.8), tgt:new THREE.Vector3(28,-3.4,3.8)},
-  {title:'Gallery 2 · 全景（地下层已放大）',dwell:3400,
-   desc:'Gallery 2 层高 4.8 米，是全馆最大的展厅。地下层按官方总楼面放大到约 1,336 m²，轮廓向东一直延到 x=52；0.55 米方柱成列排开，沿柱线有一条连续天窗缝。空间做大后展品也翻倍——全馆共 12 件：01–08 与 11 在这间东侧大厅里，09 暖帘挂在两厅之间，10 在 Gallery 1，12 在楼梯底旁。',
-   cam:new THREE.Vector3(30,-0.9,-14.2), tgt:new THREE.Vector3(47,-3.9,-3.5)} /* #7: reframe — red fabric to the right edge as a frame, not a wall */,
+   desc:'Gallery 1 约 129 m²，斜置四边形平面，靠 6 块斜向半透明板把天光引进来，白色天花下有一扇深色方窗。这里是地下层最明亮的房间。',
+   cam:new THREE.Vector3(6,-5.6,-9), tgt:new THREE.Vector3(12,-4.5,-0.5)},
+  {title:'Gallery 2 · 全景',dwell:3400,
+   desc:'Gallery 2 层高 4.8 米，是全馆最大的展厅。地下层约 1,338 m²，轮廓向东到 x≈48.6；0.55 米方柱仅一排 6 根，沿柱线有一条连续天窗缝。全馆共 12 件：01–08 与 11 在这间东侧大厅里，09 暖帘挂在两厅之间，10 在 Gallery 1，12 在下层大厅。',
+   cam:new THREE.Vector3(18,-1.2,-15), tgt:new THREE.Vector3(45,-4.5,-6)} /* #7: reframe — red fabric to the right edge as a frame, not a wall */,
   {title:'展品 01 · 一块布 / 02 · 光的织物',dwell:3800,
    desc:'01《一块布 · A-POC 织物》：一块布直接织造成衣，正是折叠钢板屋顶的灵感来源。02《光的织物》：七盏球形吊灯如经纬般垂落——地下展厅里，光本身就是展品。',
-   cam:new THREE.Vector3(31,-3.18,-5.2), tgt:new THREE.Vector3(34,-2.4,-8.6)},
+   cam:new THREE.Vector3(22,-4.5,-9), tgt:new THREE.Vector3(26,-4.5,-12)},
   {title:'展品 06 · 转动的圆',dwell:3600,
    desc:'Gallery 2 中央，圆环装置在缓慢旋转——圆是这栋三角建筑里唯一的曲线。旁边的展带上还有 03《坐的设计》三把椅子与南墙上的 04《字与形》平面设计墙。',
-   cam:new THREE.Vector3(39.6,-3.18,-2.5), tgt:new THREE.Vector3(36,-2.7,-2.5)},
+   cam:new THREE.Vector3(33.7,-5.13,-6.31), tgt:new THREE.Vector3(29.43,-4.65,-6.31)},
   {title:'展品 05 · 器物（展厅深处）',dwell:3400,
    desc:'走到展厅东侧深处，是 05《器物 · 陶罐》：拉坯的曲线没有一处多余。再往东到尽头，是 07《Akari 纸灯》的暖光。21_21 常把最日常的器物放上展台——设计就在每天端起的那只杯子里。',
-   cam:new THREE.Vector3(43,-3.18,-7.6), tgt:new THREE.Vector3(46,-3.9,-10.0)},
+   cam:new THREE.Vector3(41.39,-5.13,-10.77), tgt:new THREE.Vector3(41.39,-5.85,-12.87)},
   {title:'下沉庭院 · 露天深坑',dwell:3400,
-   desc:'三角形下沉庭院是一个真正的露天坑，坑底就是地下层地面，坑里种了一棵雪松。往西望：大堂地面已经补上，原来直通地下层的空洞只剩一条楼梯口——光和人流都从那里下去。',
-   cam:new THREE.Vector3(15,2.2,-4.6), tgt:new THREE.Vector3(4.5,-0.5,4.0)}, /* v17 (#17): from above the pit looking west-down over the new lobby floor to the stairwell slot — the atrium void is floored now, so the old westward shot's background (the open void) is gone; the pit + tree stay in the foreground, the stair slot is the subject. The old #7 clamped position is retired. */
+   desc:'三角形下沉庭院是一个真正的露天坑，坑底就是地下层地面，约 74 m²。庭院把阳光送进地下展厅——这是这栋地下建筑真正的「立面」。从下层大厅望去，隔着整面玻璃正对坑底，最高的方立柱约 11.6 米。',
+   cam:new THREE.Vector3(22,-4.0,4.0), tgt:new THREE.Vector3(33,-5.0,1.0)}, /* #7: pit-floor-looking-up is impossible — OrbitControls maxPolarAngle (PI*0.52) clamps the camera to level with the target; this IS the clamped position, verified by screenshot (pit opening, west-wall skylight slit, stair, sky) */
   {title:'前往西翼 · 越过草坪',dwell:1400,
    desc:'地下参观到此结束。镜头升上草坪上空，越过下沉庭院，飞往西侧咖啡翼——Gallery 3 在那里。',
    cam:new THREE.Vector3(-2,24,-28), tgt:new THREE.Vector3(-20,1,1)},
@@ -64,7 +64,7 @@ export const tourStops=[
       from stop 13 ran low over the museum roof, so the frame filled
       with one grey roof slope. From the aerial preset the flight
       climbs steeply and the closing frame is the whole site. */
-   cam:new THREE.Vector3(4,74,-34), tgt:new THREE.Vector3(4,0,-2)}
+   cam:new THREE.Vector3(7,74,-34), tgt:new THREE.Vector3(7,0,-4)}
 ];
 var tourHud=document.getElementById('tourHud');
 var tourNoEl=document.getElementById('tourNo');

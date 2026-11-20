@@ -1,17 +1,23 @@
-# 21_21 DESIGN SIGHT — Blender build v19 (Issue #21 PR-A [materials],
-# based on the v18 script: v18 + #21A patch, see
-# issue21/A/patch/apply_issue21A.py — replayable, do not
-# hand-edit this file; re-run the patch on build_2121_v18.py and
-# this script (patch/make_v19.py) instead).
-# v19 changes (materials only, NO geometry — PR-B does the geometry):
+# 21_21 DESIGN SIGHT — Blender build v19 (Issue #21 PR-B [geometry],
+# based on the PR-A script: PR-A + #21B patch, see
+# issue21/B/patch/apply_issue21B.py — replayable, do not
+# hand-edit this file; re-run the patch on the PR-A script instead).
+# v19 changes in PR-B (geometry rebuild; materials as in PR-A):
+#  B1 whole level sinks: exhibition floor -6.75, upper platform -5.85,
+#     G1 floor -7.20 (3 steps x 0.15 below G2); G2 ceiling -1.95,
+#     G1 ceiling -2.20; roof apex +4.95 (trapezoid 54 m x ~9 m, ~448 m2);
+#     roof construction 0.65 m (soffit = roof - 0.65); G3 ceiling
+#     clamped to cafe roof - 0.65 (max 4.26 preserved); court 74 m2;
+#     main stair 39 steps (0.15/0.30); long window 2 x 11.5 m.
+# v19 changes in PR-A (materials only, NO geometry):
 #  A1 roof seams deleted (6 dark ribbons + MAT_Steel_Seam + the
 #     panel-seam brick in add_steel_detail; site-welded plate).
 #  A2 concrete 900x1800 film-faced formwork (Brick 2.25/4.5 @ Scale 5,
 #     Offset 0), P-con grid 450x600 (tie_holes step_u/step_v, 12-vert
 #     discs, 60 -> 182), roughness 0.55, no wood grain.
 #  A3 ceilings white gypsum (GB-R 9.5+12.5 EP): G2 -> MAT_Ceiling_Gypsum,
-#     atrium soffit -> MAT_Soffit_Gypsum (identical params, different
-#     lightmap lineage — PR-A does not re-bake); G1/G3 already white.
+#     atrium soffit -> MAT_Ceiling_Gypsum (#21B: merged, same params;
+#     PR-A kept them apart only for lightmap lineage); G1/G3 already white.
 #     Access panels (square 0.60 / round dia 0.45) + sprinklers added
 #     (G2 12, G1 6, G3 3, atrium 4, stair 1 on a 0.25 m drop pipe).
 #  A4 MAT_Concrete_Dark deleted; usages unified into MAT_Concrete
@@ -52,7 +58,7 @@
 #      glass at the west end AND at the east/entrance end, short glass
 #      mid-span). v16 descended monotonically to 0.8 m at the east tip, so
 #      the 2.6 m entrance door + full-height east glass poked through it.
-#      Roof, ceiling (clamped to roof-0.30), north wall, cove strip and the
+#      Roof, ceiling (clamped to roof-0.65), north wall, cove strip and the
 #      passage roof all follow the new profile; west wall unchanged.
 #  (b) Lobby floor: the atrium void is floored over; only the 30-step
 #      stairwell stays open (x 0..8, y -5.0..-2.9). Leon confirmed the real
@@ -445,15 +451,11 @@ add_speckle(MAT_PAVING, scale=14.0, strength=0.20, dark=(0.22, 0.22, 0.21))
 MAT_WHITE = mat_principled("MAT_White_Wall", (0.92, 0.92, 0.90), rough=0.85)
 # #21A A3 (checklist §4, issue #21 §3): all ceilings are white gypsum board
 # (GB-R 9.5+12.5, EP white paint). Two materials with IDENTICAL parameters —
-# they differ only in lightmap lineage, because PR-A does not re-bake: the
-# v18 lightmap atlases attach by material name, and each ceiling's
-# TEXCOORD_1 was packed into its old group's atlas. MAT_Ceiling_Gypsum
-# (ex-MAT_Concrete_Board G2 ceilings) takes the Board atlas;
-# MAT_Soffit_Gypsum (ex-MAT_Concrete atrium soffit) takes the Concrete
-# atlas. G1/G3 ceilings are already MAT_White_Wall (white) and stay so.
-# PR-B's re-bake will regroup everything and can merge these two.
+# #21B: the atrium soffit and the G2 ceilings share one gypsum material
+# (MAT_Ceiling_Gypsum, same values as the old MAT_Soffit_Gypsum); the
+# re-bake uses a single gypsum lightmap group. G1/G3 ceilings stay
+# MAT_White_Wall (white).
 MAT_CEILING_GYPSUM = mat_principled("MAT_Ceiling_Gypsum", (0.93, 0.93, 0.91), rough=0.9)
-MAT_SOFFIT_GYPSUM = mat_principled("MAT_Soffit_Gypsum", (0.93, 0.93, 0.91), rough=0.9)
 # #21A A3: ceiling access panels (slightly grey-white so the panel reads
 # against the ceiling; no lightmap atlas — new objects carry no TEXCOORD_1)
 # and sprinkler heads (brass metal; no atlas).
@@ -582,8 +584,20 @@ def _point_in_tri(px, py, tri):
 print("=== 21_21 build: header/materials/helpers done ===")
 
 # ================= SITE =================
-def _in_atrium_rect(px, py):
-    return 0.0 <= px <= 8.0 and -5.0 <= py <= 5.0
+# #21B: ground-slab voids — the new sunken court triangle, the atrium
+# void quad (ground-slab edge (25.9,2.5)->(28.9,9.3) east is 吹抜), and
+# the main-stair rect. COURT_TRI is the new court triangle.
+COURT_TRI = [(18.72, 2.33), (39.39, -6.33), (35.8, 2.33)]
+VOID_QUAD = [(15.9, -4.5), (18.9, 2.3), (35.8, 2.33), (39.39, -6.33)]
+STAIR_RECT = (15.63, 27.26, -6.16, -3.29)
+
+def _in_void(px, py):
+    if _point_in_tri(px, py, COURT_TRI):
+        return True
+    if _point_in_tri(px, py, (VOID_QUAD[0], VOID_QUAD[1], VOID_QUAD[2])) or \
+            _point_in_tri(px, py, (VOID_QUAD[0], VOID_QUAD[2], VOID_QUAD[3])):
+        return True
+    return STAIR_RECT[0] <= px <= STAIR_RECT[1] and STAIR_RECT[2] <= py <= STAIR_RECT[3]
 
 def ground_grid_with_holes(name, mat_top, mat_side, hole_tri, x_step=1.0, y_step=1.0):
     """Lawn slab built as a grid; any quad whose centre falls inside the atrium
@@ -594,10 +608,10 @@ def ground_grid_with_holes(name, mat_top, mat_side, hole_tri, x_step=1.0, y_step
     """
     xs, ys = [], []
     x = -47.5
-    while x <= 47.5:
+    while x <= 52.5:  # #21B: lawn extends east (basement east edge 48.56)
         xs.append(x); x += x_step
-    if xs[-1] < 47.5:
-        xs.append(47.5)
+    if xs[-1] < 52.5:
+        xs.append(52.5)
     y = -32.5
     while y <= 32.5:
         ys.append(y); y += y_step
@@ -615,7 +629,7 @@ def ground_grid_with_holes(name, mat_top, mat_side, hole_tri, x_step=1.0, y_step
             c = idx[(xi + 1, yi + 1)]; d = idx[(xi, yi + 1)]
             cx = (verts[a][0] + verts[b][0] + verts[c][0] + verts[d][0]) / 4.0
             cy = (verts[a][1] + verts[b][1] + verts[c][1] + verts[d][1]) / 4.0
-            if _in_atrium_rect(cx, cy) or _point_in_tri(cx, cy, hole_tri):
+            if _in_void(cx, cy) or _point_in_tri(cx, cy, hole_tri):
                 continue
             faces.append((a, b, c, d))
     o = mesh_from_pydata(name, verts, faces, mat_top, COL_SITE)
@@ -632,7 +646,7 @@ def ground_grid_with_holes(name, mat_top, mat_side, hole_tri, x_step=1.0, y_step
 # Top face is lawn; underside/sides are concrete (the underside is the ceiling
 # seen from the basement atrium/galleries, so it must NOT be green grass).
 BASE_Z = -0.05
-COURT_TRI = [(10, -1), (20, -1), (15, 5)]
+# #21B: COURT_TRI moved to the top of the SITE section (new court triangle).
 ground = ground_grid_with_holes("SM_Site_Ground", MAT_GRASS, MAT_CONCRETE, COURT_TRI)  # #21A A4: MAT_Concrete_Dark deleted
 # v13: 400x400 m far ground (top Z=-0.07, just below the lawn slab) so the
 # aerial has ground context instead of a black void. NOTE: this grows the
@@ -656,7 +670,7 @@ for _fname, _fc, _fs in [
         ("SM_Site_FarGround_North", (0, -416.25), (1600, 767.5)),
         ("SM_Site_FarGround_South", (0, 416.25), (1600, 767.5)),
         ("SM_Site_FarGround_West", (-423.75, 0), (752.5, 65)),
-        ("SM_Site_FarGround_East", (423.75, 0), (752.5, 65))]:
+        ("SM_Site_FarGround_East", (426.25, 0), (747.5, 65))]:  # #21B: lawn east edge 52.5
     # #20: flat plane, NOT a box. A ground plane has no underside;
     # a thin box's bottom face becomes coplanar with the top in
     # the web pipeline (join node scale 800 -> quantize collapses
@@ -683,11 +697,11 @@ for _fob in _FAR_OBJS:
                     _fv = _fme.vertices[_fme.loops[_fli].vertex_index].co
                     _fuv.data[_fli].uv = ((_fob.location.x + _fv.x + 800.0) / 1600.0,  # #20: texture spans 1600 m now
                                           (_fob.location.y + _fv.y + 800.0) / 1600.0)
-# Paved courtyard between the two wings (x -12..0) + forecourt south of museum
+# Paved courtyard between the two wings (x -14..-5) + forecourt south of museum
 # #18: tops flush with the lawn (top -0.03, 2 cm above lawn top
 # -0.05) — the old 9-11 cm proud edges read as white outline lines.
 # One paving material; slabs no longer overlap in plan, so no stagger.
-box("SM_Site_Courtyard", (-6, 0, -0.06), (14, 16, 0.06), MAT_PAVING, COL_SITE)
+box("SM_Site_Courtyard", (-9.5, 0, -0.06), (9, 14, 0.06), MAT_PAVING, COL_SITE)  # #21B
 box("SM_Site_Forecourt", (10, 11, -0.06), (30, 8, 0.06), MAT_PAVING, COL_SITE)
 # Walkway from south garden to courtyard
 box("SM_Site_Walkway", (-6, 22, -0.06), (5, 18, 0.06), MAT_PAVING, COL_SITE)
@@ -852,19 +866,34 @@ def glass_strip(name, edge, z_bottom, mat, coll, mullion_every=1.4):
 
 # ================= MUSEUM WING (exterior) =================
 # Footprint quad: A(-2,-7) B(22,-7) C(42,1) D(-2,7). Area ~404 m2.
+# #21B D3: trapezoid roof — north edge 54 m (flat +4.95 to x=41, then down
+# to +2.5 at the NE corner); south edge 42 m (flat +3.20, x -3..39);
+# west/east edges are the slanted diagonals (NW 4.95 -> SW 3.20;
+# SE 3.20 -> NE 2.5). The old scaled profile is NOT used: it put the
+# tallest court mullion at ~8.7 m, contradicting the measured #17
+# (11.7 m); the north edge stays at the apex so the court mullion
+# at B (39.39,-6.33) reaches 4.95-0.02+6.75 = 11.68 m.
 def roof_z_north(x):
-    if x <= 22:
-        return 8.5 + (7.2 - 8.5) * ((x + 2) / 24.0)
-    return 7.2 + (0.8 - 7.2) * ((x - 22) / 20.0)
+    if x <= 41:
+        return 4.95
+    return 4.95 + (2.5 - 4.95) * ((x - 41) / 3.0)
 
 def roof_z_south(x):
-    return 5.5 + (0.8 - 5.5) * ((x + 2) / 44.0)
+    if x < -3:  # west diagonal: NW corner 4.95 -> SW corner 3.20
+        return 4.95 + (3.20 - 4.95) * ((x + 10) / 7.0)
+    if x <= 39:
+        return 3.20
+    return 3.20 + (2.5 - 3.20) * ((x - 39) / 5.0)  # east diagonal: SE 3.20 -> NE 2.5
 
 def edge_y_north(x):
-    return -7.0 if x <= 22 else -7.0 + 0.4 * (x - 22)
+    return -7.0
 
 def edge_y_south(x):
-    return 7.0 - 0.13636 * (x + 2)
+    if x < -3:  # west diagonal: (-10,-7) -> (-3,2.33)
+        return -7.0 + 9.33 * ((x + 10) / 7.0)
+    if x <= 39:
+        return 2.33
+    return 2.33 - 9.33 * ((x - 39) / 5.0)  # east diagonal: (39,2.33) -> (44,-7)
 
 def roof_sections(xs):
     secs = []
@@ -905,12 +934,12 @@ def roof_grid_with_hole(name, mat, coll, hole_tri, x_step=0.25, f_step=0.05):
     solidified roof silently failed: 9 large faces still covered the court.)
     """
     xs = []
-    x = -2.0
-    while x <= 42.0:
+    x = -10.0  # #21B: roof x-range -10..44 (trapezoid)
+    while x <= 44.0:
         xs.append(x)
         x += x_step
-    if xs[-1] < 42.0:
-        xs.append(42.0)
+    if xs[-1] < 44.0:
+        xs.append(44.0)
     fs = []
     f = 0.0
     while f <= 1.0:
@@ -1023,65 +1052,95 @@ def roof_opening_rim(name, tri, mat, coll, inset=0.50, outset=1.00, lift=0.08, t
     solidify(o, thick)
     return o
 
-MUSEUM_XS = [-2, 6, 14, 22, 30, 37, 42]
+# #21B museum-wing exterior (replaces the PR-A block from MUSEUM_XS through the
+# east-tip glass gable). Roof is the D3 trapezoid: north edge 54 m (-10,-7)->(44,-7),
+# south edge 42 m (-3,2.33)->(39,2.33); north edge flat at apex +4.95 to x=41, then
+# down to +2.5 at the NE corner (see roof_z_north — the old scaled profile put the
+# tallest court mullion at ~8.7 m, contradicting the measured #17, 11.7 m).
+MUSEUM_XS = [-10, -3, 5, 15, 25, 35, 39, 44]
 roof_m = roof_grid_with_hole("SM_Museum_Roof", MAT_STEEL, COL_MUSEUM, COURT_TRI, x_step=0.125, f_step=0.025)
 # #21A A1: museum roof seam ribbons deleted (3 strips)
 # v16 P2 item 6: smooth rim around the court roof opening (lighter steel
 # flashing, so it reads as a distinct curb against the darker roof).
-# v16r2: subdivided (12 segments/edge) so it hugs the sloped roof.
-# Phase 3 (item 6, 3rd attempt — NEW diagnosis from probe_court_edge.py):
-# the rim's outer band was BURIED under the roof. The roof grid's solidify
-# (offset -1) extrudes toward the grid's DOWNWARD normals, so the real roof
-# top sits at roof_z+0.18, while the rim top was at roof_z+0.08 — 0.10 m
-# UNDER the roof surface (probe: down-rays hit SM_Museum_Roof@roof_z+0.18
-# everywhere the rim should have been; the rim only showed in the inset
-# band inside the roof hole). The roof's stepped cut edge therefore stayed
-# fully exposed from above, and its vertical cut face from below. Fix:
-# raise the rim to lift=0.30 (top 0.12 m proud of the real roof top) and
-# deepen it to thick=0.90, so it stands as a vertical fascia/skirt whose
-# outer face covers the roof's 0.18 m cut face from below/side as well as
-# the steps from above. If the renders do not clearly improve, revert.
-# Phase 3 try 2: widen the inset 0.50 -> 0.90 m. The raised fascia fixed
-# the ROOF edge on all sides (probe_court_edge2: rim covers the roof edge
-# continuously), but the ground-slab / lawn 1 m-grid teeth still protrude
-# up to ~0.7 m past the rim's inner edge on the east/south sides and read
-# as steps from above (one ray at (14.9,4.0) hit SM_Ground_Slab@0.02 just
-# inside the old inner edge). 0.90 m covers the deepest 1 m-grid tooth
-# (half-diagonal 0.71 m). If this does not clean up CAM_Court, revert the
-# inset to 0.50 and keep the raised fascia only.
 roof_opening_rim("SM_Court_Roof_Rim", COURT_TRI, MAT_STEEL_DARK, COL_MUSEUM,
                  inset=0.90, lift=0.30, thick=0.90)
 
-# North (rear) concrete wall: ground + basement, top follows roof north edge
-wall_varying("SM_Museum_Wall_North", (-2, -7), (22, -7), -4.8, 8.5, -4.8, 7.2,
+# North wall (B1 + ground), straight Y=-7 / Y=-8.56 with the jog at X=29.44.
+# Below the long-window slot (Z -6.75..-0.45) it is continuous; the slot
+# (Z -0.45..0, top flush with GL) is glazed in two 11.5 m panes (#01/#02);
+# above the slot (Z 0..roof) is the ground-floor north wall.
+wall_varying("SM_Museum_Wall_North_Below", (-10, -7), (29.44, -7), -6.75, -0.45, -6.75, -0.45,
              MAT_CONCRETE, COL_MUSEUM, thick=0.35)
-wall_varying("SM_Museum_Wall_NorthEast", (22, -7), (42, 1), -4.8, 7.2, -4.8, 0.8,
-             MAT_CONCRETE, COL_MUSEUM, thick=0.35)  # #21A A4: unified into MAT_Concrete (was MAT_Concrete_Dark; baked base colours were already identical, 202.4 vs 202.3; lightmap re-sample measured mean |d| 10.4/255, see STATUS)
-# West entrance block — v16 P2 item 10: REAL doorway. The solid fin is
-# rebuilt as segments around a 3.2 m doorway at y=0 (courtyard -> lobby
-# axis). No boolean: the wall is built in pieces with a gap for the door.
-# North segment y -7.5..-1.6, south segment y 1.6..7.5, lintel z 2.7..5.2
-# over the doorway. Glass door + frames + canopy + sign kept as before.
-box("SM_Museum_Entrance_Block_N", (-2.6, -4.55, 2.6), (1.2, 5.9, 5.2), MAT_CONCRETE, COL_MUSEUM)
-box("SM_Museum_Entrance_Block_S", (-2.6, 4.55, 2.6), (1.2, 5.9, 5.2), MAT_CONCRETE, COL_MUSEUM)
-box("SM_Museum_Entrance_Lintel", (-2.6, 0, 3.95), (1.2, 3.2, 2.5), MAT_CONCRETE, COL_MUSEUM)
-box("SM_Museum_Entrance_Door", (-3.25, 0, 1.35), (0.15, 3.2, 2.7), MAT_GLASS, COL_MUSEUM)
-# door frame + canopy line (v11: bare glass plate on a plain fin)
-box("SM_Museum_Entrance_Frame_L", (-3.32, -1.68, 1.35), (0.12, 0.12, 2.7), MAT_BLACK, COL_MUSEUM)
-box("SM_Museum_Entrance_Frame_R", (-3.32, 1.68, 1.35), (0.12, 0.12, 2.7), MAT_BLACK, COL_MUSEUM)
-box("SM_Museum_Entrance_Frame_Top", (-3.32, 0, 2.76), (0.12, 3.5, 0.12), MAT_BLACK, COL_MUSEUM)
-box("SM_Museum_Entrance_Canopy", (-3.65, 0, 2.98), (0.9, 4.2, 0.08), MAT_STEEL_DARK, COL_MUSEUM)
-# 21_21 sign plate on the west block
-box("SM_Museum_Sign", (-3.3, 5.2, 3.6), (0.12, 4.5, 0.9), MAT_BLACK, COL_MUSEUM)
+wall_varying("SM_Museum_Wall_North_Above", (-10, -7), (29.44, -7), 0.0, 4.95, 0.0, 4.95,
+             MAT_CONCRETE, COL_MUSEUM, thick=0.35)
+# Slot infill west of pane 1 and between the panes (Z -0.45..0)
+wall_varying("SM_Museum_Wall_North_Slot_W", (-10, -7), (15.63, -7), -0.45, 0.0, -0.45, 0.0,
+             MAT_CONCRETE, COL_MUSEUM, thick=0.35)
+wall_varying("SM_Museum_Wall_North_Slot_Mid", (27.13, -7), (29.44, -7), -0.45, 0.0, -0.45, 0.0,
+             MAT_CONCRETE, COL_MUSEUM, thick=0.35)
+# Long window pane 1 (X 15.63..27.13, Y=-7) + shade strip above (Z 0..0.35, projects north 0.3)
+box("SM_LongWindow_Pane1", (21.38, -7, -0.225), (11.5, 0.06, 0.45), MAT_GLASS, COL_MUSEUM)
+box("SM_LongWindow_Shade1", (21.38, -7.15, 0.175), (11.5, 0.30, 0.35), MAT_CONCRETE, COL_MUSEUM)
+# Jog wall (B1 only, below lawn) + east north wall (Y=-8.56)
+wall_varying("SM_Museum_Wall_North_Jog", (29.44, -7), (29.44, -8.56), -6.75, -0.10, -6.75, -0.10,
+             MAT_CONCRETE, COL_MUSEUM, thick=0.35)
+wall_varying("SM_Museum_Wall_NorthEast_Below", (29.44, -8.56), (48.56, -8.56), -6.75, -0.45, -6.75, -0.45,
+             MAT_CONCRETE, COL_MUSEUM, thick=0.35)
+# Ground-floor north wall east of the jog (Y=-8.56, Z 0..roof: flat 4.95 to
+# x=41, then down to 2.5 at the NE corner).
+wall_varying("SM_Museum_Wall_NorthEast_Above_A", (29.44, -8.56), (41, -8.56), 0.0, 4.95, 0.0, 4.95,
+             MAT_CONCRETE, COL_MUSEUM, thick=0.35)
+wall_varying("SM_Museum_Wall_NorthEast_Above_B", (41, -8.56), (44, -8.56), 0.0, 4.95, 0.0, 2.5,
+             MAT_CONCRETE, COL_MUSEUM, thick=0.35)
+# Slot infill east of pane 2 (Z -0.45..0)
+wall_varying("SM_Museum_Wall_NorthEast_Slot_E", (40.94, -8.56), (48.56, -8.56), -0.45, 0.0, -0.45, 0.0,
+             MAT_CONCRETE, COL_MUSEUM, thick=0.35)
+# Long window pane 2 (X 29.44..40.94, Y=-8.56) + shade strip above
+box("SM_LongWindow_Pane2", (35.19, -8.56, -0.225), (11.5, 0.06, 0.45), MAT_GLASS, COL_MUSEUM)
+box("SM_LongWindow_Shade2", (35.19, -8.71, 0.175), (11.5, 0.30, 0.35), MAT_CONCRETE, COL_MUSEUM)
 
-# South glass facade (continuous glazing, top follows roof south edge)
-south_edge = []
-for x in MUSEUM_XS:
-    south_edge.append((x, edge_y_south(x), roof_z_south(x)))
+# West entrance block — #21B: the west edge is now the slanted line
+# (-10,-7)->(-3,2.33), direction (0.6,0.8), angle 53.13 deg. Doorway 3.2 m
+# centred at Y=0 (plan (-4.75,0)); segments + lintel follow the roof
+# (NW corner 4.95 -> SW corner 3.20); glass door + frames + canopy + sign.
+_ENT_ANG = math.radians(53.13)
+_ENT_C = (-4.75, 0.0)
+def _ent_pt(s):
+    return (_ENT_C[0] + 0.6 * s, _ENT_C[1] + 0.8 * s)
+# north segment (long, toward NW): s -8.75..-1.6, roof 4.95->3.88
+_n0 = _ent_pt(-8.75); _n1 = _ent_pt(-1.6)
+wall_varying("SM_Museum_Entrance_Block_N", _n0, _n1, 0.0, 4.95, 0.0, 3.88,
+             MAT_CONCRETE, COL_MUSEUM, thick=1.2)
+# south segment (short, toward SW): s 1.6..2.91, roof 3.40->3.20
+_s0 = _ent_pt(1.6); _s1 = _ent_pt(2.91)
+wall_varying("SM_Museum_Entrance_Block_S", _s0, _s1, 0.0, 3.40, 0.0, 3.20,
+             MAT_CONCRETE, COL_MUSEUM, thick=1.2)
+# lintel over the doorway (s -1.6..1.6, Z 2.7..roof)
+wall_varying("SM_Museum_Entrance_Lintel", _n1, _s0, 2.7, 3.88, 2.7, 3.40,
+             MAT_CONCRETE, COL_MUSEUM, thick=1.2)
+# glass door + frames + canopy + sign (rotated to the wall angle)
+box("SM_Museum_Entrance_Door", (_ENT_C[0], _ENT_C[1], 1.35), (3.2, 0.15, 2.7), MAT_GLASS, COL_MUSEUM,
+    rot=(0, 0, _ENT_ANG))
+box("SM_Museum_Entrance_Frame_L", (_ent_pt(-1.68)[0], _ent_pt(-1.68)[1], 1.35), (0.12, 0.12, 2.7), MAT_BLACK, COL_MUSEUM,
+    rot=(0, 0, _ENT_ANG))
+box("SM_Museum_Entrance_Frame_R", (_ent_pt(1.68)[0], _ent_pt(1.68)[1], 1.35), (0.12, 0.12, 2.7), MAT_BLACK, COL_MUSEUM,
+    rot=(0, 0, _ENT_ANG))
+box("SM_Museum_Entrance_Frame_Top", (_ENT_C[0], _ENT_C[1], 2.76), (3.5, 0.12, 0.12), MAT_BLACK, COL_MUSEUM,
+    rot=(0, 0, _ENT_ANG))
+box("SM_Museum_Entrance_Canopy", (_ENT_C[0] - 0.48, _ENT_C[1] + 0.36, 2.98), (4.2, 0.9, 0.08), MAT_STEEL_DARK, COL_MUSEUM,
+    rot=(0, 0, _ENT_ANG))
+# 21_21 sign plate on the north block (offset 0.66 outward so it sits proud
+# of the 1.2-thick wall face, not buried in it)
+_sg = _ent_pt(-3.5)
+box("SM_Museum_Sign", (_sg[0] - 0.53, _sg[1] + 0.40, 3.6), (4.5, 0.12, 0.9), MAT_BLACK, COL_MUSEUM,
+    rot=(0, 0, _ENT_ANG))
+
+# South glass facade (continuous glazing, top follows roof south edge = 3.20)
+south_edge = [(-3, 2.33, 3.20), (10, 2.33, 3.20), (25, 2.33, 3.20), (39, 2.33, 3.20)]
 glass_strip("SM_Museum_Glass_South", south_edge, 0.0, MAT_GLASS, COL_MUSEUM)
-# East tip glass gable (triangular, at the point)
+# East tip glass gable (triangular, along the roof east edge (44,-7)->(39,2.33))
 glass_strip("SM_Museum_Glass_Tip",
-            [(42, 1, 0.8), (37, edge_y_south(37), roof_z_south(37))], 0.0, MAT_GLASS, COL_MUSEUM)
+            [(44, -7, 2.5), (39, 2.33, 3.20)], 0.0, MAT_GLASS, COL_MUSEUM)
 
 # ================= CAFE WING (exterior) =================
 # Footprint quad: A2(-34,-6) B2(-12,-6) C2(-10,0) D2(-34,6). Area ~210 m2.
@@ -1094,11 +1153,11 @@ def _fold(x, x0, z0, xv, zv, x1, z1):
         return z0 + (zv - z0) * ((x - x0) / (xv - x0))
     return zv + (z1 - zv) * ((x - xv) / (x1 - xv))
 
-def cafe_z_north(x):
-    return _fold(x, -34, 5.0, -20, 3.0, -10, 4.2)
+def cafe_z_north(x):  # #21B: scaled 0.982 (apex 4.91)
+    return _fold(x, -34, 4.91, -20, 2.946, -10, 4.124)
 
-def cafe_z_south(x):
-    return _fold(x, -34, 3.5, -20, 1.2, -10, 3.5)
+def cafe_z_south(x):  # #21B: scaled 0.982
+    return _fold(x, -34, 3.437, -20, 1.178, -10, 3.437)
 
 def cafe_y_north(x):
     return -6.0 if x <= -12 else -6.0 + 3.0 * ((x + 12) / 2.0)
@@ -1153,16 +1212,16 @@ wall_varying("SM_Cafe_Wall_North_Low", (-34, -6), (-12, -6), 0.0, 1.0, 0.0, 1.0,
              MAT_CONCRETE, COL_CAFE, thick=0.3)
 # v17 (#17): north-wall top follows the folded roof — split at the valley.
 # A single straight 5.0->4.2 top would poke 1.4 m through the roof at x=-20.
-wall_varying("SM_Cafe_Wall_North_High", (-34, -6), (-20, -6), 2.2, 5.0, 2.2, 3.0,
+wall_varying("SM_Cafe_Wall_North_High", (-34, -6), (-20, -6), 2.2, 4.91, 2.2, 2.946,  # #21B
              MAT_CONCRETE, COL_CAFE, thick=0.3)
-wall_varying("SM_Cafe_Wall_North_High_E", (-20, -6), (-12, -6), 2.2, 3.0, 2.2, 4.2,
+wall_varying("SM_Cafe_Wall_North_High_E", (-20, -6), (-12, -6), 2.2, 2.946, 2.2, 4.124,  # #21B
              MAT_CONCRETE, COL_CAFE, thick=0.3)
 wall_varying("SM_Cafe_Wall_North_SlotW", (-34, -6), (-31, -6), 1.0, 2.2, 1.0, 2.2,
              MAT_CONCRETE, COL_CAFE, thick=0.3)
 wall_varying("SM_Cafe_Wall_North_SlotE", (-19, -6), (-12, -6), 1.0, 2.2, 1.0, 2.2,
              MAT_CONCRETE, COL_CAFE, thick=0.3)
 box("SM_G3_WindowSlot", (-28, -6, 1.6), (6.0, 0.12, 1.2), MAT_GLASS, COL_CAFE)
-wall_varying("SM_Cafe_Wall_West", (-34, -6), (-34, 6), 0.0, 5.0, 0.0, 3.5,
+wall_varying("SM_Cafe_Wall_West", (-34, -6), (-34, 6), 0.0, 4.91, 0.0, 3.437,  # #21B
              MAT_CONCRETE, COL_CAFE, thick=0.3)
 # Cafe south glass + east entrance (faces museum)
 cafe_south = [(x, cafe_y_south(x), cafe_z_south(x)) for x in CAFE_XS]
@@ -1232,7 +1291,7 @@ def g3_ceiling_z(x, y):
     # v17 (#17): never above the folded-roof underside. The v16 ceiling rose
     # up to 0.46 m through the roof along the north band (the page hid it
     # with fixG3RoofClip); now fixed in the model, so the page fix goes away.
-    return min(_z, cafe_z_at(x, y) - 0.30)
+    return min(_z, cafe_z_at(x, y) - 0.65)  # #21B: roof construction 0.65 m (was 0.30)
 # Gallery columns (official plan: 2 square + 1 round at the south vertex).
 # v16 P2 item 12: square columns at 30% and 55% of the 15.0 m north wall
 # from the west vertex: x = -33 + 0.30*15 = -28.5 and -33 + 0.55*15 =
@@ -1300,7 +1359,12 @@ for _di, _dx0 in enumerate([-22.0, -20.0]):
 # 3.70 — the folded roof dips to 3.29 at x=-22, so the old 12 m strip at
 # 3.95 would poke through the roof east of x=-28 (and through the clamped
 # ceiling, 3.78 at x=-28).
-box("SM_G3_CoveStrip", (-30.5, -5.55, 3.70), (5.0, 0.08, 0.08), _MAT_G3_COVE, COL_CAFE)
+# #21B: cove strip re-tilted to follow the lowered ceiling (ends 0.05
+# below g3_ceiling_z at x=-33 and x=-28).
+_cove_zw = g3_ceiling_z(-33, -5.55) - 0.05
+_cove_ze = g3_ceiling_z(-28, -5.55) - 0.05
+box("SM_G3_CoveStrip", (-30.5, -5.55, (_cove_zw + _cove_ze) / 2.0), (5.0, 0.08, 0.08),
+    _MAT_G3_COVE, COL_CAFE, rot=(0, math.atan2(_cove_zw - _cove_ze, 5.0), 0))
 # Recessed downlights just below the sloped ceiling (8, positions from the
 # visitor photos: rows following the slope). v16 P2 item 11: two moved north
 # so they sit under the new Section C ceiling instead of below it / above
@@ -1355,26 +1419,75 @@ box("SM_Passage_Post_4", (-2.5, -1.2, 1.7), (0.18, 0.18, 3.4), MAT_BLACK, COL_SI
 
 print("=== museum + cafe exterior done ===")
 
-# ================= INTERIOR (museum wing) =================
-# Footprint quad A(-2,-7) B(22,-7) C(42,1) D(-2,7)
-FOOT = [(-2, -7), (22, -7), (42, 1), (-2, 7)]
+# ---- helpers re-emitted from the PR-A interior (unchanged) ----
+def tie_holes(name, axis, fixed, u_range, v_range, step_u=0.45, step_v=0.60, vertices=12):
+    """Small dark tie-hole discs on a wall face (P-con grid 450x600, #21A A2:
+    a 900x1800 formwork panel = 2 cols x 3 rows = 6 holes; grid points at
+    multiples of 0.45 (u) / 0.60 (v) so holes sit on the panel module).
+    axis 'x': face plane YZ at x=fixed; axis 'y': face plane XZ at y=fixed.
+    u/v are the two in-plane coordinates. 12-vertex discs: at 70 mm dia the
+    facets are invisible at any real viewing distance, and the denser grid
+    (60 -> 182 discs) must not cost 22k tris (32-vert discs would)."""
+    n = 0
+    u = u_range[0]
+    while u <= u_range[1] + 1e-6:
+        v = v_range[0]
+        while v <= v_range[1] + 1e-6:
+            if axis == 'x':
+                loc = (fixed, u, v); rot = (0, math.radians(90), 0)
+            else:
+                loc = (u, fixed, v); rot = (math.radians(90), 0, 0)
+            bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=0.035, depth=0.04, location=loc, rotation=rot)
+            o = bpy.context.active_object
+            o.name = f"{name}_{n:02d}"
+            set_mat(o, MAT_TIEHOLE); link(o, COL_INTER)
+            n += 1
+            v += step_v
+        u += step_u
+    return n
 
-def flat_slab(name, z, thick, mat, coll):
-    """Flat slab over the museum footprint at height z (top), solidified down."""
-    A, B, C, D = FOOT
-    verts = [(A[0], A[1], z), (B[0], B[1], z), (C[0], C[1], z), (D[0], D[1], z)]
-    faces = [(0, 1, 2), (0, 2, 3)]
-    o = mesh_from_pydata(name, verts, faces, mat, coll)
-    solidify(o, thick)
-    return o
+def _ceiling_panel_square(name, cx, cy, z_face, rx=0.0, ry=0.0):
+    box(name, (cx, cy, z_face - 0.015), (0.60, 0.60, 0.02), MAT_CEILING_PANEL, COL_INTER, rot=(rx, ry, 0))
 
-def footprint_grid_slab(name, quad, z, thick, mat, coll, skip_rect=None):
+def _ceiling_panel_round(name, cx, cy, z_face, rx=0.0, ry=0.0):
+    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.225, depth=0.02, location=(cx, cy, z_face - 0.015), rotation=(rx, ry, 0))
+    _o = bpy.context.active_object
+    _o.name = name
+    set_mat(_o, MAT_CEILING_PANEL); link(_o, COL_INTER)
+
+def _sprinkler(name, cx, cy, z_face):
+    bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.012, depth=0.06, location=(cx, cy, z_face - 0.03))
+    _o = bpy.context.active_object
+    _o.name = name + "_Stem"
+    set_mat(_o, MAT_SPRINKLER); link(_o, COL_INTER)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.025, depth=0.012, location=(cx, cy, z_face - 0.06))
+    _o2 = bpy.context.active_object
+    _o2.name = name
+    set_mat(_o2, MAT_SPRINKLER); link(_o2, COL_INTER)
+
+def _slope_rot(zfn, cx, cy):
+    """Panel tilt matching the local ceiling slope (radians about X/Y)."""
+    _dzdx = (zfn(cx + 0.3, cy) - zfn(cx - 0.3, cy)) / 0.6
+    _dzdy = (zfn(cx, cy + 0.3) - zfn(cx, cy - 0.3)) / 0.6
+    return (math.atan(_dzdy), -math.atan(_dzdx))
+
+# ================= INTERIOR (museum wing) — #21B geometry rebuild =================
+# Levels (D1): exhibition floor G2F=-6.75, upper platform PLAT=-5.85, G1 floor G1F=-7.20.
+# Roof construction 0.65 m: atrium soffit = roof_z_at - 0.65; G2 ceiling flat -1.95.
+# (Helpers flat_slab / tie_holes / _ceiling_panel_* / _sprinkler / _slope_rot are
+# re-emitted above by apply_issue21B.py from the PR-A script.)
+G2F = -6.75
+PLAT = -5.85
+G1F = -7.20
+G2C = -1.95
+G1C = -2.20
+
+FOOT = [(-10, -7), (44, -7), (39, 2.33), (-3, 2.33)]  # #21B D3 trapezoid
+
+def footprint_grid_slab(name, quad, z, thick, mat, coll, skip_rect=None, skip_fn=None):
     """Ground-floor slab over a convex quad footprint, built as a 1 m grid with
-    the atrium void + sunken court skipped at construction (never boolean:
-    EXACT boolean on the 2-triangle flat_slab silently collapsed it to a
-    10-vert court-triangle remnant, leaving the whole ground floor as lawn).
-    skip_rect=(x0, x1, y0, y1) replaces the atrium-rect skip: only cells
-    whose centre falls in the rect are left open. None = old behaviour."""
+    openings skipped at construction (never boolean). #21B: skip_fn(cx, cy)
+    replaces the old atrium-rect skip; skip_rect kept for compatibility."""
     A, B, C, D = quad
     tri1 = (A, B, C)
     tri2 = (A, C, D)
@@ -1406,11 +1519,12 @@ def footprint_grid_slab(name, quad, z, thick, mat, coll, skip_rect=None):
             cy = (verts[a][1] + verts[b][1] + verts[c][1] + verts[d][1]) / 4.0
             if not (_point_in_tri(cx, cy, tri1) or _point_in_tri(cx, cy, tri2)):
                 continue
-            if skip_rect is not None:
+            if skip_fn is not None:
+                if skip_fn(cx, cy):
+                    continue
+            elif skip_rect is not None:
                 if skip_rect[0] <= cx <= skip_rect[1] and skip_rect[2] <= cy <= skip_rect[3]:
                     continue
-            elif _in_atrium_rect(cx, cy):
-                continue
             if _point_in_tri(cx, cy, COURT_TRI):
                 continue
             faces.append((a, b, c, d))
@@ -1418,298 +1532,20 @@ def footprint_grid_slab(name, quad, z, thick, mat, coll, skip_rect=None):
     solidify(o, thick)
     return o
 
-# Basement floor (Z=-4.8) — light concrete like the real Gallery 2 floor.
-# v16 P2 TOP PRIORITY (Leon 2026-11-17: the underground space was too small
-# AND laid out wrong): the basement is BIGGER and re-laid out per the
-# official BF plan. v15 was 816 m2 with G1 as a north strip / G2 as a south
-# hall. Official numbers: total floor 1,932 m2 - building area 597.3 m2 =
-# 1,334.7 m2 basement. New outline 1,336 m2. G1 = 129 m2 trapezoid (WEST,
-# far wall = the diagonal museum wall, (22,-7)->(37,-1)); G2 = 448 m2
-# rectangle (EAST, x 24..52, y -1..15). The 1.75x ratio in the v15 record
-# came from a schematic that is not to scale (measured BF/1F-museum = 1.82
-# in plan_big.png, but the two plans are drawn at different scales);
-# 1,045 m2 (= 1.75 x 597.3) leaves ~290 m2 of the official 1,932 m2
-# unaccounted for, so it is rejected. Court + atrium + stair/elevator core
-# stay: court between G1/G2, north of G2's centre; core at the west end;
-# atrium connects them (BF plan + Architectural Record: G1 is the trapezoid,
-# G2 the rectangle; the void is two adjacent triangles, atrium + court).
-# Exact outline path is inferred (the BF plan is schematic); the area is
-# the constraint. G1 129 m2 (-3% vs 133) and G2 448 m2 (+1% vs 443) are
-# within the schematic's tolerance.
-BASEMENT_POLY = [(-10, -7), (22, -7), (52, -1), (52, 16), (-10, 16)]
-# G1 polygon (trapezoid, WEST): north edge y=-7, far wall = diagonal museum
-# wall (22,-7)->(37,-1), south edge y=-1, west edge x=8. Area 129 m2.
-G1_POLY = [(8, -7), (22, -7), (37, -1), (8, -1)]
-# G2 rectangle (EAST): x 24..52, y -1..15. Area 448 m2.
-G2_RECT = (24, 52, -1, 15)
-basement_floor = flat_poly_slab("SM_Basement_Floor", BASEMENT_POLY, -4.8, 0.2,
-    mat_principled("MAT_Floor_Concrete", (0.72, 0.71, 0.69), rough=0.85), COL_INTER)
-# Ground-floor slab over the museum footprint (top z=0.02, just above the
-# lawn at -0.05 so it never Z-fights; atrium + court skipped at construction)
-# v17 (#17): the atrium void is floored over — only the 30-step stairwell
-# stays open (stair x 0..8.1, y -5..-3, balustrade at y=-3.0; the rect stops
-# 0.1 m south of the balustrade). Leon confirmed the real lobby has floor
-# here. The sunken-court opening (COURT_TRI) is untouched.
-ground_slab = footprint_grid_slab("SM_Ground_Slab", FOOT, 0.02, 0.3, MAT_CONCRETE, COL_INTER,
-                                  skip_rect=(0.0, 8.0, -5.0, -2.9))
-# Cafe ground-floor slab (same construction; cafe quad A2/B2/C2/D2 from above)
-CAFE_FOOT = [(-34, -6), (-12, -6), (-10, 0), (-34, 6)]
-cafe_slab = footprint_grid_slab("SM_Cafe_Slab", CAFE_FOOT, 0.02, 0.3, MAT_CONCRETE, COL_INTER)
+def _atrium_soffit_z(_x, _y):
+    # #21B: roof construction 0.65 m (was 0.15 in v18 / 0.30 in the old "top = roof - 0.30").
+    return roof_z_at(_x, _y) - 0.65
 
-# Basement perimeter walls (below ground, Z -4.8..0) — v16 outline (see above).
-# Gallery walls are WHITE (ref_gallery1/2.jpg: exhibition walls read white;
-# concrete is reserved for the atrium/court/columns). The new walls are fully
-# underground, so their outer faces are never seen.
-wall_varying("SM_Basement_Wall_South", (-10, 16), (52, 16), -4.8, -0.10, -4.8, -0.10,  # #18: tops were 0.0; -0.10 is below lawn (-0.05) AND far ground (-0.07/-0.08)
-             MAT_WHITE, COL_INTER, thick=0.35)
-wall_varying("SM_Basement_Wall_West", (-10, -7), (-10, 16), -4.8, -0.10, -4.8, -0.10,  # #18: tops were 0.0; -0.10 is below lawn (-0.05) AND far ground (-0.07/-0.08)
-             MAT_CONCRETE, COL_INTER, thick=0.35)
-# North wall west extension (the basement runs 8 m west of the ground floor)
-wall_varying("SM_Basement_Wall_North_West", (-10, -7), (-2, -7), -4.8, -0.10, -4.8, -0.10,  # #18: tops were 0.0; -0.10 is below lawn (-0.05) AND far ground (-0.07/-0.08)
-             MAT_CONCRETE, COL_INTER, thick=0.35)
-# North-east diagonal wall (follows the ground footprint edge, extended east)
-wall_varying("SM_Basement_Wall_NorthEast", (22, -7), (52, -1), -4.8, -0.10, -4.8, -0.10,  # #18: tops were 0.0; -0.10 is below lawn (-0.05) AND far ground (-0.07/-0.08)
-             MAT_WHITE, COL_INTER, thick=0.35)
-# East wall of the (eastern) Gallery 2
-wall_varying("SM_Basement_Wall_East", (52, -1), (52, 16), -4.8, -0.10, -4.8, -0.10,  # #18: tops were 0.0; -0.10 is below lawn (-0.05) AND far ground (-0.07/-0.08)
-             MAT_WHITE, COL_INTER, thick=0.35)
-# G2 ceiling: flat white gypsum panels over the whole eastern gallery  # #21A A3 (was board-formed concrete)
-# (most of G2 lies beyond the ground footprint, under the lawn), z=-0.38,
-# just below the ground-slab underside (-0.28) so the ceiling reads flat.
-# Two panels leave a 0.70 m gap for the skylight slot (Y 1.45..2.15),
-# which sits recessed at z=-0.10 and reads as a real skylight well.
-box("SM_G2_Ceiling_N", (38, 0.225, -0.38), (28.0, 2.45, 0.06), MAT_CEILING_GYPSUM, COL_INTER)
-box("SM_G2_Ceiling_S", (38, 8.575, -0.38), (28.0, 12.85, 0.06), MAT_CEILING_GYPSUM, COL_INTER)
-# G1 north wall lining: white plaster on the inside face of the concrete
-# north wall (the wall itself must stay concrete above ground).
-box("SM_G1_WallNorth_Lining", (15, -6.79, -2.4), (14.0, 0.06, 4.8), MAT_WHITE, COL_INTER)
-# v16: white plaster lining on the G1 side of the diagonal (NE) wall below
-# the skylight panels (ref_gallery1.jpg: ALL G1 walls white; v15 showed the
-# bare MAT_Concrete_Dark wall face, gray + mottled, below the panels).
-# v16 P2 REGRESSION (found 2026-11-17 in v16_verify_CAM_Gallery1/G1FarWall):
-# the lining was BURIED inside the wall and invisible. Cause: the 0.22 m
-# offset was measured from the OUTER face line (22.06,-7.16)->(42.06,0.84),
-# which is the wall's NE face (s=-0.175 from the centreline), so the lining
-# centre landed at s=+0.045 — inside the 0.35 m wall (faces s=+/-0.175).
-# Phase 3 fix: centre at s=+0.197 from the centreline (front face s=+0.227,
-# 0.052 m proud of the inner wall face, flush with the square window's back
-# face), t centred on G1's far-wall segment (22,-7)->(37,-1), length 16.2 m
-# (was 16.7 m, which overshot 0.53 m into G2's NW corner). Top z=-1.2 meets
-# the skylight panels. Window NOT moved (it sits correctly on the lining).
-box("SM_G1_WallDiagonal_Lining", (29.43, -3.82, -3.0), (16.2, 0.06, 3.6),
-    MAT_WHITE, COL_INTER, rot=(0, 0, math.radians(21.79)))
+def _wood_bench(_name, _x, _y):
+    # #21B: bench on the B1 lobby floor (G2F), not the old -4.8.
+    box(f"{_name}_Seat", (_x, _y, G2F + 0.42), (0.55, 2.0, 0.07), MAT_WOOD_LIGHT, COL_INTER)
+    for _ly in (_y - 0.85, _y + 0.85):
+        box(f"{_name}_Leg_{_ly}", (_x, _ly, G2F + 0.20), (0.5, 0.06, 0.40), MAT_WOOD_LIGHT, COL_INTER)
 
-# ---- Openings: atrium void (rect X 0..8, Y -5..+5) + sunken court (triangle) ----
-# Both openings are skipped at construction time inside footprint_grid_slab
-# (and ground_grid_with_holes / roof_grid_with_hole for site + roof).
-# The EXACT boolean used here before silently collapsed the 2-triangle
-# ground slab to a 10-vert remnant (2026-11-16 probe), so no boolean is
-# applied to any slab anymore; boolean_cut() is kept unused for reference.
-
-# ---- Atrium walls (the canyon): tall concrete, double height ----
-def tie_holes(name, axis, fixed, u_range, v_range, step_u=0.45, step_v=0.60, vertices=12):
-    """Small dark tie-hole discs on a wall face (P-con grid 450x600, #21A A2:
-    a 900x1800 formwork panel = 2 cols x 3 rows = 6 holes; grid points at
-    multiples of 0.45 (u) / 0.60 (v) so holes sit on the panel module).
-    axis 'x': face plane YZ at x=fixed; axis 'y': face plane XZ at y=fixed.
-    u/v are the two in-plane coordinates. 12-vertex discs: at 70 mm dia the
-    facets are invisible at any real viewing distance, and the denser grid
-    (60 -> 182 discs) must not cost 22k tris (32-vert discs would)."""
-    n = 0
-    u = u_range[0]
-    while u <= u_range[1] + 1e-6:
-        v = v_range[0]
-        while v <= v_range[1] + 1e-6:
-            if axis == 'x':
-                loc = (fixed, u, v); rot = (0, math.radians(90), 0)
-            else:
-                loc = (u, fixed, v); rot = (math.radians(90), 0, 0)
-            bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=0.035, depth=0.04, location=loc, rotation=rot)
-            o = bpy.context.active_object
-            o.name = f"{name}_{n:02d}"
-            set_mat(o, MAT_TIEHOLE); link(o, COL_INTER)
-            n += 1
-            v += step_v
-        u += step_u
-    return n
-
-# Atrium east wall (x=8): solid board-formed concrete on the north stretch
-# (behind the stair, Y -5..-1); full-height glass on the court stretch
-# (Y -1..5 — the real atrium overlooks the sunken court through tall glazing).
-# v16 P2: the north stretch is now two segments with a 1.4 m doorway at
-# Y -3.4..-2.0 — the stair landing steps straight into G1 (the one-stroke
-# circulation: stair -> G1 -> G2 -> court -> atrium). G1's west wall north
-# of the stair (Y -7..-5) is a separate white segment below.
-wall_varying("SM_Atrium_Wall_East_A", (8, -5), (8, -3.4), -4.8, 0.0, -4.8, 0.0,
-             MAT_CONCRETE_BOARD, COL_INTER, thick=0.3)
-wall_varying("SM_Atrium_Wall_East_B", (8, -2.0), (8, -1), -4.8, 0.0, -4.8, 0.0,
-             MAT_CONCRETE_BOARD, COL_INTER, thick=0.3)
-wall_varying("SM_G1_Wall_West_North", (8, -7), (8, -5), -4.8, 0.0, -4.8, 0.0,
-             MAT_WHITE, COL_INTER, thick=0.2)
-glass_strip("SM_Atrium_Glass_East", [(8, -1, 0.0), (8, 5, 0.0)], -4.8,
-            MAT_GLASS, COL_INTER, mullion_every=0.9)
-# Tie-hole grid on the solid stretch's atrium-side face (x=7.85), north of
-# the doorway only (the old range crossed the new doorway gap).
-tie_holes("SM_Atrium_TieHole", 'x', 7.84, (-4.95, -3.6), (-4.2, -0.6))  # #21A A2: 4 cols x 7 rows = 28 (was 2x4=8); page fixStairFootWall() + join Pass A updated to match
-# Tie-hole grid on the atrium north wall face (y=-6.825), visible above the stair
-tie_holes("SM_Atrium_North_TieHole", 'y', -6.83, (0.9, 7.2), (-4.2, -0.6))  # #21A A2: 15 cols x 7 rows = 105 (was 6x4=24)
-# Atrium north wall is the basement north wall (already there).
-# ---- Sunken court walls (triangular pit, concrete + glass to Gallery 2) ----
-# Court edges: (10,-1)-(20,-1) north edge (concrete), (20,-1)-(15,5) east (glass),
-# (15,5)-(10,-1) west (concrete). Walls from basement floor up to ground.
-wall_varying("SM_Court_Wall_North", (10, -1), (20, -1), -4.8, 0.0, -4.8, 0.0,
-             MAT_CONCRETE, COL_INTER, thick=0.25)
-wall_varying("SM_Court_Wall_West", (15, 5), (10, -1), -4.8, 0.0, -4.8, 0.0,
-             MAT_CONCRETE, COL_INTER, thick=0.25)
-# Glass wall on the court east edge (facing Gallery 2), full height to ground
-wall_varying("SM_Court_Glass_East", (20, -1), (15, 5), -4.8, 0.0, -4.8, 0.0,
-             MAT_GLASS, COL_INTER, thick=0.12)
-# v15: dense mullions on the court glass (visitor night photo: tight verticals)
-for _mx in [19.0, 18.0, 17.0, 16.0]:
-    _my = -1.0 + (20.0 - _mx) * 6.0 / 5.0 if _mx < 20 else -1.0
-    box(f"SM_Court_Glass_Mullion_{int(_mx)}", (_mx, _my, -2.4), (0.06, 0.06, 4.8), MAT_BLACK, COL_INTER)
-# v15: horizontal slit window in the court north wall (glows in the night
-# photo — G1 borrows light from the court through it). Emissive band on the
-# wall's court-side face (y=-0.86).
-box("SM_Court_SlitWindow", (15, -0.86, -2.05), (6.0, 0.06, 0.30),
-    mat_principled("MAT_Court_Slit", (1.0, 0.96, 0.88), rough=0.4,
-                   emission=(1.0, 0.95, 0.85), emission_strength=2.5), COL_INTER)
-# Court floor planting + a small tree at the bottom
-box("SM_Court_Planter", (15, 1.5, -4.7), (6.0, 3.5, 0.2), MAT_GRASS, COL_INTER)
-# v16 P2 item 7: the court tree is planted on the PIT floor (z0=-4.8), not
-# at ground level — the old z0=0 put its canopy through the roof opening
-# into the entrance hall, reading as an interior lobby tree in a planter.
-cedar(15, 1.5, h=3.8, r=0.9, z0=-4.8)
-
-# ---- Interior partitions (basement) ----
-# v16 P2: G1 (WEST) / G2 (EAST) are side by side, so P1 runs along Y=-1
-# (G1's south edge = G2's north edge), X 8..52. The court pit (X 10..20)
-# interrupts it — no wall across the open pit (the court's own north wall
-# is there) — and a 3 m doorway gap at X 28..31 connects G1 to G2.
-wall_varying("SM_Part_G1G2_A", (8, -1), (10, -1), -4.8, 0.0, -4.8, 0.0,
-             MAT_WHITE, COL_INTER, thick=0.2)
-wall_varying("SM_Part_G1G2_B", (20, -1), (28, -1), -4.8, 0.0, -4.8, 0.0,
-             MAT_WHITE, COL_INTER, thick=0.2)
-wall_varying("SM_Part_G1G2_C", (31, -1), (52, -1), -4.8, -0.10, -4.8, -0.10,  # #20: top was 0.0; its 21x0.2 m white cap poked 5 cm above the lawn east of x~42 (roof ends there) and read as the white line in aerial + exterior views (raycast-proven). -0.10 sits inside the ground slab (x<42) / lawn slab (x>42).
-             MAT_WHITE, COL_INTER, thick=0.2)
-# P2: the atrium/G1 wall is the atrium east wall itself (x=8, rebuilt above
-# with the stair-landing doorway at Y -3.4..-2.0); no separate x=12 wall —
-# the stair lands straight into G1 (the one-stroke circulation:
-# stair -> G1 -> G2 -> court -> atrium).
-# P3: full-height glass wall between atrium and sunken court along X=10
-# (real atrium overlooks the court through tall glazing); doorway gap Y 1..3
-# stays open for circulation.
-glass_strip("SM_Part_Atrium_G2_Glass_A", [(10, -1, 0.0), (10, 1, 0.0)], -4.8,
-            MAT_GLASS, COL_INTER, mullion_every=0.9)
-glass_strip("SM_Part_Atrium_G2_Glass_B", [(10, 3, 0.0), (10, 5, 0.0)], -4.8,
-            MAT_GLASS, COL_INTER, mullion_every=0.9)
-# ---- Gallery 2 columns (row along north edge Y=1.8) ----
-# v16 P2: G2 is the EASTERN rectangle (x 24..52, y -1..15). 7 columns,
-# 0.55 m square (ref_gallery2.jpg: the row reads chunkier than 0.45),
-# spacing 4 m, X 26..50 (inference: the photo shows 6 clearly).
-for i, cx in enumerate([26, 30, 34, 38, 42, 46, 50]):
-    box(f"SM_G2_Column_{i}", (cx, 1.8, -2.4), (0.55, 0.55, 4.8), MAT_CONCRETE_BOARD, COL_INTER)
-    tie_holes(f"SM_G2_Column_TieHole_{i}", 'y', 2.08, (cx, cx), (-4.2, -0.6))
-# v15: the real G2 skylight — one continuous bright slot running the full
-# length of the hall just above the column line (ref_gallery2.jpg), NOT the
-# small strip that used to sit mid-room. Emissive band set into the ceiling.
+# Interior-local materials (re-defined here; the section is replaced wholesale).
 MAT_SKYLIGHT = mat_principled("MAT_Skylight", (1.0, 1.0, 0.95), rough=0.4,
                               emission=(1, 1, 0.9), emission_strength=2.5)
-# v16 P2: slot runs the eastern hall's length (x 24..52) above the column
-# line (y=1.8), recessed at z=-0.10 in the gap between the two ceiling
-# panels (Y 1.45..2.15) so it reads as a real skylight well.
-box("SM_G2_Skylight_Slot", (38, 1.8, -0.10), (28.0, 0.70, 0.10), MAT_SKYLIGHT, COL_INTER)
-# v15: rows of linear fluorescent tubes on the exposed-concrete G2 ceiling
-# (ref_gallery2.jpg: several parallel tube runs the length of the hall).
-for _ri, _ry in enumerate([4.0, 7.0, 10.0, 13.0]):
-    box(f"SM_G2_Fluorescent_{_ri}", (38, _ry, -0.45), (26.0, 0.12, 0.06), MAT_SKYLIGHT, COL_INTER)
-# v16 P2 item 16: dark doorway in the far (east) wall, north/left side
-# (ref_gallery2.jpg: a dark opening at the far end, left side). v16r2:
-# moved to y=1.5 — the first position (y=1.0) still grazed the diagonal
-# wall's east tip from the standard Gallery2 camera (the ray to the door
-# centre hit SM_Museum_Wall_NorthEast 1 mm from the wall face); y=1.5
-# clears the tip by ~0.27 m. Still the north end of the east wall
-# (2.5 m south of the north wall y=-1). Matte near-black so it reads as
-# a dark opening, not a reflective panel.
 MAT_DARK_DOOR = mat_principled("MAT_Dark_Door", (0.02, 0.02, 0.02), metallic=0.0, rough=0.95)
-box("SM_G2_East_Door", (51.85, 1.5, -3.6), (0.3, 1.2, 2.4), MAT_DARK_DOOR, COL_INTER)
-
-# ---- Floating concrete stair (atrium north side, Y -5..-3, X 0..8.1) ----
-# v15: the real stair is a normal staircase, not a steep 16-step ladder:
-# 30 steps x 0.16 m riser = 4.8 m rise, 0.27 m tread, 2.0 m wide, one
-# straight flight descending east (top at the hall, bottom at the basement).
-# North side: solid concrete parapet + steel handrail (visitor photos);
-# south side: sloped glass balustrade; smooth sloped soffit underneath so
-# the hallway under the stair reads as a real passage.
-NSTEPS = 30
-_STAIR_X0, _STAIR_TREAD, _STAIR_RISER = 0.0, 0.27, 0.16
-for i in range(NSTEPS):
-    sx = _STAIR_X0 + i * _STAIR_TREAD + _STAIR_TREAD / 2.0
-    sz = -0.08 - i * _STAIR_RISER - _STAIR_RISER / 2.0
-    box(f"SM_Stair_Step_{i:02d}", (sx, -4.0, sz), (_STAIR_TREAD, 2.0, _STAIR_RISER), MAT_CONCRETE_BOARD, COL_INTER)
-# Sloped soffit slab under the steps: top face parallel to the nosing line,
-# ~0.25 m below it (the stair waist), so it never pokes through a step; the
-# east tip disappears under the basement floor.
-_soff_len = math.hypot(NSTEPS * _STAIR_TREAD, NSTEPS * _STAIR_RISER)
-_soff_ang = math.atan2(NSTEPS * _STAIR_RISER, NSTEPS * _STAIR_TREAD)
-box("SM_Stair_Soffit", (NSTEPS * _STAIR_TREAD / 2.0, -4.0, -2.80),
-    (_soff_len, 2.0, 0.15), MAT_CONCRETE_BOARD, COL_INTER, rot=(0, _soff_ang, 0))
-# North parapet: solid concrete upstand following the step profile, 1.0 m
-# above the nosings. Vertices: A/B bottom-west, C/D bottom-east (on the
-# nosing line), E/F top-west, G/H top-east (+1.0 m).
-_par_verts = [
-    (0.0, -5.0, -0.08), (0.0, -4.92, -0.08),          # A, B
-    (8.1, -5.0, -4.88), (8.1, -4.92, -4.88),          # C, D
-    (0.0, -5.0, 0.92), (0.0, -4.92, 0.92),            # E, F
-    (8.1, -5.0, -3.88), (8.1, -4.92, -3.88),          # G, H
-]
-_par_faces = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 2, 6, 4), (1, 5, 7, 3),
-              (0, 4, 5, 1), (2, 3, 7, 6)]
-mesh_from_pydata("SM_Stair_Parapet", _par_verts, _par_faces, MAT_CONCRETE_BOARD, COL_INTER)
-# Steel handrail on the parapet (thin sloped tube, on the parapet top line)
-box("SM_Stair_Handrail", (NSTEPS * _STAIR_TREAD / 2.0, -4.96, -1.43),
-    (_soff_len, 0.05, 0.05), MAT_BLACK, COL_INTER, rot=(0, _soff_ang, 0))
-# Sloped glass balustrade along the stair (open edge Y=-3.0): bottom edge
-# follows the stair stringer, top edge 1.0 m above the nosings.
-wall_varying("SM_Stair_Balustrade", (0.0, -3.0), (8.1, -3.0), -0.3, 0.92, -4.9, -3.88,
-             MAT_GLASS, COL_INTER, thick=0.08)
-# Stair landing at basement
-box("SM_Stair_Landing", (8.8, -4.0, -4.65), (1.6, 2.0, 0.3), MAT_CONCRETE_BOARD, COL_INTER)
-# Atrium ceiling: white gypsum soffit following the roof 0.15 m below it, over the
-# atrium void (X 0..8, Y -5..5). #21A A3: GB-R 9.5+12.5 EP white paint, following
-# the roof slope (checklist §2); was bare concrete, which the real atrium is not.
-_soff_v, _soff_f, _soff_idx = [], [], {}
-_soff_xs = [0.0 + 0.5 * i for i in range(17)]
-_soff_ys = [-5.0 + 0.5 * i for i in range(21)]
-for _xi, _x in enumerate(_soff_xs):
-    for _yi, _y in enumerate(_soff_ys):
-        _soff_idx[(_xi, _yi)] = len(_soff_v)
-        _soff_v.append((_x, _y, roof_z_at(_x, _y) - 0.15))
-for _xi in range(len(_soff_xs) - 1):
-    for _yi in range(len(_soff_ys) - 1):
-        _a = _soff_idx[(_xi, _yi)]; _b = _soff_idx[(_xi + 1, _yi)]
-        _c = _soff_idx[(_xi + 1, _yi + 1)]; _d = _soff_idx[(_xi, _yi + 1)]
-        _soff_f.append((_a, _b, _c, _d))
-_soff_o = mesh_from_pydata("SM_Atrium_Soffit", _soff_v, _soff_f, MAT_SOFFIT_GYPSUM, COL_INTER)
-solidify(_soff_o, 0.08)
-
-# ---- Trapezoidal elevator shaft (Japan's only trapezoidal elevator) ----
-# v15: moved out of the canyon's sightline to the atrium's south-west corner,
-# next to the stair top and the reception desk; plan is a real trapezoid
-# (wide 2.4 m on the hall side, narrow 1.6 m on the east side — exact
-# dimensions are inference, the trapezoid itself is documented). Concrete
-# shaft, dark steel door facing the hall (west), car inside at basement level.
-_ELEV_PLAN = [(-0.4, 2.4), (2.0, 2.8), (2.0, 4.4), (-0.4, 4.8)]
-_elev_v = [(x, y, -4.8) for (x, y) in _ELEV_PLAN] + [(x, y, 0.0) for (x, y) in _ELEV_PLAN]
-_elev_f = [(0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)]
-mesh_from_pydata("SM_Elevator_Shaft", _elev_v, _elev_f, MAT_CONCRETE, COL_INTER)
-box("SM_Elevator_Door", (-0.44, 3.6, 1.2), (0.08, 1.2, 2.4), MAT_STEEL_DARK, COL_INTER)
-box("SM_Elevator_Door_Basement", (-0.44, 3.6, -3.6), (0.08, 1.2, 2.4), MAT_STEEL_DARK, COL_INTER)
-box("SM_Elevator_Car", (0.8, 3.6, -3.7), (1.6, 1.4, 2.2), MAT_STEEL_DARK, COL_INTER)
-
-# ---- Atrium furnishings (real atrium: curved wooden bookshelf under the stair,
-# wooden benches by the floor-to-ceiling windows, long slit window, warm
-# ceiling light strip) ----
 MAT_WOOD_SHELF = mat_principled("MAT_Wood_Shelf", (0.45, 0.32, 0.20), rough=0.7)
 add_wood_grain(MAT_WOOD_SHELF)
 MAT_WOOD_LIGHT = mat_principled("MAT_Wood_Light", (0.72, 0.58, 0.40), rough=0.6)
@@ -1722,15 +1558,306 @@ MAT_SLIT = mat_principled("MAT_Slit_Light", (1.0, 0.96, 0.88), rough=0.4,
 _book_cols = [(0.60, 0.10, 0.10), (0.10, 0.30, 0.60), (0.90, 0.70, 0.10),
               (0.20, 0.50, 0.20), (0.80, 0.40, 0.10), (0.88, 0.88, 0.85)]
 MAT_BOOKS = [mat_principled(f"MAT_Book_{i}", c, rough=0.8) for i, c in enumerate(_book_cols)]
-# Curved bookshelf under the stair: arc centred (4.5,-1.0) r=3.2, angles 235..285 deg
+MAT_FLOOR_CONCRETE = mat_principled("MAT_Floor_Concrete", (0.72, 0.71, 0.69), rough=0.85)
+
+# ---- B1 floors ----
+# B1 outline (model): (-10,-7),(29.44,-7),(29.44,-8.56),(48.56,-8.56),(48.56,17.24),
+# (5.35,17.24),(1.56,20.98). Area 1337.9 m2. Tiled with exact convex pieces
+# (flat_poly_slab is fan-triangulated, convex only) — no grid teeth around
+# the G1 pit or the platform. G1 quad: (7.21,13.77),(2.43,2.21),(15.08,-0.46),(15.08,12.04).
+# Platform block (north band, X -1..29.44, Y -7..-3.29) is a solid 0.9 m block.
+G1_POLY = [(7.21, 13.77), (2.43, 2.21), (15.08, -0.46), (15.08, 12.04)]
+_B1_FLOORS = [
+    ("SM_Basement_Floor_N1", [(0.015, -3.29), (48.56, -3.29), (48.56, -0.46), (0.015, -0.46)]),
+    ("SM_Basement_Floor_N2", [(29.44, -7), (48.56, -7), (48.56, -3.29), (29.44, -3.29)]),
+    ("SM_Basement_Floor_E1", [(15.08, -0.46), (48.56, -0.46), (48.56, 17.24), (15.08, 17.24)]),
+    ("SM_Basement_Floor_W1", [(0.015, -0.46), (2.43, -0.46), (2.43, 17.24), (0.015, 17.24)]),
+    ("SM_Basement_Floor_M1", [(2.43, -0.46), (15.08, -0.46), (2.43, 2.21)]),
+    ("SM_Basement_Floor_M2", [(2.43, 2.21), (7.21, 13.77), (2.43, 13.77)]),
+    ("SM_Basement_Floor_M3", [(7.21, 13.77), (15.08, 12.04), (15.08, 17.24), (7.21, 17.24)]),
+    ("SM_Basement_Floor_M4", [(2.43, 13.77), (7.21, 13.77), (7.21, 17.24), (2.43, 17.24)]),
+    ("SM_Basement_Floor_Q2S", [(-8.47, -3.29), (0.015, -3.29), (0.015, 17.24)]),
+    ("SM_Basement_Floor_Q2N", [(-10, -7), (-1, -7), (-1, -3.29), (-8.47, -3.29)]),
+    ("SM_Basement_Floor_Q3", [(0.015, 17.24), (5.35, 17.24), (1.56, 20.98)]),
+    ("SM_Basement_Floor_Q4", [(29.44, -8.56), (48.56, -8.56), (48.56, -7), (29.44, -7)]),
+]
+for _fn, _fp in _B1_FLOORS:
+    flat_poly_slab(_fn, _fp, G2F, 0.2, MAT_FLOOR_CONCRETE, COL_INTER)
+# G1 floor (0.45 below G2 = 3 steps x 0.15, within the 0.2-0.75 range).
+flat_poly_slab("SM_G1_Floor", G1_POLY, G1F, 0.2, MAT_FLOOR_CONCRETE, COL_INTER)
+# Upper platform: solid 0.9 m block, top -5.85 (west rect + north strip + landing).
+flat_poly_slab("SM_Platform_West", [(-1, -7), (15.63, -7), (15.63, -3.29), (-1, -3.29)],
+               PLAT, 0.9, MAT_FLOOR_CONCRETE, COL_INTER)
+flat_poly_slab("SM_Platform_NorthStrip", [(15.63, -7), (27.26, -7), (27.26, -6.16), (15.63, -6.16)],
+               PLAT, 0.9, MAT_FLOOR_CONCRETE, COL_INTER)
+flat_poly_slab("SM_Platform_Landing", [(27.26, -6.16), (29.44, -6.16), (29.44, -5.39), (27.26, -5.39)],
+               PLAT, 0.9, MAT_FLOOR_CONCRETE, COL_INTER)
+
+# Ground-floor slab over the museum footprint (top z=0.02; court + void + stair
+# skipped at construction) + cafe slab (same construction).
+ground_slab = footprint_grid_slab("SM_Ground_Slab", FOOT, 0.02, 0.3, MAT_CONCRETE, COL_INTER,
+                                  skip_fn=_in_void)
+CAFE_FOOT = [(-34, -6), (-12, -6), (-10, 0), (-34, 6)]
+cafe_slab = footprint_grid_slab("SM_Cafe_Slab", CAFE_FOOT, 0.02, 0.3, MAT_CONCRETE, COL_INTER)
+
+# ---- B1 perimeter walls (Z -6.75..-0.10, tops below lawn -0.05) ----
+# North wall is built in the museum-wing section (with the long window).
+wall_varying("SM_Basement_Wall_South", (48.56, 17.24), (5.35, 17.24), -6.75, -0.10, -6.75, -0.10,
+             MAT_WHITE, COL_INTER, thick=0.35)
+wall_varying("SM_Basement_Wall_SW", (5.35, 17.24), (1.56, 20.98), -6.75, -0.10, -6.75, -0.10,
+             MAT_WHITE, COL_INTER, thick=0.35)
+wall_varying("SM_Basement_Wall_West", (1.56, 20.98), (-10, -7), -6.75, -0.10, -6.75, -0.10,
+             MAT_CONCRETE, COL_INTER, thick=0.35)
+wall_varying("SM_Basement_Wall_East", (48.56, -8.56), (48.56, 17.24), -6.75, -0.10, -6.75, -0.10,
+             MAT_WHITE, COL_INTER, thick=0.35)
+
+# ---- G2 north thick wall (solid concrete, X 18.03..41.87, Y 2.33..3.25, Z -6.75..-0.10) ----
+# Box stops at X=39.5: the doorway gap X 39.5..41.87 = G2 exit to the Z corridor.
+# Top at -0.10 (below the lawn plane at 0, so no Z-fight with the site ground).
+box("SM_G2_ThickWall", (28.77, 2.79, -3.425), (21.47, 0.92, 6.65), MAT_CONCRETE_BOARD, COL_INTER)
+# Tie-hole grid on the thick wall's north (court) face (P-con 450x600).
+tie_holes("SM_ThickWall_TieHole", 'y', 2.33, (18.5, 41.5), (-6.2, -2.6))
+# Tie-hole grid on the basement north wall face (Y=-6.83), above the stair.
+tie_holes("SM_NorthWall_TieHole", 'y', -6.83, (16.2, 26.55), (-4.2, -0.6))  # 24 cols x 7 rows = 168
+
+# ---- G2 ceiling (flat white gypsum, -1.95; net height 4.8) + skylight + fluorescents ----
+box("SM_G2_Ceiling_N", (31.82, 4.225, -1.95), (33.48, 1.95, 0.06), MAT_CEILING_GYPSUM, COL_INTER)
+box("SM_G2_Ceiling_S", (31.82, 11.57, -1.95), (33.48, 11.34, 0.06), MAT_CEILING_GYPSUM, COL_INTER)
+# Skylight slot (emissive) in the 0.70 m gap (Y 5.2..5.9), recessed at z=-1.67.
+box("SM_G2_Skylight_Slot", (31.82, 5.55, -1.67), (33.48, 0.70, 0.10), MAT_SKYLIGHT, COL_INTER)
+# Linear fluorescents (4 rows, just below the ceiling).
+for _ri, _ry in enumerate([6.5, 9.5, 12.5, 15.5]):
+    box(f"SM_G2_Fluorescent_{_ri}", (32, _ry, -2.02), (30.0, 0.12, 0.06), MAT_SKYLIGHT, COL_INTER)
+# East door (dark opening, far east wall).
+box("SM_G2_East_Door", (48.4, 5.0, -5.55), (0.3, 1.2, 2.4), MAT_DARK_DOOR, COL_INTER)
+
+# ---- G2 columns (one row of 6, Y=5.55, 0.55 sq, height 4.8) + tie holes ----
+for i, cx in enumerate([19.09, 23.25, 27.39, 31.52, 35.68, 39.84]):
+    box(f"SM_G2_Column_{i}", (cx, 5.55, -4.35), (0.55, 0.55, 4.8), MAT_CONCRETE_BOARD, COL_INTER)
+    tie_holes(f"SM_G2_Column_TieHole_{i}", 'y', 5.83, (cx, cx), (-6.2, -2.6))
+
+# ---- G1 walls (white, Z -7.20..-2.20) ----
+# West wall (A-B edge) with a doorway gap at Y 3.45..5.55 (3 steps down from lobby).
+wall_varying("SM_G1_Wall_West_A", (2.43, 2.21), (2.94, 3.45), -7.20, -2.20, -7.20, -2.20,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_G1_Wall_West_B", (3.81, 5.55), (7.21, 13.77), -7.20, -2.20, -7.20, -2.20,
+             MAT_WHITE, COL_INTER, thick=0.2)
+# Diagonal (north) wall B-C with the 1800x1800 square window (centre Z -4.5, t=0.25).
+# Below-window band + above-window band (full length) + side pieces at window height.
+wall_varying("SM_G1_Wall_Diag_Below", (2.43, 2.21), (15.08, -0.46), -7.20, -5.40, -7.20, -5.40,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_G1_Wall_Diag_Above", (2.43, 2.21), (15.08, -0.46), -3.60, -2.20, -3.60, -2.20,
+             MAT_WHITE, COL_INTER, thick=0.2)
+_G1D = (0.978, -0.207)  # B->C direction (unit)
+_G1N = (0.207, 0.978)   # inward normal (into G1)
+def _g1_wall_pt(t):
+    return (2.43 + 12.65 * t, 2.21 - 2.67 * t)
+_w0 = _g1_wall_pt(0.0); _w1 = _g1_wall_pt(0.18); _w2 = _g1_wall_pt(0.32); _w3 = _g1_wall_pt(1.0)
+wall_varying("SM_G1_Wall_Diag_Side_W", _w0, _w1, -5.40, -3.60, -5.40, -3.60,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_G1_Wall_Diag_Side_E", _w2, _w3, -5.40, -3.60, -5.40, -3.60,
+             MAT_WHITE, COL_INTER, thick=0.2)
+# Square window glass in the opening (1.8 x 1.8, centre t=0.25, Z -4.5).
+_wc = _g1_wall_pt(0.25)
+box("SM_G1_SquareWindow_Glass", (_wc[0], _wc[1], -4.5), (1.8, 0.06, 1.8), MAT_GLASS, COL_INTER,
+    rot=(0, 0, math.radians(-11.9)))
+# East wall (X=15.08) with the G1->G2 doorway gap at Y 5..8 (noren, exhibit 09).
+wall_varying("SM_G1_Wall_East_A", (15.08, -0.46), (15.08, 5.0), -7.20, -2.20, -7.20, -2.20,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_G1_Wall_East_B", (15.08, 8.0), (15.08, 12.04), -7.20, -2.20, -7.20, -2.20,
+             MAT_WHITE, COL_INTER, thick=0.2)
+# South wall (D-A edge).
+wall_varying("SM_G1_Wall_South", (15.08, 12.04), (7.21, 13.77), -7.20, -2.20, -7.20, -2.20,
+             MAT_WHITE, COL_INTER, thick=0.2)
+# G1 ceiling: flat white at -2.2; far edge offset 0.8 m inward from the B-C wall
+# so the skylight band stays open. (C' clamped to X=15.08 so the ceiling does
+# not overhang the east wall.)
+flat_poly_slab("SM_G1_Ceiling", [(7.21, 13.77), (2.60, 2.99), (15.08, 0.32), (15.08, 12.04)],
+               -2.20, 0.05, MAT_CEILING_GYPSUM, COL_INTER)
+# G1 skylight: 6 emissive panels leaning from the wall top (-2.2) up-inward to -1.1.
+# Panels 1.4 m long along the wall, 1.52 m apart (no overlap / Z-fight).
+for _pi, _t in enumerate([0.08, 0.20, 0.32, 0.44, 0.56, 0.68]):
+    _cx, _cy = _g1_wall_pt(_t)
+    _b1 = (_cx - 0.7 * _G1D[0], _cy - 0.7 * _G1D[1], -2.2)
+    _b2 = (_cx + 0.7 * _G1D[0], _cy + 0.7 * _G1D[1], -2.2)
+    _t2 = (_b2[0] + 0.7 * _G1N[0], _b2[1] + 0.7 * _G1N[1], -1.1)
+    _t1 = (_b1[0] + 0.7 * _G1N[0], _b1[1] + 0.7 * _G1N[1], -1.1)
+    mesh_from_pydata(f"SM_G1_Skylight_{_pi}", [_b1, _b2, _t2, _t1],
+                     [(0, 3, 2, 1)], MAT_SKYLIGHT, COL_INTER)
+# G1 linear fluorescents (2 rows, just below the ceiling).
+for _fi, _fy in enumerate([4.0, 8.0]):
+    box(f"SM_G1_Fluorescent_{_fi}", (9, _fy, -2.28), (10.0, 0.12, 0.06), MAT_SKYLIGHT, COL_INTER)
+# G1 side walls: dark vertical slat panel (south wall, upper) + white door (west wall).
+# Both offset 0.13 m inward from the wall centreline so they sit proud of the
+# 0.2-thick wall's inner face instead of being buried in it.
+_MAT_G1_SLAT = mat_principled("MAT_G1_Slat", (0.12, 0.12, 0.12), rough=0.9)
+box("SM_G1_Slat_South", (11.12, 12.77, -2.8), (8.0, 0.06, 1.2), _MAT_G1_SLAT, COL_INTER,
+    rot=(0, 0, math.radians(167.6)))
+box("SM_G1_Door_West", (5.63, 9.61, -6.15), (0.9, 0.06, 2.1), MAT_WHITE, COL_INTER,
+    rot=(0, 0, math.radians(67.5)))
+
+# ---- Sunken court (triangle (18.72,2.33),(39.39,-6.33),(35.8,2.33), area 74 m2) ----
+# South edge is the G2 thick wall. Diagonal glass wall A-B (tall, to the roof)
+# with a 1.2 m doorway gap near the west end; east glass wall B-C.
+# Mullions: solid steel 235x69 mm, dense (~0.8 m), from the pit floor (-6.75)
+# to the roof plate underside (roof_z_at - 0.02); tallest ~11.68 m at B (#17).
+_COURT_A = (18.72, 2.33); _COURT_B = (39.39, -6.33); _COURT_C = (35.8, 2.33)
+def _court_roof_z(x, y):
+    return roof_z_at(x, y) - 0.02
+# Diagonal glass: two segments around the doorway gap (2.5..3.7 m from A along A-B).
+_diag_d = (0.922, -0.387)
+_gap0 = (_COURT_A[0] + 2.5 * _diag_d[0], _COURT_A[1] + 2.5 * _diag_d[1])
+_gap1 = (_COURT_A[0] + 3.7 * _diag_d[0], _COURT_A[1] + 3.7 * _diag_d[1])
+wall_varying("SM_Court_Glass_Diag_A", _COURT_A, _gap0, -6.75, _court_roof_z(*_COURT_A),
+             -6.75, _court_roof_z(*_gap0), MAT_GLASS, COL_INTER, thick=0.12)
+wall_varying("SM_Court_Glass_Diag_B", _gap1, _COURT_B, -6.75, _court_roof_z(*_gap1),
+             -6.75, _court_roof_z(*_COURT_B), MAT_GLASS, COL_INTER, thick=0.12)
+wall_varying("SM_Court_Glass_East", _COURT_B, _COURT_C, -6.75, _court_roof_z(*_COURT_B),
+             -6.75, _court_roof_z(*_COURT_C), MAT_GLASS, COL_INTER, thick=0.12)
+# Steel mullions along the diagonal (skip the doorway gap) and the east edge.
+# Corner posts at A, B and C so the tallest mullion is exactly at B (11.68 m).
+_diag_len = 22.41
+_diag_ang = math.radians(-22.76)
+_mi = 0
+_s = 0.4
+while _s < _diag_len:
+    if not (2.5 <= _s <= 3.7):
+        _mx = _COURT_A[0] + _s * _diag_d[0]
+        _my = _COURT_A[1] + _s * _diag_d[1]
+        _top = _court_roof_z(_mx, _my)
+        box(f"SM_Court_Mullion_D{_mi:02d}", (_mx, _my, (G2F + _top) / 2),
+            (0.069, 0.235, _top - G2F), MAT_BLACK, COL_INTER, rot=(0, 0, _diag_ang))
+        _mi += 1
+    _s += 0.8
+for _cs, _cang in [(0.0, _diag_ang), (_diag_len, _diag_ang)]:
+    _mx = _COURT_A[0] + _cs * _diag_d[0]
+    _my = _COURT_A[1] + _cs * _diag_d[1]
+    _top = _court_roof_z(_mx, _my)
+    box(f"SM_Court_Mullion_D{_mi:02d}", (_mx, _my, (G2F + _top) / 2),
+        (0.069, 0.235, _top - G2F), MAT_BLACK, COL_INTER, rot=(0, 0, _cang))
+    _mi += 1
+_east_d = (-0.383, 0.924)  # B->C direction (unit), length 9.38
+_east_ang = math.radians(112.4)
+_s = 0.4
+while _s < 9.38:
+    _mx = _COURT_B[0] + _s * _east_d[0]
+    _my = _COURT_B[1] + _s * _east_d[1]
+    _top = _court_roof_z(_mx, _my)
+    box(f"SM_Court_Mullion_E{_mi:02d}", (_mx, _my, (G2F + _top) / 2),
+        (0.069, 0.235, _top - G2F), MAT_BLACK, COL_INTER, rot=(0, 0, _east_ang))
+    _mi += 1
+    _s += 0.8
+# Corner post at C (east edge end).
+_mx = _COURT_C[0]; _my = _COURT_C[1]
+_top = _court_roof_z(_mx, _my)
+box(f"SM_Court_Mullion_E{_mi:02d}", (_mx, _my, (G2F + _top) / 2),
+    (0.069, 0.235, _top - G2F), MAT_BLACK, COL_INTER, rot=(0, 0, _east_ang))
+_mi += 1
+# Court floor planting + tree on the pit floor (centroid (31.3,-0.56)).
+box("SM_Court_Planter", (31.3, -0.56, -6.65), (6.0, 3.5, 0.2), MAT_GRASS, COL_INTER)
+cedar(31.3, -0.56, h=3.8, r=0.9, z0=-6.75)
+
+# ---- Main stair (D2): 39 steps, riser 0.15 / tread 0.30, west->east GL 0 -> -5.85 ----
+# Flight X 15.63..27.33, 1.9 m wide (Y -5.8..-3.9); north concrete wall + steel
+# handrail, south glass balustrade (heights differ: handrail 1.0, balustrade 1.1).
+NSTEPS = 39
+_STAIR_X0, _STAIR_TREAD, _STAIR_RISER = 15.63, 0.30, 0.15
+for i in range(NSTEPS):
+    sx = _STAIR_X0 + i * _STAIR_TREAD + _STAIR_TREAD / 2.0
+    sz = -i * _STAIR_RISER - _STAIR_RISER / 2.0
+    box(f"SM_Stair_Step_{i:02d}", (sx, -4.85, sz), (_STAIR_TREAD, 1.9, _STAIR_RISER), MAT_CONCRETE_BOARD, COL_INTER)
+# Sloped soffit slab under the steps (top flush with the step blocks' undersides:
+# nosing line - 0.15, centre 0.075 below that, 0.15 thick).
+_soff_len = math.hypot(NSTEPS * _STAIR_TREAD, NSTEPS * _STAIR_RISER)
+_soff_ang = math.atan2(NSTEPS * _STAIR_RISER, NSTEPS * _STAIR_TREAD)
+box("SM_Stair_Soffit", (_STAIR_X0 + NSTEPS * _STAIR_TREAD / 2.0, -4.85, -3.15),
+    (_soff_len, 1.9, 0.15), MAT_CONCRETE_BOARD, COL_INTER, rot=(0, _soff_ang, 0))
+# North concrete wall (parapet, top = nosing line + 1.0 m) + steel handrail on top.
+# Full height down to the B1 floor (-6.75); 0.4 thick so it embeds into the
+# platform's north strip edge (no floating bottom over the stair well).
+wall_varying("SM_Stair_Wall_North", (15.63, -6.0), (27.33, -6.0), -6.75, 1.0, -6.75, -4.85,
+             MAT_CONCRETE_BOARD, COL_INTER, thick=0.4)
+box("SM_Stair_Handrail", (21.48, -6.0, -1.83),
+    (_soff_len, 0.05, 0.05), MAT_BLACK, COL_INTER, rot=(0, _soff_ang, 0))
+# South glass balustrade (top 1.1 m above the nosings, bottom 0.3 below).
+wall_varying("SM_Stair_Balustrade", (15.63, -3.9), (27.33, -3.9), -0.3, 1.1, -6.15, -4.75,
+             MAT_GLASS, COL_INTER, thick=0.08)
+# Wide steps: 6 steps from the platform (-5.85) down to the lobby (-6.75),
+# X 9.68..12.04, descending southward (Y -3.29..-1.49). Solid blocks to the lobby floor.
+for _wi in range(6):
+    _wz = PLAT - _wi * 0.15
+    box(f"SM_WideStep_{_wi}", (10.86, -3.29 - (_wi + 0.5) * 0.30, (_wz + G2F) / 2),
+        (2.36, 0.30, _wz - G2F), MAT_CONCRETE_BOARD, COL_INTER)
+# G1 steps: 3 steps from the lobby (-6.75) down into G1 (-7.20),
+# X 2.0..2.9, Y 3.45..5.55, descending eastward. Solid blocks to the G1 floor.
+for _gi in range(3):
+    _gz = G2F - _gi * 0.15
+    box(f"SM_G1Step_{_gi}", (2.0 + (_gi + 0.5) * 0.30, 4.5, (_gz + G1F) / 2),
+        (0.30, 2.10, _gz - G1F), MAT_CONCRETE_BOARD, COL_INTER)
+
+# ---- Trapezoidal elevator shaft (Japan's only trapezoidal elevator) ----
+# Plan (model): (-0.72,-3.68),(-1.51,-5.46),(-0.1,-5.79),(0.4,-4.6) — the platform's
+# NW corner. Concrete shaft Z -6.75..2.4 (a lift core in the ground lobby);
+# dark steel doors on the east face at platform level and ground level; car inside.
+_ELEV_PLAN = [(-0.72, -3.68), (-1.51, -5.46), (-0.1, -5.79), (0.4, -4.6)]
+_elev_v = [(x, y, -6.75) for (x, y) in _ELEV_PLAN] + [(x, y, 2.4) for (x, y) in _ELEV_PLAN]
+# Winding outward (plan is CCW in XY): bottom reversed, sides bottom->bottom->top->top.
+_elev_f = [(3, 2, 1, 0), (7, 6, 5, 4), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
+mesh_from_pydata("SM_Elevator_Shaft", _elev_v, _elev_f, MAT_CONCRETE, COL_INTER)
+# East face: edge P2(-0.1,-5.79)->P3(0.4,-4.6), midpoint (0.15,-5.2), direction 67.3 deg;
+# doors sit 0.05 proud of the face, wide along it.
+box("SM_Elevator_Door", (0.20, -5.22, 1.2), (1.2, 0.08, 2.4), MAT_STEEL_DARK, COL_INTER,
+    rot=(0, 0, math.radians(67.3)))
+box("SM_Elevator_Door_Basement", (0.20, -5.22, -4.65), (1.2, 0.08, 2.4), MAT_STEEL_DARK, COL_INTER,
+    rot=(0, 0, math.radians(67.3)))
+box("SM_Elevator_Car", (0.0, -4.7, -4.7), (1.2, 1.0, 2.2), MAT_STEEL_DARK, COL_INTER)
+
+# ---- BOH (south-west back of house: office + storage), walls Z -6.75..-0.10 ----
+# Polygon (model): (-0.84,14.99),(-4.11,7.16),(0.23,5.43),(2.38,10.63),(3.3,10.21),(3.44,13.23).
+# Doorway gap (1.0 m) in the north edge (P1->P2).
+_BOH = [(-0.84, 14.99), (-4.11, 7.16), (0.23, 5.43), (2.38, 10.63), (3.3, 10.21), (3.44, 13.23)]
+wall_varying("SM_BOH_Wall_0", _BOH[5], _BOH[0], -6.75, -0.10, -6.75, -0.10,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_BOH_Wall_1a", _BOH[1], (-2.44, 6.49), -6.75, -0.10, -6.75, -0.10,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_BOH_Wall_1b", (-1.51, 6.12), _BOH[2], -6.75, -0.10, -6.75, -0.10,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_BOH_Wall_2", _BOH[2], _BOH[3], -6.75, -0.10, -6.75, -0.10,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_BOH_Wall_3", _BOH[3], _BOH[4], -6.75, -0.10, -6.75, -0.10,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_BOH_Wall_4", _BOH[4], _BOH[5], -6.75, -0.10, -6.75, -0.10,
+             MAT_WHITE, COL_INTER, thick=0.2)
+
+# ---- Z corridor (G2 exit -> court), X 36..44, Y -1..3, flat ceiling -1.95 ----
+# Zigzag: baffle wall at X=40.5 (Y -1..1.5) forces the fold; doorway gap in the
+# thick wall (X 39.5..41.87) is the G2 exit. 20 mm chamfers at the two sharp
+# outer corners are below modelling resolution — noted, not modelled.
+wall_varying("SM_ZCorr_Wall_West", (36, -1), (36, 3), -6.75, -1.95, -6.75, -1.95,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_ZCorr_Wall_North", (36, -1), (44, -1), -6.75, -1.95, -6.75, -1.95,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_ZCorr_Wall_East", (44, -1), (44, 3), -6.75, -1.95, -6.75, -1.95,
+             MAT_WHITE, COL_INTER, thick=0.2)
+# South side: the thick wall itself is the south boundary for X 36..39.5;
+# X 39.5..41.87 is the G2-exit doorway gap; only the east segment is built.
+wall_varying("SM_ZCorr_Wall_South_E", (41.87, 3), (44, 3), -6.75, -1.95, -6.75, -1.95,
+             MAT_WHITE, COL_INTER, thick=0.2)
+wall_varying("SM_ZCorr_Baffle", (40.5, -1), (40.5, 1.5), -6.75, -1.95, -6.75, -1.95,
+             MAT_WHITE, COL_INTER, thick=0.2)
+flat_poly_slab("SM_ZCorr_Ceiling", [(36, -1), (44, -1), (44, 3), (36, 3)],
+               -1.95, 0.06, MAT_CEILING_GYPSUM, COL_INTER)
+
+# ---- Atrium furnishings (lower lobby, floor -6.75) ----
+# Curved bookshelf: arc centred (8,7) r=2.8, angles 235..285 deg.
 _book_rng = random.Random(7)
 for _si, _ang in enumerate([235, 247.5, 260, 272.5, 285]):
     _a = math.radians(_ang)
-    _cx = 4.5 + 3.2 * math.cos(_a)
-    _cy = -1.0 + 3.2 * math.sin(_a)
+    _cx = 8 + 2.8 * math.cos(_a)
+    _cy = 7 + 2.8 * math.sin(_a)
     _rot = _a + math.pi / 2.0
-    box(f"SM_Atrium_Shelf_Base_{_si}", (_cx, _cy, -4.74), (0.95, 0.35, 0.12), MAT_WOOD_SHELF, COL_INTER, rot=(0, 0, _rot))
-    for _li, _lz in enumerate([-4.45, -3.98]):
+    box(f"SM_Atrium_Shelf_Base_{_si}", (_cx, _cy, G2F + 0.06), (0.95, 0.35, 0.12), MAT_WOOD_SHELF, COL_INTER, rot=(0, 0, _rot))
+    for _li, _lz in enumerate([G2F + 0.35, G2F + 0.82]):
         box(f"SM_Atrium_Shelf_Board_{_si}_{_li}", (_cx, _cy, _lz), (0.95, 0.35, 0.05), MAT_WOOD_SHELF, COL_INTER, rot=(0, 0, _rot))
         for _bi in range(3):
             _s = -0.28 + _bi * 0.28
@@ -1740,190 +1867,104 @@ for _si, _ang in enumerate([235, 247.5, 260, 272.5, 285]):
             _bm = MAT_BOOKS[_book_rng.randrange(len(MAT_BOOKS))]
             box(f"SM_Atrium_Shelf_Book_{_si}_{_li}_{_bi}", (_bx, _by, _lz + 0.025 + _bh / 2),
                 (0.16, 0.22, _bh), _bm, COL_INTER, rot=(0, 0, _rot + _book_rng.uniform(-0.06, 0.06)))
-# v16: wooden benches by the floor-to-ceiling east glass (visitor photo:
-# "three men seated on wooden benches by floor-to-ceiling windows").
-# Replaces the v11/v15 round stools at the north wall. Simple: light-wood
-# seat slab + two light-wood slab legs, 2.0 m long, 0.45 m seat height.
-def _wood_bench(_name, _x, _y):
-    box(f"{_name}_Seat", (_x, _y, -4.8 + 0.42), (0.55, 2.0, 0.07), MAT_WOOD_LIGHT, COL_INTER)
-    for _ly in (_y - 0.85, _y + 0.85):
-        box(f"{_name}_Leg_{_ly}", (_x, _ly, -4.8 + 0.20), (0.5, 0.06, 0.40), MAT_WOOD_LIGHT, COL_INTER)
-for _bi, (_bx, _by) in enumerate([(7.2, 0.5), (7.2, 3.0)]):
+# Wooden benches by the south glass.
+for _bi, (_bx, _by) in enumerate([(12, 0.5), (12, 3.0)]):
     _wood_bench(f"SM_Atrium_Bench_{_bi}", _bx, _by)
-for _ti, (_tx, _ty) in enumerate([(2.0, -5.5), (6.0, -5.5)]):
-    bpy.ops.mesh.primitive_cylinder_add(radius=0.35, depth=0.05, location=(_tx, _ty, -4.8 + 0.55))
+# Round tables (exhibit 12 sits on the (6,4) table).
+for _ti, (_tx, _ty) in enumerate([(6.0, 4.0), (10.0, 3.0)]):
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.35, depth=0.05, location=(_tx, _ty, G2F + 0.55))
     _t = bpy.context.active_object
     _t.name = f"SM_Atrium_Table_{_ti}_Top"
     set_mat(_t, MAT_WOOD_LIGHT); link(_t, COL_INTER)
-    bpy.ops.mesh.primitive_cylinder_add(radius=0.04, depth=0.52, location=(_tx, _ty, -4.8 + 0.28))
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.04, depth=0.52, location=(_tx, _ty, G2F + 0.28))
     _tl = bpy.context.active_object
     _tl.name = f"SM_Atrium_Table_{_ti}_Leg"
     set_mat(_tl, MAT_BLACK); link(_tl, COL_INTER)
-    bpy.ops.mesh.primitive_cylinder_add(radius=0.22, depth=0.04, location=(_tx, _ty, -4.8 + 0.02))
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.22, depth=0.04, location=(_tx, _ty, G2F + 0.02))
     _tb = bpy.context.active_object
     _tb.name = f"SM_Atrium_Table_{_ti}_Base"
     set_mat(_tb, MAT_BLACK); link(_tb, COL_INTER)
-# Long narrow slit window high on the atrium north wall (v15: was at z=-0.8,
-# below ground — the visitor photos show it above the stair / high on the
-# entrance-hall wall, with greenery visible through it).
-box("SM_Atrium_SlitWindow", (4, -6.80, 2.2), (6.0, 0.06, 0.30), MAT_SLIT, COL_INTER)
-# Warm recessed-look light strip under the sloped atrium soffit (tilted to follow it)
-box("SM_Atrium_WarmStrip", (4, 0, 6.28), (5.0, 0.25, 0.06), MAT_WARM_STRIP, COL_INTER, rot=(0, 0.122, 0))
+# Warm recessed-look light strip under the sloped atrium soffit (tilted to follow it).
+_warm_z = _atrium_soffit_z(4, 0) - 0.05
+box("SM_Atrium_WarmStrip", (4, 0, _warm_z), (5.0, 0.25, 0.06), MAT_WARM_STRIP, COL_INTER,
+    rot=(math.radians(-11.4), 0, 0))
 
-# ---- Ground floor: entrance hall (reception + shop) ----
-# v15: Gallery 3 is NOT here — it is the west (cafe) wing (see the cafe
-# section below). The museum ground floor is the entrance hall: reception
-# and shop either side of the route to the stair. The old reception desk
-# stood at (2,-2), floating over the atrium void (no slab under it); it now
-# sits on solid slab on the hall's south strip.
-box("SM_Reception_Desk", (0.5, 5.8, 0.55), (3.2, 1.0, 1.1), MAT_WHITE, COL_INTER)
-box("SM_Reception_Desk_Top", (0.5, 5.8, 1.12), (3.3, 1.1, 0.06), MAT_WOOD, COL_INTER)
-box("SM_Shop_Counter", (4, 5.5, 0.5), (3.0, 0.9, 1.0), MAT_WOOD, COL_INTER)
-# v15: entrance-hall columns — a row of square concrete columns just inside
-# the south glass, ceiling sloping down over them (visitor photo). Heights
+# ---- Ground floor: entrance hall (reception + shop, new west lobby) ----
+box("SM_Reception_Desk", (-4, -2, 0.55), (3.2, 1.0, 1.1), MAT_WHITE, COL_INTER)
+box("SM_Reception_Desk_Top", (-4, -2, 1.12), (3.3, 1.1, 0.06), MAT_WOOD, COL_INTER)
+box("SM_Shop_Counter", (-1, 1, 0.5), (3.0, 0.9, 1.0), MAT_WOOD, COL_INTER)
+# Entrance-hall columns — square concrete just inside the south glass, heights
 # follow the roof profile at each column.
-for _cx, _cy in [(10, 5.0), (16, 4.2), (22, 3.4)]:
+for _cx, _cy in [(0, 1.2), (12, 1.2), (24, 1.2), (34, 1.2)]:
     _ch = max(2.5, roof_z_at(_cx, _cy) - 0.10)
     box(f"SM_Hall_Column_{_cx}", (_cx, _cy, _ch / 2.0), (0.45, 0.45, _ch), MAT_CONCRETE_BOARD, COL_INTER)
 
-# Gallery 1 skylight (v15): the real G1 feature is a row of sloped translucent
-# panels at the top of the far (diagonal) wall, washing it with indirect
-# light from above (ref_gallery1.jpg) — not flat strips on the ceiling.
-# 6 panels leaning 35 deg back from the wall top (z -1.2) up into the room
-# (z -0.1); emissive, so they read as daylight slots.
-# v15r5: the panels MUST sit on the diagonal wall's ACTUAL southwest face —
-# the wall wedge SM_Museum_Wall_NorthEast runs (22.06,-7.16)->(42.06,0.84),
-# NOT the (22,-7)->(46,-1) polygon diagonal the panels first used, so they
-# ended up 0.9 m north of the wall face, hidden inside the building (every
-# probe ray to a panel centre hit the wall). Panels now follow the wall face.
-_G1_WALL_A = (22.06, -7.16)   # wall face, west end
-_G1_WALL_B = (42.06, 0.84)    # wall face, east end
-_G1_WALL_D = (0.928, 0.371)   # wall face direction (unit)
-_G1_WALL_N = (-0.371, 0.928)  # inward normal (into G1)
-# v16 P2: G1 is the WEST trapezoid; its far wall is the diagonal segment
-# (22,-7)->(37,-1) (16.7 m). 6 panels spread along it (t=0.08..0.68).
-for _pi, _t in enumerate([0.08, 0.20, 0.32, 0.44, 0.56, 0.68]):
-    _cx, _cy = _G1_WALL_A[0] + 20.0 * _t, _G1_WALL_A[1] + 8.0 * _t
-    _b1 = (_cx - 1.1 * _G1_WALL_D[0], _cy - 1.1 * _G1_WALL_D[1], -1.2)
-    _b2 = (_cx + 1.1 * _G1_WALL_D[0], _cy + 1.1 * _G1_WALL_D[1], -1.2)
-    _t2 = (_b2[0] + 0.7 * _G1_WALL_N[0], _b2[1] + 0.7 * _G1_WALL_N[1], -0.1)
-    _t1 = (_b1[0] + 0.7 * _G1_WALL_N[0], _b1[1] + 0.7 * _G1_WALL_N[1], -0.1)
-    mesh_from_pydata(f"SM_G1_Skylight_{_pi}", [_b1, _b2, _t2, _t1],
-                     [(0, 3, 2, 1)], MAT_SKYLIGHT, COL_INTER)
-# G1 white ceiling (ref_gallery1.jpg: flat white, not bare concrete slab).
-# v16 P2 item 9: rebuilt to follow the diagonal wall exactly — the old
-# polygon's far edge was 2.61 m inside the wall. The new far edge is
-# parallel to the wall line, offset 0.8 m inward, so the skylight band
-# stays open (panels cross z=-0.15 at 0.668 m inward; 0.8 m clears them
-# by 0.13 m) and no part of the ceiling sits inside the wall.
-flat_poly_slab("SM_G1_Ceiling", [(8, -7), (19.85, -7), (34.86, -1), (8, -1)],
-               -0.15, 0.05, MAT_WHITE, COL_INTER)
-# G1 linear fluorescents: 2 long parallel tube rows on the white ceiling.
-for _fi, _fy in enumerate([-3.5, -5.2]):
-    box(f"SM_G1_Fluorescent_{_fi}", (22, _fy, -0.22), (20.0, 0.12, 0.06), MAT_SKYLIGHT, COL_INTER)
-# G1 small dark square window in the far wall, LEFT side (ref_gallery1.jpg).
-# v16 P2 item 13: moved to the left (north/west) end of the far wall —
-# along-wall 2.0 m from the wall's west end (photo: ~6% of the far wall's
-# width from the left corner), mid-height, flush with the lining face.
-# v16: moved onto the white lining face (was at (30.3,-4.7): 0.78 m on the
-# far side of the museum-wall face, embedded behind the white basement wall
-# and invisible from G1). Now flush with the lining, wall angle 21.79 deg.
-box("SM_G1_SquareWindow", (23.76, -6.02, -2.4), (1.0, 0.06, 1.0), MAT_BLACK, COL_INTER,
-    rot=(0, 0, math.radians(21.79)))
+# ---- Atrium soffit: white gypsum following the roof 0.65 m below it, over the
+# FOOT trapezoid minus the court / void / stair openings (1.0 m grid). ----
+_soff_v, _soff_f, _soff_idx = [], [], {}
+_soff_xs = [-10.0 + 1.0 * i for i in range(55)]
+_soff_ys = [-7.0 + 1.0 * i for i in range(11)]
+for _xi, _x in enumerate(_soff_xs):
+    for _yi, _y in enumerate(_soff_ys):
+        _soff_idx[(_xi, _yi)] = len(_soff_v)
+        _soff_v.append((_x, _y, _atrium_soffit_z(_x, _y)))
+for _xi in range(len(_soff_xs) - 1):
+    for _yi in range(len(_soff_ys) - 1):
+        _a = _soff_idx[(_xi, _yi)]; _b = _soff_idx[(_xi + 1, _yi)]
+        _c = _soff_idx[(_xi + 1, _yi + 1)]; _d = _soff_idx[(_xi, _yi + 1)]
+        _cx = (_soff_v[_a][0] + _soff_v[_b][0] + _soff_v[_c][0] + _soff_v[_d][0]) / 4.0
+        _cy = (_soff_v[_a][1] + _soff_v[_b][1] + _soff_v[_c][1] + _soff_v[_d][1]) / 4.0
+        if not (_point_in_tri(_cx, _cy, (FOOT[0], FOOT[1], FOOT[2])) or
+                _point_in_tri(_cx, _cy, (FOOT[0], FOOT[2], FOOT[3]))):
+            continue
+        if _in_void(_cx, _cy):
+            continue
+        _soff_f.append((_a, _b, _c, _d))
+_soff_o = mesh_from_pydata("SM_Atrium_Soffit", _soff_v, _soff_f, MAT_CEILING_GYPSUM, COL_INTER)
+solidify(_soff_o, 0.08)
 
 # ---- #21A A3: ceiling access panels + sprinkler heads (white gypsum ceilings) ----
-# Round panels: dia 0.45 m; square panels: 0.60 x 0.60 m; both 0.02 m thick,
-# face 0.01 m below the ceiling soffit so the panel edge reads. Sprinklers:
-# dia 0.05 m head on a 0.06 m stem below the ceiling. Positions are schematic
-# (typical 3-5 m sprinkler spacing, panels near the middle of each room) —
-# no drawing gives exact positions. The stair sprinkler hangs on a 0.25 m
-# drop pipe under the stair soffit ("楼梯下喷淋低装", checklist §4).
-def _ceiling_panel_square(name, cx, cy, z_face, rx=0.0, ry=0.0):
-    box(name, (cx, cy, z_face - 0.015), (0.60, 0.60, 0.02), MAT_CEILING_PANEL, COL_INTER, rot=(rx, ry, 0))
-def _ceiling_panel_round(name, cx, cy, z_face, rx=0.0, ry=0.0):
-    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.225, depth=0.02, location=(cx, cy, z_face - 0.015), rotation=(rx, ry, 0))
-    _o = bpy.context.active_object
-    _o.name = name
-    set_mat(_o, MAT_CEILING_PANEL); link(_o, COL_INTER)
-def _sprinkler(name, cx, cy, z_face):
-    bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.012, depth=0.06, location=(cx, cy, z_face - 0.03))
-    _o = bpy.context.active_object
-    _o.name = name + "_Stem"
-    set_mat(_o, MAT_SPRINKLER); link(_o, COL_INTER)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.025, depth=0.012, location=(cx, cy, z_face - 0.06))
-    _o2 = bpy.context.active_object
-    _o2.name = name
-    set_mat(_o2, MAT_SPRINKLER); link(_o2, COL_INTER)
-def _slope_rot(zfn, cx, cy):
-    """Panel tilt matching the local ceiling slope (radians about X/Y)."""
-    _dzdx = (zfn(cx + 0.3, cy) - zfn(cx - 0.3, cy)) / 0.6
-    _dzdy = (zfn(cx, cy + 0.3) - zfn(cx, cy - 0.3)) / 0.6
-    return (math.atan(_dzdy), -math.atan(_dzdx))
-# G2 ceiling (flat, soffit z=-0.41): 2 rows of sprinklers + 1 square + 1 round panel
-for _si, _sx in enumerate([26.0, 30.8, 35.6, 40.4, 45.2, 50.0]):
-    _sprinkler(f"SM_G2_Sprinkler_N_{_si}", _sx, 0.2, -0.41)
-    _sprinkler(f"SM_G2_Sprinkler_S_{_si}", _sx, 11.0, -0.41)
-_ceiling_panel_square("SM_G2_Access_Square", 30.0, 7.0, -0.41)
-_ceiling_panel_round("SM_G2_Access_Round", 46.0, 10.0, -0.41)
-# G1 ceiling (flat, soffit z=-0.20): 6 sprinklers + 1 square + 1 round panel.
-# Row A x-values stay inside the diagonal far edge (x<=23.6 at y=-5.5).
-for _si, _sx in enumerate([12.0, 16.0, 20.0]):
-    _sprinkler(f"SM_G1_Sprinkler_A_{_si}", _sx, -5.5, -0.20)
-for _si, _sx in enumerate([14.0, 22.0, 30.0]):
-    _sprinkler(f"SM_G1_Sprinkler_B_{_si}", _sx, -2.5, -0.20)
-_ceiling_panel_square("SM_G1_Access_Square", 16.0, -4.0, -0.20)
-_ceiling_panel_round("SM_G1_Access_Round", 28.0, -3.0, -0.20)
-# G3 ceiling (sloped, north band ~2.7-4.26 m): 3 sprinklers + 1 square + 1 round panel
+# (Helpers _ceiling_panel_square / _ceiling_panel_round / _sprinkler / _slope_rot
+# re-emitted above by apply_issue21B.py.)
+# G2 ceiling (flat, soffit z=-1.98): 2 rows of sprinklers + 1 square + 1 round panel.
+for _si, _sx in enumerate([19.0, 23.5, 28.0, 32.5, 37.0, 41.5, 46.0]):
+    _sprinkler(f"SM_G2_Sprinkler_N_{_si}", _sx, 4.2, -1.98)
+    _sprinkler(f"SM_G2_Sprinkler_S_{_si}", _sx, 15.0, -1.98)
+_ceiling_panel_square("SM_G2_Access_Square", 25.0, 10.0, -1.98)
+_ceiling_panel_round("SM_G2_Access_Round", 42.0, 14.0, -1.98)
+# G1 ceiling (flat, soffit z=-2.25): 4 sprinklers + 1 square + 1 round panel.
+for _si, (_gx, _gy) in enumerate([(6.0, 4.0), (10.0, 4.0), (6.0, 9.0), (10.0, 9.0)]):
+    _sprinkler(f"SM_G1_Sprinkler_{_si}", _gx, _gy, -2.25)
+_ceiling_panel_square("SM_G1_Access_Square", 8.0, 6.0, -2.25)
+_ceiling_panel_round("SM_G1_Access_Round", 12.0, 10.0, -2.25)
+# G3 ceiling (sloped, north band ~2.7-4.26 m): 3 sprinklers + 1 square + 1 round panel.
 for _si, (_gx, _gy) in enumerate([(-28.0, -4.5), (-24.0, -4.0), (-20.0, -4.5)]):
     _sprinkler(f"SM_G3_Sprinkler_{_si}", _gx, _gy, g3_ceiling_z(_gx, _gy))
 _rx, _ry = _slope_rot(g3_ceiling_z, -26.0, -3.5)
 _ceiling_panel_square("SM_G3_Access_Square", -26.0, -3.5, g3_ceiling_z(-26.0, -3.5), _rx, _ry)
 _rx, _ry = _slope_rot(g3_ceiling_z, -22.0, -4.5)
 _ceiling_panel_round("SM_G3_Access_Round", -22.0, -4.5, g3_ceiling_z(-22.0, -4.5), _rx, _ry)
-# Atrium soffit (sloped, z = roof_z_at - 0.15): 4 sprinklers + 1 square panel
-def _atrium_soffit_z(_x, _y):
-    return roof_z_at(_x, _y) - 0.15
-for _si, (_ax, _ay) in enumerate([(2.0, 2.0), (6.0, 2.0), (2.0, -2.0), (6.0, -2.0)]):
+# Atrium soffit (sloped, z = roof_z_at - 0.65): 4 sprinklers + 1 square panel.
+for _si, (_ax, _ay) in enumerate([(0.0, 0.0), (8.0, 0.0), (0.0, -4.0), (8.0, -4.0)]):
     _sprinkler(f"SM_Atrium_Sprinkler_{_si}", _ax, _ay, _atrium_soffit_z(_ax, _ay))
-_rx, _ry = _slope_rot(_atrium_soffit_z, 4.0, 0.0)
-_ceiling_panel_square("SM_Atrium_Access_Square", 4.0, 0.0, _atrium_soffit_z(4.0, 0.0), _rx, _ry)
+_rx, _ry = _slope_rot(_atrium_soffit_z, 4.0, -2.0)
+_ceiling_panel_square("SM_Atrium_Access_Square", 4.0, -2.0, _atrium_soffit_z(4.0, -2.0), _rx, _ry)
 # Stair sprinkler, low mount on a 0.25 m drop pipe under the stair soffit.
-# Nosing line: z = -0.08 - (x/8.1)*4.8; soffit top ~0.25 below it, 0.15 thick.
-_sx = 4.0
-_sz_nose = -0.08 - (_sx / 8.1) * 4.8
-_sz_soffit = _sz_nose - 0.25 - 0.17
-bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.015, depth=0.25, location=(_sx, -4.0, _sz_soffit - 0.125))
+# Nosing line: z = -(x-15.63)/0.30*0.15; soffit bottom = nosing - 0.30.
+_sx = 21.48
+_sz_nose = -(_sx - 15.63) / 0.30 * 0.15
+_sz_soffit = _sz_nose - 0.30
+bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.015, depth=0.25, location=(_sx, -4.85, _sz_soffit - 0.125))
 _o = bpy.context.active_object
 _o.name = "SM_Stair_Sprinkler_Drop"
 set_mat(_o, MAT_SPRINKLER); link(_o, COL_INTER)
-bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.025, depth=0.012, location=(_sx, -4.0, _sz_soffit - 0.25))
+bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=0.025, depth=0.012, location=(_sx, -4.85, _sz_soffit - 0.25))
 _o2 = bpy.context.active_object
 _o2.name = "SM_Stair_Sprinkler"
 set_mat(_o2, MAT_SPRINKLER); link(_o2, COL_INTER)
-# G1 side walls: dark vertical slat panels (upper) + white doors (lower).
-_MAT_G1_SLAT = mat_principled("MAT_G1_Slat", (0.12, 0.12, 0.12), rough=0.9)
-box("SM_G1_Slat_North", (15, -6.72, -0.9), (14.0, 0.06, 1.2), _MAT_G1_SLAT, COL_INTER)
-box("SM_G1_Slat_South", (22, -1.14, -0.9), (20.0, 0.06, 1.2), _MAT_G1_SLAT, COL_INTER)
-box("SM_G1_Door_North", (12, -6.70, -3.75), (0.9, 0.06, 2.1), MAT_WHITE, COL_INTER)
-box("SM_G1_Door_South", (26, -1.16, -3.75), (0.9, 0.06, 2.1), MAT_WHITE, COL_INTER)
-
-# Basement ramp (the lower level's "subtle elevation changes"): v16 P2
-# moves it south of the sunken court — the old wedge (X 8.5..12.5, Y 1..3)
-# poked through the court west wall into the pit (court west edge at Y=1
-# is X~11.7). Now a gentle wedge in the atrium->G2 passage (X 8.5..12.5,
-# Y 6..8), rising 0.35 m eastward, clear of the court triangle (court ends
-# at Y=5). Position and rise are interpretation, not measured.
-_ramp_v = [(8.5, 6, -4.8), (12.5, 6, -4.8), (12.5, 6, -4.45),
-           (8.5, 8, -4.8), (12.5, 8, -4.8), (12.5, 8, -4.45)]
-_ramp_f = [(0, 1, 4, 3), (0, 2, 5, 3), (1, 2, 5, 4), (0, 1, 2), (3, 4, 5)]
-mesh_from_pydata("SM_Ramp_Atrium_G2", _ramp_v, _ramp_f, MAT_CONCRETE, COL_INTER)
 
 print("=== interior done ===")
-
-# ================= EXHIBITS (virtual show "A Piece of Cloth, A Beam of Light") =================
-# All in Gallery 2 (floor Z=-4.8), X 24..52, Y -1..15 (v16 P2: G2 moved east).
-G2F = -4.8
-
+# ---- helpers re-emitted from the PR-A exhibits (unchanged) ----
 def plinth(name, x, y, w, d, h=0.45):
     return box(name, (x, y, G2F + h / 2), (w, d, h), MAT_PLINTH, COL_EXH)
 
@@ -1941,7 +1982,6 @@ def chair(name, x, y, rot_z=0.0, mat=None):
     for (lx, ly) in [(-0.19, -0.18), (0.19, -0.18), (-0.19, 0.18), (0.19, 0.18)]:
         box(f"{name}_Leg_{lx}_{ly}", (x + lx, y + ly, G2F + 0.225), (0.04, 0.04, 0.45), MAT_BLACK, COL_EXH)
 
-# EXHIBIT 01 — A-POC red fabric: draped hanging textile panel (waved grid mesh)
 def draped_fabric(name, x, y, w=4.5, h=3.6):
     # Denser grid + irregular folds + a billow so it reads as a hanging textile,
     # not a set of flat boards. (v1-v4: a coarse 10x14 grid with a single sine
@@ -1975,82 +2015,26 @@ def draped_fabric(name, x, y, w=4.5, h=3.6):
     box(f"{name}_Rod", (x, y, G2F + 0.15 + h + 0.05), (w + 0.3, 0.06, 0.06), MAT_BLACK, COL_EXH)
     return o
 
-# EXHIBIT_01 A-POC red fabric at (32, 9.5) — in the eastern Gallery 2,
-# clear of the sunken-court triangle (the old (16,2) spot was INSIDE the
-# court; the v15 (20,4.5) spot is west of the new G2).
-draped_fabric("SM_EXHIBIT_01_RedFabric", 32, 9.5)
-plinth("SM_EXHIBIT_01_Plinth", 32, 9.5, 5.0, 0.9, h=0.12)
+def low_table(name, x, y, w, d, h=0.45, floor_z=G2F):
+    """Low wooden display table: top slab + 4 legs. Top surface at floor_z+h+0.03."""
+    box(f"{name}_Top", (x, y, floor_z + h), (w, d, 0.06), MAT_WOOD, COL_EXH)
+    for (lx, ly) in [(-w / 2 + 0.06, -d / 2 + 0.06), (w / 2 - 0.06, -d / 2 + 0.06),
+                     (-w / 2 + 0.06, d / 2 - 0.06), (w / 2 - 0.06, d / 2 - 0.06)]:
+        box(f"{name}_Leg_{lx:.2f}_{ly:.2f}", (x + lx, y + ly, floor_z + (h - 0.03) / 2),
+            (0.05, 0.05, h - 0.03), MAT_BLACK, COL_EXH)
 
-# EXHIBIT 02 — pendant light cluster: 7 lamps at varying heights
-for i, (px, py, drop) in enumerate([(34, 6.0, 1.6), (35.2, 7.2, 2.2), (36, 5.6, 1.2),
-                                     (33.4, 7.6, 2.6), (35.8, 8.2, 1.9), (34.4, 8.6, 2.4), (36.4, 6.8, 1.4)]):
-    top_z = 0.0
-    bot_z = -drop
-    box(f"SM_EXHIBIT_02_Cord_{i}", (px, py, (top_z + bot_z) / 2), (0.02, 0.02, top_z - bot_z), MAT_BLACK, COL_EXH)
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=0.15, location=(px, py, bot_z))
-    s = bpy.context.active_object
-    s.name = f"SM_EXHIBIT_02_Lamp_{i}"
-    set_mat(s, MAT_LIGHT); link(s, COL_EXH)
-plinth("SM_EXHIBIT_02_Plinth", 35, 7.0, 4.0, 4.0, h=0.1)
+# ================= EXHIBITS — #21B geometry rebuild =================
+# Faithful remap of the PR-A exhibits (same designs, same materials).
+# G2 remap (old G2 X 24..52, Y -1..15 -> new X 15.08..48.56, Y 3.25..17.24):
+# x' = 15.08 + (x-24)*1.1957, y' = 3.25 + (y+1)*0.8744. Floor G2F=-6.75.
+# Exhibit 10 (bento) sits in G1 (floor G1F=-7.20); exhibit 12 sits on the
+# atrium table (6,4). (Helpers plinth / chair / draped_fabric / low_table are
+# re-emitted above by apply_issue21B.py from the PR-A script.)
+G2F = -6.75
+G1F = -7.20
+G2C = -1.95
 
-# EXHIBIT 03 — three chairs in a row
-for i, cx in enumerate([40.5, 42.0, 43.5]):
-    chair(f"SM_EXHIBIT_03_Chair_{i}", cx, 8.2, rot_z=0.15)
-plinth("SM_EXHIBIT_03_Plinth", 42, 8.2, 4.2, 1.2, h=0.12)
-
-# EXHIBIT 04 — graphic design wall: white panel + coloured geometric shapes (south wall)
-box("SM_EXHIBIT_04_Panel", (38, 15.85, G2F + 1.8), (8.0, 0.12, 3.6), MAT_WHITE, COL_EXH)
-box("SM_EXHIBIT_04_Red", (35.5, 15.78, G2F + 2.2), (1.6, 0.06, 1.6), MAT_RED, COL_EXH)
-box("SM_EXHIBIT_04_Blue",
-    (38.5, 15.78, G2F + 1.6), (1.8, 0.06, 1.0),
-    mat_principled("MAT_Blue", (0.10, 0.25, 0.65), rough=0.6), COL_EXH)
-box("SM_EXHIBIT_04_Black", (41.0, 15.78, G2F + 2.6), (1.2, 0.06, 0.8), MAT_BLACK, COL_EXH)
-bpy.ops.mesh.primitive_uv_sphere_add(radius=0.55, location=(40.6, 15.78, G2F + 1.0))
-o = bpy.context.active_object
-o.name = "SM_EXHIBIT_04_Circle"
-o.scale = (1, 0.12, 1)
-bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-bpy.ops.object.shade_smooth()
-set_mat(o, mat_principled("MAT_Yellow", (0.95, 0.75, 0.10), rough=0.6)); link(o, COL_EXH)
-
-# EXHIBIT 05 — ceramic jars on a plinth at (46, 10), far east in Gallery 2
-plinth("SM_EXHIBIT_05_Plinth", 46, 10, 3.0, 1.2, h=0.5)
-for i, (jx, jr, jh) in enumerate([(45.0, 0.28, 0.75), (45.9, 0.34, 0.95), (46.8, 0.26, 0.65),
-                                   (47.6, 0.30, 0.85), (46.3, 0.22, 0.55)]):
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=jr, location=(jx, 10, G2F + 0.5 + jh * 0.45))
-    s = bpy.context.active_object
-    s.name = f"SM_EXHIBIT_05_Jar_{i}"
-    s.scale = (1, 1, jh / (jr * 2) * 1.5)
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    bpy.ops.object.shade_smooth()
-    set_mat(s, MAT_CERAMIC); link(s, COL_EXH)
-    box(f"SM_EXHIBIT_05_Neck_{i}", (jx, 10, G2F + 0.5 + jh * 0.95), (0.12, 0.12, 0.18), MAT_CERAMIC, COL_EXH)
-
-# EXHIBIT 06 — central rotating installation: plinth + tilted torus ring on a stand
-# v16 P2: moved to (36, 2.5) — just south of the column line, between the
-# columns at x=34 and x=38, on the Gallery2 camera's sightline.
-plinth("SM_EXHIBIT_06_Plinth", 36, 2.5, 2.2, 2.2, h=0.5)
-box("SM_EXHIBIT_06_Stand", (36, 2.5, G2F + 1.1), (0.18, 0.18, 1.2), MAT_BLACK, COL_EXH)
-bpy.ops.mesh.primitive_torus_add(major_radius=0.85, minor_radius=0.09,
-    location=(36, 2.5, G2F + 2.1), rotation=(math.radians(65), 0, math.radians(20)))
-t = bpy.context.active_object
-t.name = "SM_EXHIBIT_06_Ring"
-bpy.context.view_layer.objects.active = t
-bpy.ops.object.shade_smooth()
-set_mat(t, MAT_STEEL_DARK); link(t, COL_EXH)
-bpy.ops.mesh.primitive_uv_sphere_add(radius=0.3, location=(36, 2.5, G2F + 2.1))
-s = bpy.context.active_object
-s.name = "SM_EXHIBIT_06_Core"
-bpy.context.view_layer.objects.active = s
-bpy.ops.object.shade_smooth()
-set_mat(s, MAT_RED_SPHERE); link(s, COL_EXH)
-
-# ================= EXHIBITS 07-12 (v16 Phase 3: Leon 2026-11-17 — "the
-# exhibition items should double too" now the underground space is bigger).
-# 6 new pieces on the "everyday design" theme (Japanese daily-life design,
-# same language as 01-06). Existing 01-06 untouched. All procedural
-# primitives, low poly; positions keep the stair / ramp / court / atrium
-# circulation clear. G2 = east hall, G1 = west trapezoid, floor Z = -4.8.
+# Material values identical to the PR-A exhibits section (no material change in PR-B).
 MAT_AKARI = mat_principled("MAT_Akari_Paper", (0.98, 0.90, 0.75), rough=0.9,
                            emission=(1.0, 0.85, 0.6), emission_strength=1.2)
 MAT_KYUSU_CLAY = mat_principled("MAT_Kyusu_Clay", (0.32, 0.20, 0.13), rough=0.85)
@@ -2063,21 +2047,80 @@ MAT_TEA_BOWL = mat_principled("MAT_Tea_Bowl", (0.12, 0.08, 0.06), rough=0.35)
 MAT_MATCHA = mat_principled("MAT_Matcha", (0.25, 0.45, 0.15), rough=0.6)
 MAT_TEA_DARK = mat_principled("MAT_Tea_Dark", (0.15, 0.08, 0.03), rough=0.6)
 
-def low_table(name, x, y, w, d, h=0.45, floor_z=G2F):
-    """Low wooden display table: top slab + 4 legs. Top surface at floor_z+h+0.03."""
-    box(f"{name}_Top", (x, y, floor_z + h), (w, d, 0.06), MAT_WOOD, COL_EXH)
-    for (lx, ly) in [(-w / 2 + 0.06, -d / 2 + 0.06), (w / 2 - 0.06, -d / 2 + 0.06),
-                     (-w / 2 + 0.06, d / 2 - 0.06), (w / 2 - 0.06, d / 2 - 0.06)]:
-        box(f"{name}_Leg_{lx:.2f}_{ly:.2f}", (x + lx, y + ly, floor_z + (h - 0.03) / 2),
-            (0.05, 0.05, h - 0.03), MAT_BLACK, COL_EXH)
+# EXHIBIT 01 — A-POC red fabric: draped hanging textile panel (32,9.5) -> (24.65,12.43)
+draped_fabric("SM_EXHIBIT_01_RedFabric", 24.65, 12.43)
+plinth("SM_EXHIBIT_01_Plinth", 24.65, 12.43, 5.0, 0.9, h=0.12)
 
-# EXHIBIT 07 — Akari paper lantern (Noguchi): warm glowing paper shade on a
-# thin stand, east end of G2 (48, 4.5). Clear of the east door (51.85, 1.5),
-# the column row (y=1.8) and exhibit 05 (46, 10). Echoes 02's light theme.
-plinth("SM_EXHIBIT_07_Plinth", 48, 4.5, 1.2, 1.2, h=0.10)
-box("SM_EXHIBIT_07_Stand", (48, 4.5, G2F + 0.38), (0.05, 0.05, 0.56), MAT_BLACK, COL_EXH)
+# EXHIBIT 02 — pendant light cluster: 7 lamps. Old cords ran from z=0.0;
+# new cords hang from the G2 ceiling (-1.95); lamp heights above the floor kept.
+for i, (px, py, drop) in enumerate([(27.04, 9.37, 1.6), (28.47, 10.42, 2.2), (29.43, 9.02, 1.2),
+                                     (26.32, 10.77, 2.6), (29.19, 11.29, 1.9), (27.51, 11.64, 2.4),
+                                     (29.91, 10.07, 1.4)]):
+    top_z = G2C
+    bot_z = G2C - drop
+    box(f"SM_EXHIBIT_02_Cord_{i}", (px, py, (top_z + bot_z) / 2), (0.02, 0.02, top_z - bot_z), MAT_BLACK, COL_EXH)
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=0.15, location=(px, py, bot_z))
+    s = bpy.context.active_object
+    s.name = f"SM_EXHIBIT_02_Lamp_{i}"
+    set_mat(s, MAT_LIGHT); link(s, COL_EXH)
+plinth("SM_EXHIBIT_02_Plinth", 28.23, 10.25, 4.0, 4.0, h=0.1)
+
+# EXHIBIT 03 — three chairs in a row (40.5/42/43.5, 8.2) -> (34.80/36.60/38.39, 11.29)
+for i, cx in enumerate([34.80, 36.60, 38.39]):
+    chair(f"SM_EXHIBIT_03_Chair_{i}", cx, 11.29, rot_z=0.15)
+plinth("SM_EXHIBIT_03_Plinth", 36.60, 11.29, 4.2, 1.2, h=0.12)
+
+# EXHIBIT 04 — graphic design wall: white panel + coloured shapes (south wall).
+# Old panel (38,15.85) -> (31.82,17.10); shapes keep their offsets from the panel.
+box("SM_EXHIBIT_04_Panel", (31.82, 17.10, G2F + 1.8), (8.0, 0.12, 3.6), MAT_WHITE, COL_EXH)
+box("SM_EXHIBIT_04_Red", (28.94, 17.03, G2F + 2.2), (1.6, 0.06, 1.6), MAT_RED, COL_EXH)
+box("SM_EXHIBIT_04_Blue",
+    (32.53, 17.03, G2F + 1.6), (1.8, 0.06, 1.0),
+    mat_principled("MAT_Blue", (0.10, 0.25, 0.65), rough=0.6), COL_EXH)
+box("SM_EXHIBIT_04_Black", (35.52, 17.03, G2F + 2.6), (1.2, 0.06, 0.8), MAT_BLACK, COL_EXH)
+bpy.ops.mesh.primitive_uv_sphere_add(radius=0.55, location=(35.05, 17.03, G2F + 1.0))
+o = bpy.context.active_object
+o.name = "SM_EXHIBIT_04_Circle"
+o.scale = (1, 0.12, 1)
+bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+bpy.ops.object.shade_smooth()
+set_mat(o, mat_principled("MAT_Yellow", (0.95, 0.75, 0.10), rough=0.6)); link(o, COL_EXH)
+
+# EXHIBIT 05 — ceramic jars on a plinth (46,10) -> (41.39,12.87)
+plinth("SM_EXHIBIT_05_Plinth", 41.39, 12.87, 3.0, 1.2, h=0.5)
+for i, (jx, jr, jh) in enumerate([(40.19, 0.28, 0.75), (41.27, 0.34, 0.95), (42.34, 0.26, 0.65),
+                                   (43.30, 0.30, 0.85), (41.75, 0.22, 0.55)]):
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=jr, location=(jx, 12.87, G2F + 0.5 + jh * 0.45))
+    s = bpy.context.active_object
+    s.name = f"SM_EXHIBIT_05_Jar_{i}"
+    s.scale = (1, 1, jh / (jr * 2) * 1.5)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    bpy.ops.object.shade_smooth()
+    set_mat(s, MAT_CERAMIC); link(s, COL_EXH)
+    box(f"SM_EXHIBIT_05_Neck_{i}", (jx, 12.87, G2F + 0.5 + jh * 0.95), (0.12, 0.12, 0.18), MAT_CERAMIC, COL_EXH)
+
+# EXHIBIT 06 — central rotating installation: plinth + tilted torus ring (36,2.5) -> (29.43,6.31)
+plinth("SM_EXHIBIT_06_Plinth", 29.43, 6.31, 2.2, 2.2, h=0.5)
+box("SM_EXHIBIT_06_Stand", (29.43, 6.31, G2F + 1.1), (0.18, 0.18, 1.2), MAT_BLACK, COL_EXH)
+bpy.ops.mesh.primitive_torus_add(major_radius=0.85, minor_radius=0.09,
+    location=(29.43, 6.31, G2F + 2.1), rotation=(math.radians(65), 0, math.radians(20)))
+t = bpy.context.active_object
+t.name = "SM_EXHIBIT_06_Ring"
+bpy.context.view_layer.objects.active = t
+bpy.ops.object.shade_smooth()
+set_mat(t, MAT_STEEL_DARK); link(t, COL_EXH)
+bpy.ops.mesh.primitive_uv_sphere_add(radius=0.3, location=(29.43, 6.31, G2F + 2.1))
+s = bpy.context.active_object
+s.name = "SM_EXHIBIT_06_Core"
+bpy.context.view_layer.objects.active = s
+bpy.ops.object.shade_smooth()
+set_mat(s, MAT_RED_SPHERE); link(s, COL_EXH)
+
+# EXHIBIT 07 — Akari paper lantern (Noguchi) (48,4.5) -> (43.78,8.06)
+plinth("SM_EXHIBIT_07_Plinth", 43.78, 8.06, 1.2, 1.2, h=0.10)
+box("SM_EXHIBIT_07_Stand", (43.78, 8.06, G2F + 0.38), (0.05, 0.05, 0.56), MAT_BLACK, COL_EXH)
 bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=12, radius=0.38,
-                                     location=(48, 4.5, G2F + 1.04))
+                                     location=(43.78, 8.06, G2F + 1.04))
 _s = bpy.context.active_object
 _s.name = "SM_EXHIBIT_07_Shade"
 _s.scale = (1, 1, 1.15)
@@ -2085,125 +2128,118 @@ bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
 bpy.ops.object.shade_smooth()
 set_mat(_s, MAT_AKARI); link(_s, COL_EXH)
 
-# EXHIBIT 08 — Kyusu teapot + 2 cups on a low wooden table, G2 south wall
-# (47, 13.5), east of exhibit 04's wall (x 34..42). Side-handle teapot:
-# squashed-sphere clay body, lid + knob, angled spout, loop handle.
-low_table("SM_EXHIBIT_08_Table", 47, 13.5, 1.3, 0.65, h=0.45)
+# EXHIBIT 08 — Kyusu teapot + 2 cups on a low wooden table (47,13.5) -> (42.58,15.93)
+low_table("SM_EXHIBIT_08_Table", 42.58, 15.93, 1.3, 0.65, h=0.45)
 _top08 = G2F + 0.48
 bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=12, radius=0.16,
-                                     location=(47, 13.5, _top08 + 0.12))
+                                     location=(42.58, 15.93, _top08 + 0.12))
 _s = bpy.context.active_object
 _s.name = "SM_EXHIBIT_08_Teapot_Body"
 _s.scale = (1, 1, 0.75)
 bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
 bpy.ops.object.shade_smooth()
 set_mat(_s, MAT_KYUSU_CLAY); link(_s, COL_EXH)
-bpy.ops.mesh.primitive_cylinder_add(radius=0.09, depth=0.03, location=(47, 13.5, _top08 + 0.24))
+bpy.ops.mesh.primitive_cylinder_add(radius=0.09, depth=0.03, location=(42.58, 15.93, _top08 + 0.24))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_08_Teapot_Lid"
 set_mat(_o, MAT_KYUSU_CLAY); link(_o, COL_EXH)
-bpy.ops.mesh.primitive_uv_sphere_add(radius=0.03, location=(47, 13.5, _top08 + 0.27))
+bpy.ops.mesh.primitive_uv_sphere_add(radius=0.03, location=(42.58, 15.93, _top08 + 0.27))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_08_Teapot_Knob"
 set_mat(_o, MAT_KYUSU_CLAY); link(_o, COL_EXH)
 bpy.ops.mesh.primitive_cylinder_add(radius=0.025, depth=0.24,
-                                    location=(47.19, 13.5, _top08 + 0.17),
+                                    location=(42.81, 15.93, _top08 + 0.17),
                                     rotation=(0, math.radians(50), 0))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_08_Teapot_Spout"
 set_mat(_o, MAT_KYUSU_CLAY); link(_o, COL_EXH)
 bpy.ops.mesh.primitive_torus_add(major_radius=0.085, minor_radius=0.016,
-                                 location=(46.83, 13.5, _top08 + 0.14),
+                                 location=(42.38, 15.93, _top08 + 0.14),
                                  rotation=(math.radians(90), 0, 0))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_08_Teapot_Handle"
 set_mat(_o, MAT_KYUSU_CLAY); link(_o, COL_EXH)
-for _ci, (_cx, _cy) in enumerate([(47.40, 13.70), (47.40, 13.30)]):
+for _ci, (_cx, _cy) in enumerate([(43.06, 16.10), (43.06, 15.75)]):
     bpy.ops.mesh.primitive_cylinder_add(radius=0.065, depth=0.09, location=(_cx, _cy, _top08 + 0.045))
     _o = bpy.context.active_object
     _o.name = f"SM_EXHIBIT_08_Cup_{_ci}"
     set_mat(_o, MAT_CERAMIC); link(_o, COL_EXH)
-bpy.ops.mesh.primitive_cylinder_add(radius=0.055, depth=0.012, location=(47.40, 13.70, _top08 + 0.085))
+bpy.ops.mesh.primitive_cylinder_add(radius=0.055, depth=0.012, location=(43.06, 16.10, _top08 + 0.085))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_08_Tea"
 set_mat(_o, MAT_TEA_DARK); link(_o, COL_EXH)
 
-# EXHIBIT 09 — Noren indigo curtain in the G1->G2 doorway (x 28..31, y=-1).
-# Rod 2.25 m above the floor; two panels with a centre split so the passage
-# reads open (you walk through the split, as with a real noren). White
-# crest discs on both faces of each panel.
-box("SM_EXHIBIT_09_Rod", (29.5, -1, -2.55), (3.0, 0.05, 0.05), MAT_BLACK, COL_EXH)
-box("SM_EXHIBIT_09_Panel_L", (28.75, -1, -3.45), (1.3, 0.04, 1.8), MAT_INDIGO, COL_EXH)
-box("SM_EXHIBIT_09_Panel_R", (30.25, -1, -3.45), (1.3, 0.04, 1.8), MAT_INDIGO, COL_EXH)
-for _di, (_dx, _dy) in enumerate([(28.75, -1.03), (28.75, -0.97),
-                                  (30.25, -1.03), (30.25, -0.97)]):
+# EXHIBIT 09 — Noren indigo curtain in the G1->G2 doorway (X=15.08, Y 5..8).
+# Rotated 90 deg from the old doorway (x 28..31, y=-1): rod along Y, panels
+# thin in X; crests face +/-X (cylinder axis along X). Rod 2.25 m above floor.
+box("SM_EXHIBIT_09_Rod", (15.08, 6.5, -4.50), (0.05, 3.0, 0.05), MAT_BLACK, COL_EXH)
+box("SM_EXHIBIT_09_Panel_L", (15.08, 5.75, -5.40), (0.04, 1.3, 1.8), MAT_INDIGO, COL_EXH)
+box("SM_EXHIBIT_09_Panel_R", (15.08, 7.25, -5.40), (0.04, 1.3, 1.8), MAT_INDIGO, COL_EXH)
+for _di, (_dx, _dy) in enumerate([(15.05, 5.75), (15.11, 5.75),
+                                  (15.05, 7.25), (15.11, 7.25)]):
     bpy.ops.mesh.primitive_cylinder_add(radius=0.18, depth=0.02,
-                                        location=(_dx, _dy, -3.30),
-                                        rotation=(math.radians(90), 0, 0))
+                                        location=(_dx, _dy, -5.25),
+                                        rotation=(0, math.radians(90), 0))
     _o = bpy.context.active_object
     _o.name = f"SM_EXHIBIT_09_Crest_{_di}"
     set_mat(_o, MAT_WHITE); link(_o, COL_EXH)
 
-# EXHIBIT 10 — Lacquer bento box (black + red tiers) on a low table, G1
-# (15, -3.5). Clear of the stair-landing doorway (x=8) and the G1->G2
-# doorway (29.5, -1); chopsticks beside the box.
-low_table("SM_EXHIBIT_10_Table", 15, -3.5, 0.95, 0.6, h=0.40)
-_top10 = G2F + 0.43
-box("SM_EXHIBIT_10_Tier_Black", (15, -3.5, _top10 + 0.045), (0.34, 0.24, 0.09), MAT_LACQUER_BLACK, COL_EXH)
-box("SM_EXHIBIT_10_Tier_Red", (15.01, -3.5, _top10 + 0.135), (0.32, 0.22, 0.09), MAT_LACQUER_RED, COL_EXH)
-box("SM_EXHIBIT_10_Lid", (15, -3.5, _top10 + 0.19), (0.34, 0.24, 0.02), MAT_LACQUER_BLACK, COL_EXH)
-box("SM_EXHIBIT_10_Chopstick_0", (15.35, -3.28, _top10 + 0.008), (0.22, 0.016, 0.016), MAT_BAMBOO_DARK, COL_EXH, rot=(0, 0, 0.20))
-box("SM_EXHIBIT_10_Chopstick_1", (15.35, -3.24, _top10 + 0.008), (0.22, 0.016, 0.016), MAT_BAMBOO_DARK, COL_EXH, rot=(0, 0, 0.16))
+# EXHIBIT 10 — Lacquer bento box (black + red tiers) on a low table, G1 (9,6).
+# Table on the G1 floor (floor_z=G1F=-7.20).
+low_table("SM_EXHIBIT_10_Table", 9.0, 6.0, 0.95, 0.6, h=0.40, floor_z=G1F)
+_top10 = G1F + 0.43
+box("SM_EXHIBIT_10_Tier_Black", (9.0, 6.0, _top10 + 0.045), (0.34, 0.24, 0.09), MAT_LACQUER_BLACK, COL_EXH)
+box("SM_EXHIBIT_10_Tier_Red", (9.01, 6.0, _top10 + 0.135), (0.32, 0.22, 0.09), MAT_LACQUER_RED, COL_EXH)
+box("SM_EXHIBIT_10_Lid", (9.0, 6.0, _top10 + 0.19), (0.34, 0.24, 0.02), MAT_LACQUER_BLACK, COL_EXH)
+box("SM_EXHIBIT_10_Chopstick_0", (9.35, 6.22, _top10 + 0.008), (0.22, 0.016, 0.016), MAT_BAMBOO_DARK, COL_EXH, rot=(0, 0, 0.20))
+box("SM_EXHIBIT_10_Chopstick_1", (9.35, 6.26, _top10 + 0.008), (0.22, 0.016, 0.016), MAT_BAMBOO_DARK, COL_EXH, rot=(0, 0, 0.16))
 
-# EXHIBIT 11 — Bamboo basket on a low round plinth, G2 west end (28, 4).
-# Clear of the column row (y=1.8), exhibit 06 (36, 2.5) and the G1->G2
-# doorway (28..31, y=-1). Tapered woven-look body + rim + dark interior.
-bpy.ops.mesh.primitive_cylinder_add(radius=0.45, depth=0.10, location=(28, 4, G2F + 0.05))
+# EXHIBIT 11 — Bamboo basket on a low round plinth, G2 west end (28,4) -> (19.86,7.62)
+bpy.ops.mesh.primitive_cylinder_add(radius=0.45, depth=0.10, location=(19.86, 7.62, G2F + 0.05))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_11_Plinth"
 set_mat(_o, MAT_PLINTH); link(_o, COL_EXH)
 bpy.ops.mesh.primitive_cone_add(radius1=0.26, radius2=0.32, depth=0.42, vertices=24,
-                                location=(28, 4, G2F + 0.31))
+                                location=(19.86, 7.62, G2F + 0.31))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_11_Basket"
 set_mat(_o, MAT_BAMBOO); link(_o, COL_EXH)
-bpy.ops.mesh.primitive_torus_add(major_radius=0.32, minor_radius=0.02, location=(28, 4, G2F + 0.52))
+bpy.ops.mesh.primitive_torus_add(major_radius=0.32, minor_radius=0.02, location=(19.86, 7.62, G2F + 0.52))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_11_Rim"
 set_mat(_o, MAT_BAMBOO_DARK); link(_o, COL_EXH)
-bpy.ops.mesh.primitive_cylinder_add(radius=0.29, depth=0.02, location=(28, 4, G2F + 0.50))
+bpy.ops.mesh.primitive_cylinder_add(radius=0.29, depth=0.02, location=(19.86, 7.62, G2F + 0.50))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_11_Interior"
 set_mat(_o, MAT_BAMBOO_DARK); link(_o, COL_EXH)
-bpy.ops.mesh.primitive_torus_add(major_radius=0.30, minor_radius=0.015, location=(28, 4, G2F + 0.31))
+bpy.ops.mesh.primitive_torus_add(major_radius=0.30, minor_radius=0.015, location=(19.86, 7.62, G2F + 0.31))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_11_Band"
 set_mat(_o, MAT_BAMBOO_DARK); link(_o, COL_EXH)
 
 # EXHIBIT 12 — Tea bowl + chasen (bamboo whisk) on a wooden tray, on the
-# east round table in the atrium (6.0, -5.5, table top z=-4.225). Uses the
-# existing atrium furniture; nothing new on the floor, circulation untouched.
-box("SM_EXHIBIT_12_Tray", (6.0, -5.5, -4.215), (0.42, 0.30, 0.02), MAT_WOOD, COL_EXH)
-bpy.ops.mesh.primitive_cylinder_add(radius=0.085, depth=0.08, location=(5.88, -5.55, -4.165))
+# atrium round table (6,4). Table top at G2F+0.55 (top surface -6.175);
+# tray sits on it (centre -6.165), bowl/matcha/chasen above the tray.
+box("SM_EXHIBIT_12_Tray", (6.0, 4.0, -6.165), (0.42, 0.30, 0.02), MAT_WOOD, COL_EXH)
+bpy.ops.mesh.primitive_cylinder_add(radius=0.085, depth=0.08, location=(5.88, 3.95, -6.115))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_12_TeaBowl"
 set_mat(_o, MAT_TEA_BOWL); link(_o, COL_EXH)
-bpy.ops.mesh.primitive_cylinder_add(radius=0.07, depth=0.012, location=(5.88, -5.55, -4.125))
+bpy.ops.mesh.primitive_cylinder_add(radius=0.07, depth=0.012, location=(5.88, 3.95, -6.075))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_12_Matcha"
 set_mat(_o, MAT_MATCHA); link(_o, COL_EXH)
-bpy.ops.mesh.primitive_cylinder_add(radius=0.025, depth=0.06, location=(6.12, -5.42, -4.175))
+bpy.ops.mesh.primitive_cylinder_add(radius=0.025, depth=0.06, location=(6.12, 4.08, -6.125))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_12_Chasen_Handle"
 set_mat(_o, MAT_BAMBOO); link(_o, COL_EXH)
 bpy.ops.mesh.primitive_cone_add(radius1=0.022, radius2=0.05, depth=0.09, vertices=16,
-                                location=(6.12, -5.42, -4.10))
+                                location=(6.12, 4.08, -6.05))
 _o = bpy.context.active_object
 _o.name = "SM_EXHIBIT_12_Chasen_Bristles"
 set_mat(_o, MAT_BAMBOO); link(_o, COL_EXH)
 
 print("=== exhibits done ===")
-
 # ================= ROOT + SAVE + EXPORT =================
 # Single wrapper root for a clean GLB hierarchy (two wings + site + interior + exhibits)
 bpy.ops.object.empty_add(type='PLAIN_AXES', location=(0, 0, 0))
