@@ -640,8 +640,8 @@ function loadFailed(err){
 /* ================= Stair-foot wall fix =================
    In the v16 GLB the x=8 atrium wall line runs straight across the
    foot of the 30-step stair: SM_Atrium_Wall_East_A (x 7.85-8.15,
-   z 3.4-5.0, full height y -4.8..0, its eight form-tie discs
-   SM_Atrium_TieHole_00..07 on its west face) stands across most of
+   z 3.4-5.0, full height y -4.8..0, its twenty-eight form-tie discs
+   SM_Atrium_TieHole_00..27 on its west face) stands across most of
    the stair's width (z 3-5) exactly where the flight lands — the
    tour's stair stop looks straight into it, the walk-mode stair
    ride and the enter-walk descent fly through it, and on foot the
@@ -656,9 +656,15 @@ function loadFailed(err){
 function fixStairFootWall(){
   var wall=model.getObjectByName('SM_Atrium_Wall_East_A');
   if(wall) wall.position.z+=1.6;
-  for(var i=0;i<8;i++){
-    var th=model.getObjectByName('SM_Atrium_TieHole_0'+i);
-    if(th) th.position.z+=1.6;
+  /* #21A: the atrium-east wall now carries 28 tie discs (00..27, re-grid
+     450x600); loop until the name is missing instead of hard-coding 8,
+     so a future re-grid cannot leave discs floating at the stair foot.
+     In the web GLB the 28 discs are merged into one node (Pass A), so
+     only the first lookup hits; in a source-GLB load all 28 shift. */
+  for(var i=0;;i++){
+    var th=model.getObjectByName('SM_Atrium_TieHole_'+(i<10?'0':'')+i);
+    if(!th) break;
+    th.position.z+=1.6;
   }
 }
 /* ================= Exterior trees: keep only three =================
@@ -757,7 +763,9 @@ function onModelLoaded(gltf){
            0, base alpha 0.18) — normalise to opacity 0.32 so the facade
            reads as glass: visible and reflective, neither a solid wall
            nor invisible. The GLB JSON is verified to contain no
-           KHR_materials_transmission (see the #4 PR). */
+           KHR_materials_transmission (see the #4 PR; the #21A web
+           pipeline strips it in build_join_21A.mjs — the Blender
+           source GLB keeps it, the web GLB does not). */
         o.material=o.material.clone();
         o.material.transparent=true;
         o.material.opacity=0.32;
