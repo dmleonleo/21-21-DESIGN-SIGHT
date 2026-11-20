@@ -36,6 +36,9 @@
 #  [Rail] steel handrail bar seated on the parapet (centre Z
 #      -1.83 -> -1.897; it floated 0.06 m with no posts, and its
 #      top at +1.12 stood above the glass top +1.10; now +1.05).
+#  Outputs are design2121_v20_build.blend / design2121_v20.glb
+#      (the v19-fix script's v19 names would clobber the v19 GLB
+#      if run verbatim — found in the post-push review).
 # v19 changes in PR-A (materials only, NO geometry):
 #  A1 roof seams deleted (6 dark ribbons + MAT_Steel_Seam + the
 #     panel-seam brick in add_steel_detail; site-welded plate).
@@ -123,8 +126,8 @@ import bpy, math, os, random
 from mathutils import Vector
 
 OUT_DIR = r"C:\Users\Leon\design2121"
-BLEND_PATH = os.path.join(OUT_DIR, "design2121_v19_build.blend")
-GLB_PATH = os.path.join(OUT_DIR, "design2121_v19.glb")
+BLEND_PATH = os.path.join(OUT_DIR, "design2121_v20_build.blend")
+GLB_PATH = os.path.join(OUT_DIR, "design2121_v20.glb")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # ---------- clean scene ----------
