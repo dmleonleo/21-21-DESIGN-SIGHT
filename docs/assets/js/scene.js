@@ -1161,7 +1161,7 @@ export function initScene(){
   addIntLight(9.5,-3.0,-6.5,0xf2f6ff,0.35,32); /* #21B Gallery 1 skylight hall (was 0.7) */
   addIntLight(6,-1.0,-4,0xfff1da,0.3,26); /* #21B lower lobby / atrium void (was 0.6) */
   addSpotLight(32,-2.6,-10, 32,-6.75,-10, 0xfff1da,66,0.88,30); /* #21B G2 spot (was 38,-1.1,-8 -> 38,-4.8,-8); #18 note: the spot must sit inside the gallery, not above the outdoor grass */
-  addSpotLight(9.5,2.5,-6.5,  9.5,-7.2,-6.5,  0xf2f6ff,120,0.5,25);  /* #21B Gallery 1 skylight hall */
+  addSpotLight(9.5,-1.0,-6.5,  9.5,-7.2,-6.5,  0xf2f6ff,120,0.5,25);  /* FIX [2]: was y=2.5, above ground OUTDOORS south of the glass — its cone painted the sharp white disc on the lawn (proven by experiment, see fix/STATUS.md). Now just above the G1 skylight panels (-1.1), below the ground slab (0.02); same target/intensity/angle, still lights the G1 floor. Same precedent as the #18 G2-spot move. */
   try{ reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ reducedMotion=false; }
   loadRetryBtn.addEventListener('click',restartLoad);
   window.addEventListener('online',function(){ if(!loadDone&&loadExhausted) restartLoad(); });

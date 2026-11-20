@@ -123,7 +123,7 @@ var hoverTick=0;
    via a 3-point ride (lobby top -> platform landing -> wide-steps
    bottom); its trigger is edge-latched (see checkStairTrigger). */
 var GEYE=1.62;
-export const walk={pos:new THREE.Vector3(-1.0,GEYE,-1.8),yaw:-2.88,pitch:0,keys:{},press:{},intro:null,level:'ground',inStair:false,
+export const walk={pos:new THREE.Vector3(-3.5,GEYE,0.5),yaw:-2.88,pitch:0,keys:{},press:{},intro:null,level:'ground',inStair:false, /* FIX [1]: spawn on the open ground just inside the entrance (was (-1.0,-1.8), a 0.35 m strip between the shop counter and the south glass) */
   clickTarget:null,clickBlocked:0,focusEx:null};
 function rectPoly(x1,z1,x2,z2){ return [[x1,z1],[x2,z1],[x2,z2],[x1,z2]]; }
 function inPoly(x,z,poly){
@@ -252,7 +252,7 @@ export function enterWalk(){
   walk.clickTarget=null; walk.clickBlocked=0; walk.focusEx=null; hideMoveRing();
   walk.level='ground';
   walk.intro={s:performance.now(),d:8000,
-    pts:[new THREE.Vector3(-1.0,GEYE,-1.8), new THREE.Vector3(15.0,0.3,4.7), new THREE.Vector3(28.0,-5.85,5.8), new THREE.Vector3(10.86,-6.75,1.0)],
+    pts:[new THREE.Vector3(-3.5,GEYE,0.5), new THREE.Vector3(15.0,0.3,4.7), new THREE.Vector3(28.0,-5.85,5.8), new THREE.Vector3(10.86,-6.75,1.0)], /* FIX [1]: intro starts at the new spawn */
     yaws:[-1.96,-1.57,1.30],
     endLevel:'base'};
   walk.pos.copy(walk.intro.pts[0]); walk.yaw=walk.intro.yaws[0]; walk.pitch=0;

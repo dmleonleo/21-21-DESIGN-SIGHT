@@ -27,9 +27,9 @@ export const tourStops=[
   {title:'两栋之间 · 铺地庭院',dwell:3200,
    desc:'两栋建筑之间的铺地庭院是地面的交通核：向东进博物馆翼大堂，穿过庭院向西，就是 Gallery 3 的入口。',
    cam:new THREE.Vector3(-13,3.4,-20), tgt:new THREE.Vector3(-5,1.2,1)},
-  {title:'入口大堂 · 接待台与电梯',dwell:3400,
-   desc:'大堂在博物馆翼地面层：接待台与商店在西侧，梯形平面的电梯在北侧平台角。展厅在地下——接下来走楼梯下去。',
-   cam:new THREE.Vector3(-6,1.9,2), tgt:new THREE.Vector3(2,0.4,-1)},
+  {title:'入口大堂 · 玻璃与楼梯',dwell:3400,
+   desc:'从入口进来就是大堂：左手边是整面南玻璃，商店柜台在手边，前面是下沉庭院的玻璃幕墙与 39 级楼梯——展厅在地下，接下来走楼梯下去。',
+   cam:new THREE.Vector3(-3.5,1.9,0.0), tgt:new THREE.Vector3(14,0.4,-1.0)}, /* FIX [1]: old cam (-6,1.9,2) was inside the entrance wall (raycast-proven); new cam on the open ground just inside the entrance, verified by screenshot */
   {title:'39 级楼梯 · 下到地下层',dwell:3000,
    desc:'楼梯共 39 级、每级高 0.15 米，北侧是混凝土墙加钢扶手、南侧是玻璃栏板。顺着它下行 5.85 米，就到了地下展厅层。',
    cam:new THREE.Vector3(28,-4.2,5.8), tgt:new THREE.Vector3(15,0.5,4.7)},

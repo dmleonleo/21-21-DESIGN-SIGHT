@@ -77,11 +77,15 @@ export function setMode(next,keepCam){
   controls.maxPolarAngle=(next==='exterior')?Math.PI*0.52:Math.PI*0.65;
   controls.maxDistance=(next==='exterior')?260:60;
   if(next==='exterior'&&!keepCam){ extDefault=true; flyTo(exteriorCamPos(),EXT_TARGET.clone()); }
-  /* #21B lobby camera: stands in the west lobby, looking east across
-     the reception desk and shop toward the atrium void and the main
-     stair below it. The trapezoidal elevator shaft is at the north
-     band, out of this frame; the south glass and the stair carry it. */
-  if(next==='lobby') flyTo(new THREE.Vector3(-6,1.9,2),new THREE.Vector3(2,0.4,-1));
+  /* FIX [1] lobby camera: the #21B position (-6,1.9,2) sat INSIDE the
+     slanted entrance wall (1.2 m thick; camera 0.20 m from its centreline
+     — GLB raycast, see fix/STATUS.md), which is why Hark's lobby.png was
+     all grey wall. New: stands on the open ground just inside the
+     entrance, looking east-southeast along the south glass toward the
+     court mullions and the stair; shop counter in the foreground, hall
+     columns and sloped soffit in frame. Three candidates screenshotted;
+     this one (E2) reads cleanly in SwiftShader. */
+  if(next==='lobby') flyTo(new THREE.Vector3(-3.5,1.9,0.0),new THREE.Vector3(14,0.4,-1.0));
   if(next==='g3'){ var gs=g3Spots[g3Idx]; flyTo(gs.cam,gs.tgt,1400); showG3Spot(g3Idx); }
   /* #21B Gallery 2: x 15.08..48.56, z -17.24..-3.25, ceiling -1.95; camera inside the SW corner */
   if(next==='gallery') flyTo(new THREE.Vector3(18,-1.2,-15),new THREE.Vector3(45,-4.5,-6)); /* #21B: same reframe as tour stop 6 */
