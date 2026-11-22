@@ -100,10 +100,30 @@ dialog#info .close{position:absolute;right:var(--pad);top:var(--pad)}
 
 #toast{position:fixed;left:50%;top:var(--pad);transform:translateX(-50%);z-index:20;font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink);animation:rise .8s var(--ease) both}
 
+/* diagram sheet */
+#sheet{display:none}
+body.diagram #sheet{display:block}
+body.diagram #map,body.diagram #sun,body.diagram #veil{display:none}
+#sheet::before{content:"";position:fixed;inset:calc(var(--pad) * .5);border:1px solid var(--faint);pointer-events:none;z-index:4}
+#sheet .lv{position:fixed;left:0;top:0;z-index:7;font-size:9px;letter-spacing:.2em;color:var(--mute);white-space:nowrap;pointer-events:none;margin:-6px 0 0 -128px;width:120px;text-align:right}
+#sheet .lv i{position:absolute;right:-60px;top:6px;width:56px;border-top:1px dashed var(--faint)}
+#sheet .north{position:fixed;right:var(--pad);top:calc(var(--pad) + 40px);z-index:7;color:var(--mute);display:flex;flex-direction:column;align-items:center;gap:4px;font-size:9px;letter-spacing:.2em}
+#sheet .block{position:fixed;right:var(--pad);bottom:var(--pad);z-index:7;display:grid;grid-template-columns:repeat(3,auto);border:1px solid var(--faint);font-size:10px;letter-spacing:.12em;text-transform:uppercase;pointer-events:none}
+#sheet .cell{padding:8px 14px;border-right:1px solid var(--faint);border-bottom:1px solid var(--faint)}
+#sheet .cell span{display:block;font-size:8px;letter-spacing:.24em;color:var(--mute);margin-bottom:4px}
+#sheet .cell.wide{grid-column:1/-1;border-right:0}
+#sheet .legend{grid-column:1/-1;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;padding:10px 14px;font-size:9px;letter-spacing:.16em;color:rgba(233,230,223,.72)}
+#sheet .legend i{display:inline-block;width:14px;height:8px;margin-right:8px;vertical-align:middle;background:color-mix(in srgb,var(--c) 30%,transparent);border:1px solid var(--c)}
+#explodeBtn{position:fixed;left:50%;bottom:var(--pad);transform:translateX(-50%);z-index:10}
+
 @media (max-width:720px){
+  #sheet .block{left:var(--pad);right:var(--pad);bottom:calc(var(--pad) + 40px);grid-template-columns:repeat(3,1fr)}
+  #sheet .lv{display:none}
+  #explodeBtn{left:auto;right:var(--pad);transform:none;bottom:var(--pad)}
+
   #brand .sub{display:none} #brand .mark{font-size:11px;letter-spacing:.3em}
   #map{width:150px;top:calc(var(--pad) + 30px)}
-  #modes{gap:20px}
+  #modes{gap:16px} #modes button{font-size:10px;letter-spacing:.18em}
   #sun{left:var(--pad);right:auto;bottom:calc(var(--pad) + 36px);gap:12px} #sun output{text-align:left;width:40px} #sun input{width:120px}
   body.tour #sun{display:none}
   #tourCard{bottom:calc(var(--pad) + 7vh + 28px)}

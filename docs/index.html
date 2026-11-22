@@ -52,6 +52,7 @@
   <button data-mode="orbit" class="on">Overview</button>
   <button data-mode="tour">Tour</button>
   <button data-mode="walk">Walk</button>
+  <button data-mode="diagram">Diagram</button>
 </nav>
 
 <footer id="sun">
@@ -83,6 +84,26 @@
   </ul>
   <p class="fine">An unofficial study project.</p>
 </dialog>
+
+<section id="sheet" aria-hidden="true">
+  <div class="lv" id="lvRF"><i></i>RF +4.8</div>
+  <div class="lv" id="lvGL"><i></i>GL &plusmn;0</div>
+  <div class="lv" id="lvB1"><i></i>B1 FL -6.0</div>
+  <div class="north"><svg viewBox="0 0 40 56" width="22"><circle cx="20" cy="36" r="17" fill="none" stroke="currentColor" stroke-width=".8"/><path d="M20 2 L20 53" stroke="currentColor" stroke-width=".8"/><path d="M20 8 L25 22 L20 19 L15 22Z" fill="currentColor"/></svg><span>N</span></div>
+  <div class="block">
+    <div class="cell wide"><span>Drawing</span>Folded Plate Diagram</div>
+    <div class="cell"><span>View</span>Axonometric</div>
+    <div class="cell"><span>Scale</span>Module 3.6 m</div>
+    <div class="cell"><span>No.</span>2121-AX-01</div>
+    <ul class="legend">
+      <li><i style="--c:#d2a868"></i>Steel plate roof</li>
+      <li><i style="--c:#9fb2c6"></i>Exposed concrete</li>
+      <li><i style="--c:#76c0b2"></i>Glazing</li>
+      <li><i style="--c:#a196e0"></i>Basement</li>
+    </ul>
+  </div>
+  <button id="explodeBtn" class="link">Explode</button>
+</section>
 
 <div id="toast" hidden></div>
 
