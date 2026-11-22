@@ -142,7 +142,7 @@ function setSun(hour) {
   $('#sunOut').value = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 $('#sunRange').addEventListener('input', (e) => setSun(+e.target.value));
-setSun(14.5);
+setSun(23);
 
 // ---------- controls ----------
 const orbit = new OrbitControls(camera, canvas);
@@ -290,18 +290,18 @@ $('#cutRange').addEventListener('input', (e) => setCut(cutKind, +e.target.value)
 let dayRun = null;
 $('#dayBtn').onclick = () => {
   if (dayRun) { dayRun = null; $('#dayBtn').textContent = 'Day'; return; }
-  dayRun = { h: Math.max(6, +$('#sunRange').value >= 20.5 ? 6 : +$('#sunRange').value) }; $('#dayBtn').textContent = 'Stop';
+  dayRun = { h: Math.max(5, +$('#sunRange').value >= 23 ? 5 : +$('#sunRange').value) }; $('#dayBtn').textContent = 'Stop';
 };
 function stepDay(dt) {
   if (!dayRun) return;
-  dayRun.h += dt * 0.75;                    // a day in 20 s
-  if (dayRun.h > 21) dayRun.h = 6;
+  dayRun.h += dt * 0.9;                     // a day in ~20 s
+  if (dayRun.h > 23.5) dayRun.h = 5;
   $('#sunRange').value = dayRun.h; setSun(dayRun.h);
 }
 
 function setMode(m) {
   mode = m;
-  document.body.className = m;
+  document.body.className = m + (document.body.classList.contains('light') ? ' light' : '');
   fovTarget = fovFor(m);
   document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
   orbit.enabled = m === 'orbit';
@@ -635,9 +635,9 @@ const bloom = window.__bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth,
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 const grade = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, grain: { value: 0.035 } },
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, grain: { value: 0.035 }, paper: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float time; uniform float grain; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float time; uniform float grain; uniform float paper; varying vec2 vUv;
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + time) * 43758.5453); }
     void main(){
       vec3 c = texture2D(tDiffuse, vUv).rgb;
@@ -646,18 +646,46 @@ const grade = new ShaderPass({
       c = mix(c, c * vec3(0.92,0.98,1.06), 1.0 - smoothstep(0.0, 0.5, l));  // cool shadows
       c = mix(c, c * vec3(1.05,1.0,0.93), smoothstep(0.45, 1.0, l));       // warm highlights
       c = (c - 0.25) * 1.05 + 0.25;
+      c = mix(c, vec3(0.93,0.92,0.89) * (0.5 + 0.7 * c), paper);   // Light: morning haze, lifted paper blacks
       c += (h(vUv * 1000.0) - 0.5) * grain;
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
 });
 composer.addPass(grade);
 
+// ---------- light / dark: morning 08:00 vs late night 23:00 ----------
+const THEME = { light: { h: 8.5, paper: 0.62 }, dark: { h: 23, paper: 0 } };
+let themeRun = null, paperK = 0;
+function setTheme(t, instant) {
+  document.body.classList.toggle('light', t === 'light');
+  document.querySelectorAll('#theme button').forEach((b) => b.classList.toggle('on', b.dataset.theme === t));
+  dayRun = null; $('#dayBtn').textContent = 'Day';
+  const to = THEME[t];
+  if (instant) { paperK = to.paper; setSun(to.h); $('#sunRange').value = to.h; return; }
+  themeRun = { h0: +$('#sunRange').value, h1: to.h, p0: paperK, p1: to.paper, k: 0 };
+  try { localStorage.setItem('2121.theme', t); } catch (e) {}
+}
+document.querySelectorAll('#theme button').forEach((b) => (b.onclick = () => setTheme(b.dataset.theme)));
+function stepTheme(dt) {
+  if (!themeRun) return;
+  themeRun.k = Math.min(1, themeRun.k + dt / 2.4);
+  const e = themeRun.k * themeRun.k * (3 - 2 * themeRun.k);
+  // always run forward in time: 08 -> 23 crosses the afternoon and dusk, 23 -> 08 crosses the night to dawn
+  const h1 = themeRun.h1 < themeRun.h0 ? themeRun.h1 + 24 : themeRun.h1;
+  const hh = (themeRun.h0 + (h1 - themeRun.h0) * e) % 24;
+  paperK = themeRun.p0 + (themeRun.p1 - themeRun.p0) * e;
+  const hs = hh < 5 ? 23.5 : Math.min(23.5, hh);
+  $('#sunRange').value = hs; setSun(hs);
+  if (themeRun.k >= 1) themeRun = null;
+}
+{ let t0 = 'dark'; try { t0 = localStorage.getItem('2121.theme') || 'dark'; } catch (e) {} setTheme(t0, true); }
+
 // ---------- loop ----------
 const clock = new THREE.Timer();
 function frame() {
   clock.update(); const dt = Math.min(clock.getDelta(), 0.05);
   if (fly) stepFly(dt);
-  stepDay(dt);
+  stepDay(dt); stepTheme(dt); grade.uniforms.paper.value = paperK;
   if (mode === 'diagram') stepDiagram();
   else if (mode === 'tour' && J.on && !fly) stepJourney(dt);
   else if (mode === 'orbit' && !fly) orbit.update();
@@ -667,7 +695,7 @@ function frame() {
   renderer.toneMappingExposure = baseExposure * (1 - 0.28 * underK);
   fill.intensity += ((under ? 0.9 : 0.35 + 0.3 * lampLevel) - fill.intensity) * 0.08;
   const lampOn = Math.max(0.35, lampLevel, under ? 1 : 0);
-  lamps.forEach((l, i) => { const k = i < 3 ? lampLevel * 0.6 : lampOn; l.intensity += (k * 7 - l.intensity) * 0.08; });
+  lamps.forEach((l, i) => { const k = i < 3 ? lampLevel : lampOn; l.intensity += (k * (i < 3 ? 14 : 7) - l.intensity) * 0.08; });
   for (const m of lightMats) m.emissiveIntensity = 1.6 + 2.4 * lampLevel;
   if (Math.abs(camera.fov - fovTarget) > 0.05) { camera.fov += (fovTarget - camera.fov) * 0.05; camera.updateProjectionMatrix(); }
   grade.uniforms.time.value = (grade.uniforms.time.value + 0.37) % 100;

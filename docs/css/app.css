@@ -161,3 +161,18 @@ body.diagram #dayBtn{display:none}
 }
 @media (hover:none){ #walkHelp .desk{display:none} #walkHelp .touch{display:inline} }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* light / dark */
+#theme{position:fixed;right:calc(var(--pad) + 76px);top:calc(var(--pad) - 2px);z-index:10;display:flex;gap:18px}
+#theme button{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--mute);padding:0 0 6px;position:relative;transition:color .6s var(--ease)}
+#theme button::after{content:"";position:absolute;left:0;right:100%;bottom:0;height:1px;background:var(--ink);transition:right .6s var(--ease)}
+#theme button.on{color:var(--ink)} #theme button.on::after{right:0}
+body,#loader,dialog{transition:background-color 2.4s var(--ease),color 2.4s var(--ease)}
+body.light{--bg:#e8e6e1;--ink:#151513;--mute:rgba(21,21,19,.52);--faint:rgba(21,21,19,.18)}
+body.light #tourCard{text-shadow:0 0 28px rgba(232,230,225,.6)}
+body.light #you::after{background:linear-gradient(rgba(0,0,0,0),#151513)}
+@media (max-width:640px){#theme{right:auto;left:var(--pad);top:calc(var(--pad) + 44px)}}
+body.light #tourCard p{color:rgba(21,21,19,.78)}
+body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:46vh;pointer-events:none;z-index:5;opacity:0;transition:opacity 2.4s var(--ease);background:linear-gradient(rgba(232,230,225,0),rgba(232,230,225,.62))}
+body.light::after{opacity:1}
+body.light.diagram::after{opacity:0}
