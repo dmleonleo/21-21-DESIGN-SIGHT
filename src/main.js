@@ -518,7 +518,7 @@ loader.load('model/2121.glb', (gltf) => {
     o.castShadow = !isGlass && !isLight;
     o.receiveShadow = !isLight;
     mats.forEach((m) => {
-      if (isGlass) { m.transparent = true; m.depthWrite = false; m.envMapIntensity = 0.9; m.color.setRGB(0.06, 0.08, 0.09); m.opacity = Math.max(m.opacity, 0.42); m.metalness = 0.2; m.roughness = 0.04; }
+      if (isGlass) { m.transparent = true; m.depthWrite = false; m.envMapIntensity = 0.7; m.color.setRGB(0.80, 0.86, 0.88); m.opacity = 0.14; m.metalness = 0.0; m.roughness = 0.03; }
       if (isLight) { m.emissive = new THREE.Color(1, 0.9, 0.74); m.emissiveIntensity = 3.0; lightMats.push(m); }
       if (m.map) m.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
       if (!isGlass && !isLight && !m.userData.cover) { m.userData.cover = true; addCover(m); }
