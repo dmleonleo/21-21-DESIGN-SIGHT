@@ -1,0 +1,152 @@
+[
+ {
+  "id": "site",
+  "title": "A Piece of Cloth",
+  "cam": [
+   -26,
+   -40,
+   13
+  ],
+  "look": [
+   14,
+   12,
+   0
+  ],
+  "text": "Hidden in the Tokyo Midtown garden, two folded steel plates settle on the lawn like dropped cloth. Nothing rises more than 4.8 m. Most of the building lies below."
+ },
+ {
+  "id": "plaza",
+  "title": "Plaza and Low Wall",
+  "cam": [
+   20,
+   3.5,
+   1.6
+  ],
+  "look": [
+   6,
+   -2.5,
+   1.0
+  ],
+  "text": "The west roof folds down from 4.8 m to a knife edge. A concrete wall carries the line on, dividing the paved plaza from the lawn, its steel rail level with the tip."
+ },
+ {
+  "id": "entry",
+  "title": "Forecourt",
+  "cam": [
+   14,
+   4.2,
+   1.6
+  ],
+  "look": [
+   19.6,
+   10.6,
+   2.4
+  ],
+  "text": "Two concrete walls hold a covered outdoor room. Above the glass door, a concrete band and a slot of glass run up to the steel."
+ },
+ {
+  "id": "lobby",
+  "title": "Lobby",
+  "cam": [
+   22.5,
+   13,
+   1.6
+  ],
+  "look": [
+   40,
+   10.5,
+   0.9
+  ],
+  "text": "The lobby runs along the south glass. The ceiling follows the fold of the roof, from the high back wall down to the glazing."
+ },
+ {
+  "id": "stair",
+  "title": "Descent",
+  "cam": [
+   52.6,
+   16.2,
+   -1.4
+  ],
+  "look": [
+   43.5,
+   15.0,
+   -4.6
+  ],
+  "text": "The stair drops beside the sunken court behind 1.1 m glass guards. Daylight follows you down from the side."
+ },
+ {
+  "id": "g1",
+  "title": "Gallery 1",
+  "cam": [
+   30.5,
+   9,
+   -4.4
+  ],
+  "look": [
+   38.5,
+   -3,
+   -4.8
+  ],
+  "text": "133 m², 5 m to the ceiling. Formwork of 1800 × 900 mm and its tie holes set the scale of every wall."
+ },
+ {
+  "id": "g2",
+  "title": "Gallery 2",
+  "cam": [
+   44,
+   -4,
+   -4.4
+  ],
+  "look": [
+   66,
+   3,
+   -4.0
+  ],
+  "text": "443 m², roughly 15 by 31 m, with a single row of six columns. The room for the large exhibitions."
+ },
+ {
+  "id": "court",
+  "title": "Sunken Court",
+  "cam": [
+   52,
+   2.5,
+   -4.4
+  ],
+  "look": [
+   55,
+   13,
+   -1.5
+  ],
+  "text": "Under the east fold, a full-height glass wall opens to the sunken court. Solid steel mullions, 70 mm wide, carry daylight to the basement."
+ },
+ {
+  "id": "tip",
+  "title": "East Tip",
+  "cam": [
+   47,
+   -4,
+   1.6
+  ],
+  "look": [
+   38.5,
+   8,
+   1.2
+  ],
+  "text": "The east roof folds to within centimetres of the ground. A frosted glass screen stands square to the building, keeping people from the edge."
+ },
+ {
+  "id": "g3",
+  "title": "Gallery 3",
+  "cam": [
+   0.5,
+   0.8,
+   1.6
+  ],
+  "look": [
+   9,
+   -3.2,
+   1.0
+  ],
+  "text": "The former café in the west wing, a gallery since 2017. A raking ceiling up to 4.3 m, granite underfoot, the plaza beyond the glass."
+ }
+]
