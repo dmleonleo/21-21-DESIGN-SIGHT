@@ -116,7 +116,36 @@ body.diagram #map,body.diagram #sun,body.diagram #veil{display:none}
 #sheet .legend i{display:inline-block;width:14px;height:8px;margin-right:8px;vertical-align:middle;background:color-mix(in srgb,var(--c) 30%,transparent);border:1px solid var(--c)}
 #explodeBtn{position:fixed;left:50%;bottom:var(--pad);transform:translateX(-50%);z-index:10}
 
+/* journey rail */
+#cut2{position:fixed;inset:0;background:#050505;opacity:0;pointer-events:none;z-index:3}
+#rail{display:none;position:fixed;right:var(--pad);top:50%;height:36vh;transform:translateY(-50%);width:1px;background:var(--faint);z-index:10}
+body.tour #rail{display:block}
+body.tour #map{display:none}
+#rail button{position:absolute;left:-6px;width:13px;height:9px;margin-top:-4px}
+#rail button::after{content:"";position:absolute;left:3px;top:4px;width:7px;height:1px;background:var(--mute)}
+#rail button:hover::after{background:var(--ink)}
+#railDot{position:absolute;left:-3px;width:7px;height:7px;margin-top:-3px;border-radius:50%;background:var(--ink);top:0}
+#tourCard{transition:opacity .25s linear}
+/* section tools */
+#cut{display:none;position:fixed;left:50%;top:calc(var(--pad) - 2px);transform:translateX(-50%);z-index:10;align-items:center;gap:18px;font-size:10px;letter-spacing:.22em;text-transform:uppercase}
+body.orbit #cut{display:flex}
+#cut .k{color:var(--mute)}
+#cut .link{font-size:10px;color:var(--mute)}
+#cut .link.on{color:var(--ink)}
+#cut input{-webkit-appearance:none;appearance:none;width:120px;height:16px;background:transparent;cursor:pointer}
+#cut input::-webkit-slider-runnable-track{height:1px;background:var(--faint)}
+#cut input::-moz-range-track{height:1px;background:var(--faint)}
+#cut input::-webkit-slider-thumb{-webkit-appearance:none;width:7px;height:7px;border-radius:50%;background:var(--ink);margin-top:-3px;border:0}
+#cut input::-moz-range-thumb{width:7px;height:7px;border-radius:50%;background:var(--ink);border:0}
+#cut output{font-variant-numeric:tabular-nums;width:56px;color:var(--mute)}
+#cut [hidden]{display:none}
+#dayBtn{font-size:10px;letter-spacing:.22em;color:var(--mute)}
+body.diagram #dayBtn{display:none}
+
 @media (max-width:720px){
+  #cut{left:var(--pad);transform:none;top:auto;bottom:calc(var(--pad) + 76px);gap:14px}
+  #rail{height:28vh}
+
   #sheet .block{left:var(--pad);right:var(--pad);bottom:calc(var(--pad) + 40px);grid-template-columns:repeat(3,1fr)}
   #sheet .lv{display:none}
   #explodeBtn{left:auto;right:var(--pad);transform:none;bottom:var(--pad)}

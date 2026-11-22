@@ -61,6 +61,7 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1200, 32, 16), new THREE.Sha
 sky.material.uniforms.rayleigh = { value: 0 };
 scene.add(sky);
 const realList = [sky];
+let groundMat = null; const trees = [];
 
 const hemi = new THREE.HemisphereLight(0xc9d3dc, 0x2b2a24, 0.6);
 scene.add(hemi);
@@ -82,7 +83,7 @@ let lampLevel = 0, baseExposure = 0.8, underK = 0;
 {
   const g = new THREE.Mesh(new THREE.CircleGeometry(600, 64).rotateX(-Math.PI / 2),
     new THREE.MeshStandardMaterial({ color: 0x262b21, roughness: 1 }));
-  g.position.y = -0.45; g.receiveShadow = true; scene.add(g); realList.push(g);
+  g.position.y = -0.45; g.receiveShadow = true; scene.add(g); realList.push(g); groundMat = g.material;
   let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const trunk = new THREE.CylinderGeometry(0.18, 0.28, 1, 6).translate(0, 0.5, 0);
   // crown: a loose cluster of low-poly blobs, read as silhouette at dusk
@@ -101,7 +102,7 @@ let lampLevel = 0, baseExposure = 0.8, underK = 0;
     m.compose(p.clone().add(new THREE.Vector3(0, h * 0.3, 0)), q, new THREE.Vector3(r * 1.5, h * 0.75, r * 1.5)); cI.setMatrixAt(i, m); q.identity();
   });
   tI.castShadow = cI.castShadow = true;
-  scene.add(tI, cI); realList.push(tI, cI);
+  scene.add(tI, cI); realList.push(tI, cI); trees.push(tI, cI);
 }
 
 // ---------- sun position (Tokyo) ----------
@@ -190,7 +191,104 @@ const realThings = [];
 let mode = 'orbit', fly = null, fovTarget = fovFor('orbit');
 camera.fov = fovTarget; camera.updateProjectionMatrix();
 const stations = await (await fetch('data/stations.json')).json();
+
 let tIdx = 0, tAuto = null;
+
+
+// ---------- Journey: one continuous take, driven by scroll ----------
+const J = { p: 0, t: 0, pos: null, look: null, chapter: -1, on: false };
+function buildJourney() {
+  J.reach = stations.map((st) => {                       // how far each shot may dolly forward before meeting a wall
+    const c = M(...st.cam), d = M(...st.look).sub(c).normalize();
+    const h = bvh ? hit(c, d, 6) : null;
+    return h ? Math.max(0, Math.min(1.8, h.distance - 2.2)) : 1.8;
+  });
+  const rail = $('#rail');
+  if (!rail.children.length || rail.children.length < 2) stations.forEach((s, i) => { const b = document.createElement('button'); b.style.top = `${(i / (stations.length - 1)) * 100}%`; b.title = s.title; b.onclick = () => { stopAuto(); J.t = i; }; rail.appendChild(b); });
+}
+function chapterText(i) {
+  const s = stations[i];
+  $('#tIdx').textContent = String(i + 1).padStart(2, '0');
+  $('#tOf').textContent = `/ ${String(stations.length).padStart(2, '0')}`;
+  $('#tTitle').textContent = s.title; $('#tText').textContent = s.text;
+}
+const jA = new THREE.Vector3(), jB = new THREE.Vector3(), jTmp = new THREE.PerspectiveCamera();
+function stepJourney(dt) {
+  if (!J.on) return;
+  const N = stations.length - 1;
+  J.t = THREE.MathUtils.clamp(J.t, 0, N);
+  J.p += (J.t - J.p) * Math.min(1, dt * (TEST ? 60 : 2.4));
+  const c = THREE.MathUtils.clamp(Math.round(J.p), 0, N), st = stations[c];
+  const f = THREE.MathUtils.clamp(J.p - c, -0.5, 0.5);              // -0.5 .. 0.5 within the shot
+  if (!J.reach || (!J.bvhOK && bvh)) { J.bvhOK = !!bvh; buildJourney(); }
+  jA.copy(M(...st.cam)); jB.copy(M(...st.look));
+  const dir = jB.clone().sub(jA).normalize();
+  camera.position.copy(jA).addScaledVector(dir, (f + 0.5) * J.reach[c]);   // a slow push-in, one shot per chapter
+  jTmp.position.copy(camera.position); jTmp.lookAt(jB.clone().addScaledVector(dir, 4).add(new THREE.Vector3(0, 0, 0)));
+  jTmp.rotateY(-f * 0.06);
+  camera.quaternion.copy(jTmp.quaternion);
+  if (c !== J.chapter) { J.chapter = c; tIdx = c; chapterText(c); }
+  const edge = THREE.MathUtils.smoothstep(Math.abs(f), 0.3, 0.5);
+  $('#cut2').style.opacity = c === 0 && f < 0 || c === N && f > 0 ? 0 : edge;    // dip to black between shots
+  $('#tourCard').style.opacity = 1 - THREE.MathUtils.smoothstep(Math.abs(f), 0.1, 0.36);
+  $('#railDot').style.top = `${(J.p / N) * 100}%`;
+}
+addEventListener('wheel', (e) => {
+  if (mode !== 'tour' || !J.on) return;
+  stopAuto(); J.t += e.deltaY * 0.0016;
+}, { passive: true });
+{ let ty = null;
+  canvas.addEventListener('touchstart', (e) => { if (mode === 'tour') ty = e.touches[0].clientY; }, { passive: true });
+  canvas.addEventListener('touchmove', (e) => { if (mode !== 'tour' || ty === null) return; stopAuto(); J.t += (ty - e.touches[0].clientY) * 0.006; ty = e.touches[0].clientY; }, { passive: true });
+  canvas.addEventListener('touchend', () => (ty = null));
+}
+
+// ---------- Section: cut the building open, run the day ----------
+const cutPlane = new THREE.Plane();
+let cutKind = 'none';
+const CUT = { plan: { min: -5.6, max: 4.8, def: 1.4, label: (v) => `Z ${v >= 0 ? '+' : ''}${v.toFixed(1)}` }, long: { min: -12, max: 22, def: 10, label: (v) => `Y ${v.toFixed(1)}` } };
+function setCut(kind, v) {
+  cutKind = kind;
+  document.querySelectorAll('#cut [data-cut]').forEach((b) => b.classList.toggle('on', b.dataset.cut === kind));
+  const on = kind !== 'none', r = $('#cutRange');
+  r.hidden = !on; $('#cutOut').hidden = !on;
+  if (on) {
+    const c = CUT[kind];
+    if (v === undefined) { r.min = c.min; r.max = c.max; r.step = 0.1; r.value = c.def; v = c.def; }
+    if (kind === 'plan') cutPlane.set(new THREE.Vector3(0, -1, 0), v);       // keep below v
+    else cutPlane.set(new THREE.Vector3(0, 0, -1), -v);                      // keep model Y > v (north half), seen from the south
+    $('#cutOut').value = c.label(v);
+  }
+  const planes = on ? [cutPlane] : null;
+  for (const m of clipMats) { m.clippingPlanes = planes; m.side = on ? THREE.DoubleSide : THREE.FrontSide; m.needsUpdate = true; }
+  if (groundMat) { groundMat.clippingPlanes = planes; groundMat.needsUpdate = true; }
+  coverU.cutOn.value = on ? 1 : 0;
+  earthMat.clippingPlanes = planes; earthMat.needsUpdate = true; earth.visible = on;
+  trees.forEach((t) => (t.visible = !on && mode !== 'diagram'));
+}
+renderer.localClippingEnabled = true;
+// earth mass: only its inside shows, and only when the cut opens it
+const earthMat = new THREE.MeshBasicMaterial({ color: 0x141413, side: THREE.BackSide, fog: false });
+const earth = new THREE.Mesh(new THREE.BoxGeometry(600, 120, 600), earthMat);
+earth.position.copy(M(32, 4, -60.5)); earth.visible = false; scene.add(earth);
+const CUTVIEW = { plan: [[30, -26, 74], [30, 4, -1]], long: [[30, -58, 9], [30, 10, -2.5]] };
+document.querySelectorAll('#cut [data-cut]').forEach((b) => (b.onclick = () => {
+  setCut(b.dataset.cut);
+  const v = CUTVIEW[b.dataset.cut];
+  if (v) { const t = M(...v[1]); flyTo(M(...v[0]), t, () => orbit.target.copy(t)); }
+}));
+$('#cutRange').addEventListener('input', (e) => setCut(cutKind, +e.target.value));
+let dayRun = null;
+$('#dayBtn').onclick = () => {
+  if (dayRun) { dayRun = null; $('#dayBtn').textContent = 'Day'; return; }
+  dayRun = { h: Math.max(6, +$('#sunRange').value >= 20.5 ? 6 : +$('#sunRange').value) }; $('#dayBtn').textContent = 'Stop';
+};
+function stepDay(dt) {
+  if (!dayRun) return;
+  dayRun.h += dt * 0.75;                    // a day in 20 s
+  if (dayRun.h > 21) dayRun.h = 6;
+  $('#sunRange').value = dayRun.h; setSun(dayRun.h);
+}
 
 function setMode(m) {
   mode = m;
@@ -202,6 +300,8 @@ function setMode(m) {
   diagCtl.enabled = D; diagRoot.visible = D; renderPass.camera = D ? diagCam : camera; bloom.enabled = !D;
   scene.background = D ? new THREE.Color(0x0e0f10) : null;
   for (const o of realThings) o.visible = !D;
+  if (m !== 'orbit' && cutKind !== 'none') setCut('none');
+  J.on = false; $('#tourCard').style.opacity = ''; $('#cut2').style.opacity = 0;
   scene.fog.far = D ? 1e5 : 420;
   if (D) { explode = explodeTarget = 0; $('#explodeBtn').textContent = 'Explode'; }
   $('#tourCard').hidden = m !== 'tour';
@@ -214,7 +314,11 @@ function setMode(m) {
     if (camera.position.y < 3) { flyTo(M(30, -50, 24), tgt, () => orbit.target.copy(tgt)); }
     else orbit.target.copy(tgt);
   } else if (m === 'tour') {
-    goStation(tIdx);
+    const i = THREE.MathUtils.clamp(Math.round(J.t), 0, stations.length - 1), s = stations[i];
+    J.t = J.p = i; J.chapter = -1;
+    flyTo(M(...s.cam), M(...s.look), () => { J.on = true; });
+    chapterText(i);
+    if (!TEST) toast('Scroll to move through the building');
   } else if (m === 'walk') {
     const s = stations.find((x) => x.id === 'plaza');
     flyTo(M(...s.cam), M(...s.look));
@@ -243,6 +347,7 @@ function stepFly(dt) {
 
 // tour
 function goStation(i) {
+  if (J.on) { J.t = THREE.MathUtils.clamp(i, 0, stations.length - 1); if (TEST) J.p = J.t; return; }
   tIdx = (i + stations.length) % stations.length;
   const s = stations[tIdx];
   $('#tIdx').textContent = String(tIdx + 1).padStart(2, '0');
@@ -252,12 +357,12 @@ function goStation(i) {
   flyTo(M(...s.cam), M(...s.look));
 }
 function stopAuto() { if (tAuto) { clearInterval(tAuto); tAuto = null; $('#tPlay').textContent = 'Play'; } }
-$('#tPrev').onclick = () => { stopAuto(); goStation(tIdx - 1); };
-$('#tNext').onclick = () => { stopAuto(); goStation(tIdx + 1); };
+$('#tPrev').onclick = () => { stopAuto(); goStation(Math.round(J.t) - 1); };
+$('#tNext').onclick = () => { stopAuto(); goStation(Math.round(J.t) + 1); };
 $('#tPlay').onclick = () => {
   if (tAuto) return stopAuto();
-  $('#tPlay').textContent = 'Pause'; goStation(tIdx + 1);
-  tAuto = setInterval(() => goStation(tIdx + 1), 9000);
+  $('#tPlay').textContent = 'Pause';
+  tAuto = setInterval(() => { J.t += 0.0022; if (J.t >= stations.length - 1) stopAuto(); }, 16);
 };
 
 // walk input
@@ -265,8 +370,8 @@ const keys = new Set();
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   keys.add(e.code);
-  if (mode === 'tour' && e.code === 'ArrowRight') { stopAuto(); goStation(tIdx + 1); }
-  if (mode === 'tour' && e.code === 'ArrowLeft') { stopAuto(); goStation(tIdx - 1); }
+  if (mode === 'tour' && /ArrowRight|ArrowDown|Space/.test(e.code)) { stopAuto(); goStation(Math.round(J.t) + 1); }
+  if (mode === 'tour' && /ArrowLeft|ArrowUp/.test(e.code)) { stopAuto(); goStation(Math.round(J.t) - 1); }
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -355,19 +460,19 @@ let toastT;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), 2600); }
 
 // ---------- load model ----------
-const lightMats = [];
+const lightMats = [], clipMats = [];
 // ---------- sky cover: indoor fragments lose the open-sky ambient, so sunlight and lamps model the rooms ----------
 const COVER = { w: 200, h: 80, x0: -14, x1: 86, y0: -16, y1: 24 };   // model metres, 0.5 m cells
 const coverTex = new THREE.DataTexture(new Float32Array(COVER.w * COVER.h * 4).fill(-20), COVER.w, COVER.h, THREE.RGBAFormat, THREE.FloatType);
 coverTex.magFilter = coverTex.minFilter = THREE.LinearFilter; coverTex.needsUpdate = true;
-const coverU = { coverTex: { value: coverTex }, coverBox: { value: new THREE.Vector4(COVER.x0, COVER.x1, COVER.y0, COVER.y1) }, coverK: { value: 0.22 } };
+const coverU = { coverTex: { value: coverTex }, coverBox: { value: new THREE.Vector4(COVER.x0, COVER.x1, COVER.y0, COVER.y1) }, coverK: { value: 0.22 }, cutOn: { value: 0 } };
 function addCover(m) {
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, coverU);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-      varying vec3 vWPos; uniform sampler2D coverTex; uniform vec4 coverBox; uniform float coverK;
+      varying vec3 vWPos; uniform sampler2D coverTex; uniform vec4 coverBox; uniform float coverK; uniform float cutOn;
       float skyOpen(){
         vec2 uv = vec2((vWPos.x - coverBox.x) / (coverBox.y - coverBox.x), (-vWPos.z - coverBox.z) / (coverBox.w - coverBox.z));
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 1.0;
@@ -376,7 +481,9 @@ function addCover(m) {
         return smoothstep(-0.25, 0.05, vWPos.y - roof);   // 0 under cover, 1 in the open
       }`)
       .replace('#include <aomap_fragment>', `#include <aomap_fragment>
-      { float k = mix(coverK, 1.0, skyOpen()); reflectedLight.indirectDiffuse *= k; reflectedLight.indirectSpecular *= k; }`);
+      { float k = mix(coverK, 1.0, skyOpen()); reflectedLight.indirectDiffuse *= k; reflectedLight.indirectSpecular *= k; }`)
+      .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+      if (cutOn > 0.5 && !gl_FrontFacing) gl_FragColor = vec4(0.56, 0.55, 0.52, 1.0);`);
   };
   m.needsUpdate = true;
 }
@@ -409,6 +516,7 @@ loader.load('model/2121.glb', (gltf) => {
       if (isLight) { m.emissive = new THREE.Color(1, 0.9, 0.74); m.emissiveIntensity = 3.0; lightMats.push(m); }
       if (m.map) m.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
       if (!isGlass && !isLight && !m.userData.cover) { m.userData.cover = true; addCover(m); }
+      if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); }
     });
     if (!isLight) {
       const g = o.geometry.clone();
@@ -534,7 +642,9 @@ const clock = new THREE.Timer();
 function frame() {
   clock.update(); const dt = Math.min(clock.getDelta(), 0.05);
   if (fly) stepFly(dt);
+  stepDay(dt);
   if (mode === 'diagram') stepDiagram();
+  else if (mode === 'tour' && J.on && !fly) stepJourney(dt);
   else if (mode === 'orbit' && !fly) orbit.update();
   else if (!fly) { if (mode === 'walk') stepWalk(dt); applyLook(); }
   const under = toModel(camera.position).z < -1.2;
@@ -557,4 +667,4 @@ addEventListener('resize', () => {
   composer.setSize(innerWidth, innerHeight); sizeDiag();
 });
 // debug hook for automated checks
-window.__2121 = { get bvh() { return bvh; }, THREE, setMode, goStation, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };
+window.__2121 = { get bvh() { return bvh; }, THREE, setMode, goStation, setCut, J, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };

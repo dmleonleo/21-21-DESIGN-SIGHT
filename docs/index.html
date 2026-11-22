@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0a0a09">
 <title>21_21 DESIGN SIGHT — A Digital Walkthrough</title>
-<meta name="description" content="A digital walkthrough of 21_21 DESIGN SIGHT by Tadao Ando, Tokyo Midtown. Overview, guided tour and free walk.">
+<meta name="description" content="A digital walkthrough of 21_21 DESIGN SIGHT by Tadao Ando, Tokyo Midtown. Journey, section, walk and diagram.">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <canvas id="view"></canvas>
 <div id="veil" aria-hidden="true"></div>
 <div id="bars" aria-hidden="true"><i></i><i></i></div>
+<div id="cut2" aria-hidden="true"></div>
 
 <div id="loader">
   <div class="mark">21_21 DESIGN SIGHT</div>
@@ -42,6 +43,17 @@
   </div>
 </section>
 
+<div id="rail" aria-label="Chapters"><i id="railDot"></i></div>
+
+<div id="cut">
+  <span class="k">Cut</span>
+  <button data-cut="none" class="link on">None</button>
+  <button data-cut="plan" class="link">Plan</button>
+  <button data-cut="long" class="link">Long</button>
+  <input id="cutRange" type="range" hidden aria-label="Cut position">
+  <output id="cutOut" hidden></output>
+</div>
+
 <section id="walkHelp" hidden>
   <span class="desk">Drag to look. W A S D to move. Shift to hurry. Click the plan to jump.</span>
   <span class="touch">Stick to move. Drag to look. Tap the plan to jump.</span>
@@ -49,13 +61,14 @@
 <div id="stick" hidden><i></i></div>
 
 <nav id="modes" aria-label="View">
-  <button data-mode="orbit" class="on">Overview</button>
-  <button data-mode="tour">Tour</button>
+  <button data-mode="tour">Journey</button>
+  <button data-mode="orbit" class="on">Section</button>
   <button data-mode="walk">Walk</button>
   <button data-mode="diagram">Diagram</button>
 </nav>
 
 <footer id="sun">
+  <button id="dayBtn" class="link">Day</button>
   <output id="sunOut">14:30</output>
   <input id="sunRange" type="range" min="6" max="21" step="0.25" value="14.5" aria-label="Time of day">
 </footer>
