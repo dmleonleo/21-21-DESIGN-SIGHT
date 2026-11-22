@@ -473,17 +473,25 @@ const lightMats = [], clipMats = [];
 // ---------- sky cover: indoor fragments lose the open-sky ambient, so sunlight and lamps model the rooms ----------
 const COVER = { w: 200, h: 80, x0: -14, x1: 86, y0: -16, y1: 24 };   // model metres, 0.5 m cells
 const coverTex = new THREE.DataTexture(new Float32Array(COVER.w * COVER.h * 4).fill(-20), COVER.w, COVER.h, THREE.RGBAFormat, THREE.FloatType);
-coverTex.magFilter = coverTex.minFilter = THREE.LinearFilter; coverTex.needsUpdate = true;
+coverTex.magFilter = coverTex.minFilter = THREE.NearestFilter;   // linear blending of open(-20)/covered(+4.8) cells made dark wedges on walls coverTex.needsUpdate = true;
 const coverU = { coverTex: { value: coverTex }, coverBox: { value: new THREE.Vector4(COVER.x0, COVER.x1, COVER.y0, COVER.y1) }, coverK: { value: 0.22 }, cutOn: { value: 0 } };
 function addCover(m) {
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, coverU);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    // normals always face the viewer: SketchUp export has triangles with reversed winding, which DoubleSide
+    // shading flipped to the dark side (the black slivers on the walls)
+    sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin
+      .replace('float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;', '\n#ifdef FLAT_SHADED\nfloat faceDirection = 1.0;\n#else\nfloat faceDirection = dot(vNormal, vViewPosition) >= 0.0 ? 1.0 : -1.0;\n#endif\n'));
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vWPos; uniform sampler2D coverTex; uniform vec4 coverBox; uniform float coverK; uniform float cutOn;
       float skyOpen(){
-        vec2 uv = vec2((vWPos.x - coverBox.x) / (coverBox.y - coverBox.x), (-vWPos.z - coverBox.z) / (coverBox.w - coverBox.z));
+        // sample a little off the surface, on the viewer's side, so a wall under the eave reads as outside from outside
+        vec3 gn = normalize(cross(dFdx(vWPos), dFdy(vWPos)));
+        if (dot(gn, cameraPosition - vWPos) < 0.0) gn = -gn;
+        vec3 sp = vWPos + gn * 0.35;
+        vec2 uv = vec2((sp.x - coverBox.x) / (coverBox.y - coverBox.x), (-sp.z - coverBox.z) / (coverBox.w - coverBox.z));
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 1.0;
         vec4 c = texture2D(coverTex, uv);
         float roof = vWPos.y > -0.6 ? c.r : c.g;          // covering height above this level
@@ -531,7 +539,7 @@ loader.load('model/2121.glb', (gltf) => {
       if (isLight) { m.emissive = new THREE.Color(1, 0.9, 0.74); m.emissiveIntensity = 3.0; lightMats.push(m); }
       if (m.map) m.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
       if (!isGlass && !isLight && !m.userData.cover) { m.userData.cover = true; addCover(m); }
-      if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); if (!isGlass && !isLight) m.side = THREE.DoubleSide; }
+      if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); if (!isGlass && !isLight) { m.side = THREE.DoubleSide; m.flatShading = true; } }   // planar architecture: geometric normals, ignores broken exported vertex normals
     });
     if (!isLight) {
       const g = o.geometry.clone();
@@ -654,7 +662,7 @@ const grade = new ShaderPass({
 composer.addPass(grade);
 
 // ---------- light / dark: morning 08:00 vs late night 23:00 ----------
-const THEME = { light: { h: 8.5, paper: 0.62 }, dark: { h: 23, paper: 0 } };
+const THEME = { light: { h: 8.5, paper: 0.5 }, dark: { h: 23, paper: 0 } };
 let themeRun = null, paperK = 0;
 function setTheme(t, instant) {
   document.body.classList.toggle('light', t === 'light');
@@ -710,4 +718,4 @@ addEventListener('resize', () => {
   composer.setSize(innerWidth, innerHeight); sizeDiag();
 });
 // debug hook for automated checks
-window.__2121 = { get bvh() { return bvh; }, THREE, setMode, goStation, setCut, J, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };
+window.__2121 = { get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };

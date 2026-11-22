@@ -1,6 +1,8 @@
+@font-face{font-family:"Bella Gothic";src:url(../fonts/BellaGothicSansSerifVF.woff2) format("woff2");font-weight:10 1000;font-display:swap}
+@font-face{font-family:"Bella Carvique";src:url(../fonts/BellaCarviqueSerifVF.woff2) format("woff2");font-weight:100 900;font-display:swap}
 :root{
   --bg:#0a0a09; --ink:#e9e6df; --mute:rgba(233,230,223,.46); --faint:rgba(233,230,223,.16);
-  --font:"Helvetica Neue",Helvetica,"Neue Haas Grotesk Text Pro",Arial,sans-serif;
+  --font:"Bella Gothic","Helvetica Neue",Helvetica,Arial,sans-serif; --serif:"Bella Carvique","Bella Gothic",Georgia,serif;
   --pad:clamp(20px,3.4vw,48px);
   --ease:cubic-bezier(.2,.7,.1,1);
 }
@@ -31,7 +33,7 @@ body.tour #veil{background:radial-gradient(120% 90% at 50% 46%,transparent 55%,r
 
 /* brand */
 #brand{position:fixed;left:var(--pad);top:var(--pad);z-index:10;pointer-events:none}
-#brand .mark{font-size:12px;letter-spacing:.42em}
+#brand .mark{font-weight:1000;font-size:15px;letter-spacing:.04em}
 #brand .sub{font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--mute);margin-top:10px}
 #infoBtn{position:fixed;right:var(--pad);top:calc(var(--pad) - 2px);z-index:10}
 
@@ -57,7 +59,7 @@ body.tour #veil{background:radial-gradient(120% 90% at 50% 46%,transparent 55%,r
 #tourCard{text-shadow:0 0 28px rgba(0,0,0,.55);position:fixed;left:var(--pad);bottom:calc(var(--pad) + 48px);z-index:10;width:min(400px,calc(100vw - 2 * var(--pad)))}
 #tourCard .idx{font-size:11px;letter-spacing:.24em;font-variant-numeric:tabular-nums}
 #tourCard .of{color:var(--mute);margin-left:10px}
-#tourCard h2{font-weight:300;font-size:clamp(26px,3.2vw,40px);letter-spacing:.01em;line-height:1.1;margin-top:18px}
+#tourCard h2{font-family:var(--serif);font-weight:900;font-size:clamp(28px,3.4vw,46px);letter-spacing:0;line-height:1.04;margin-top:18px}
 #tourCard p{font-size:13px;line-height:1.75;margin-top:16px;color:rgba(233,230,223,.72);max-width:34em}
 #tourCard .row{display:flex;gap:28px;margin-top:22px}
 #tourCard .fade{animation:rise 1.1s var(--ease) both}
@@ -85,7 +87,7 @@ dialog#info{margin:0 0 0 auto;height:100%;max-height:none;width:min(520px,100vw)
 dialog#info[open]{animation:slide .7s var(--ease) both}
 @keyframes slide{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
 dialog#info::backdrop{background:rgba(0,0,0,.5)}
-dialog#info h2{font-weight:400;font-size:12px;letter-spacing:.42em}
+dialog#info h2{font-family:var(--serif);font-weight:900;font-size:34px;letter-spacing:0;line-height:1.05}
 dialog#info .lede{font-weight:300;font-size:22px;line-height:1.4;margin:36px 0 24px}
 dialog#info p{color:rgba(233,230,223,.72)}
 dialog#info h3{font-weight:400;font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:var(--mute);margin:44px 0 14px}
@@ -176,3 +178,11 @@ body.light #tourCard p{color:rgba(21,21,19,.78)}
 body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:46vh;pointer-events:none;z-index:5;opacity:0;transition:opacity 2.4s var(--ease);background:linear-gradient(rgba(232,230,225,0),rgba(232,230,225,.62))}
 body.light::after{opacity:1}
 body.light.diagram::after{opacity:0}
+
+#theme{gap:14px;top:calc(var(--pad) - 6px)}
+#theme button{padding:2px 0 6px;display:flex}
+#theme svg{fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round;transition:transform .8s var(--ease)}
+#theme button:hover svg{transform:rotate(-18deg)}
+#theme button.on svg{stroke-width:1.6}
+#loader .mark{font-weight:1000;font-size:22px;letter-spacing:.04em;padding-left:0}
+@media (max-width:640px){#brand .mark{font-size:14px;letter-spacing:.03em}}
