@@ -1,83 +1,87 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>21_21 DESIGN SIGHT · 数字建筑体验</title>
-<meta name="description" content="安藤忠雄设计的 21_21 DESIGN SIGHT（东京中城）三维线上体验：鸟瞰、导览与自由漫游。">
+<meta name="theme-color" content="#0a0a09">
+<title>21_21 DESIGN SIGHT — A Digital Walkthrough</title>
+<meta name="description" content="A digital walkthrough of 21_21 DESIGN SIGHT by Tadao Ando, Tokyo Midtown. Overview, guided tour and free walk.">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <canvas id="view"></canvas>
+<div id="veil" aria-hidden="true"></div>
+<div id="bars" aria-hidden="true"><i></i><i></i></div>
 
 <div id="loader">
-  <div class="mark">21_21<br>DESIGN SIGHT</div>
+  <div class="mark">21_21 DESIGN SIGHT</div>
   <div class="bar"><i id="loadbar"></i></div>
-  <div class="hint" id="loadtext">正在载入建筑模型…</div>
+  <div class="hint"><span id="loadtext">Loading</span> <span id="loadpct">0</span></div>
 </div>
 
 <header id="brand">
   <div class="mark">21_21 DESIGN SIGHT</div>
-  <div class="sub">Tadao Ando · Tokyo Midtown · 2007</div>
+  <div class="sub">Tadao Ando, Tokyo, 2007</div>
 </header>
 
-<nav id="modes" aria-label="浏览模式">
-  <button data-mode="orbit" class="on">鸟瞰</button>
-  <button data-mode="tour">导览</button>
-  <button data-mode="walk">漫游</button>
-  <button id="infoBtn" class="ghost" aria-label="关于">i</button>
-</nav>
+<button id="infoBtn" class="link">About</button>
 
-<aside id="map" title="平面图">
-  <div class="lvl"><span id="lvlname">1F</span></div>
-  <div class="frame"><img id="planimg" src="plan_f1.png" alt="平面图"><i id="you"></i></div>
+<aside id="map" title="Plan">
+  <div class="lvl" id="lvlname">Ground floor</div>
+  <div class="frame"><img id="planimg" src="plan_f1.png" alt="Plan"><i id="you"></i></div>
 </aside>
 
 <section id="tourCard" hidden>
-  <div class="idx" id="tIdx">01 / 09</div>
+  <div class="idx"><span id="tIdx">01</span><span class="of" id="tOf">/ 10</span></div>
   <h2 id="tTitle"></h2>
-  <div class="en" id="tEn"></div>
   <p id="tText"></p>
   <div class="row">
-    <button id="tPrev" aria-label="上一站">←</button>
-    <button id="tPlay">自动播放</button>
-    <button id="tNext" aria-label="下一站">→</button>
+    <button id="tPrev" class="link" aria-label="Previous">Prev</button>
+    <button id="tPlay" class="link">Play</button>
+    <button id="tNext" class="link" aria-label="Next">Next</button>
   </div>
 </section>
 
 <section id="walkHelp" hidden>
-  <div class="desk">拖动画面环视 · <b>W A S D</b> / 方向键移动 · <b>Shift</b> 快走 · 点平面图瞬移</div>
-  <div class="touch">左下摇杆移动 · 拖动画面环视 · 点平面图瞬移</div>
+  <span class="desk">Drag to look. W A S D to move. Shift to hurry. Click the plan to jump.</span>
+  <span class="touch">Stick to move. Drag to look. Tap the plan to jump.</span>
 </section>
 <div id="stick" hidden><i></i></div>
 
+<nav id="modes" aria-label="View">
+  <button data-mode="orbit" class="on">Overview</button>
+  <button data-mode="tour">Tour</button>
+  <button data-mode="walk">Walk</button>
+</nav>
+
 <footer id="sun">
-  <label>时间 <output id="sunOut">14:00</output></label>
-  <input id="sunRange" type="range" min="6" max="18.5" step="0.25" value="14">
+  <output id="sunOut">14:30</output>
+  <input id="sunRange" type="range" min="6" max="21" step="0.25" value="14.5" aria-label="Time of day">
 </footer>
 
 <dialog id="info">
-  <button class="close" id="infoClose" aria-label="关闭">×</button>
+  <button class="close link" id="infoClose" aria-label="Close">Close</button>
   <h2>21_21 DESIGN SIGHT</h2>
-  <p>由安藤忠雄与日建设计设计，2007 年 3 月落成于东京中城花园。三宅一生“一块布”（A Piece of Cloth）的理念化作两片折叠的钢板屋顶：最长 54 m，16 mm 厚，现场焊接成一整张。建筑地上一层、地下一层，约八成面积位于地下。</p>
+  <p class="lede">Two folded steel plates laid on a garden lawn. Tadao Ando and Nikken Sekkei, 2007, after Issey Miyake's idea of a single piece of cloth.</p>
+  <p>The roof plates run up to 54 m and are 16 mm thick, welded on site into one sheet. One storey sits above ground and one below; about eighty per cent of the building is underground.</p>
   <table>
-    <tr><td>场地面积</td><td>2,653.3 m²</td></tr>
-    <tr><td>建筑面积</td><td>597.3 m²</td></tr>
-    <tr><td>总楼面</td><td>1,932 m²</td></tr>
-    <tr><td>展厅</td><td>Gallery 1 133 m² · Gallery 2 443 m² · Gallery 3 110 m²</td></tr>
-    <tr><td>最高</td><td>地面以上 4.8 m</td></tr>
-    <tr><td>清水混凝土模板</td><td>1800 × 900 mm，每块 6 个对拉螺栓孔</td></tr>
+    <tr><td>Site</td><td>2,653.3 m²</td></tr>
+    <tr><td>Building</td><td>597.3 m²</td></tr>
+    <tr><td>Total floor</td><td>1,932 m²</td></tr>
+    <tr><td>Galleries</td><td>133 m², 443 m², 110 m²</td></tr>
+    <tr><td>Height</td><td>4.8 m above ground</td></tr>
+    <tr><td>Formwork</td><td>1800 × 900 mm, six tie holes</td></tr>
   </table>
-  <h3>模型说明</h3>
-  <p>三维模型以一份 SketchUp 模型（作者未知）为基础，按 PLATEAU 港区 3D 城市模型（CC BY 4.0）校正平面位置与尺度，再对照官方资料与公开照片逐项修正入口、屋面、矮墙、场地坡度、磨砂玻璃护栏与室内饰面。标注为推测的尺寸并非实测，地下层与室内隔墙为简化。</p>
-  <h3>资料来源</h3>
+  <h3>The model</h3>
+  <p>Built from a SketchUp model of unknown authorship, registered to the PLATEAU Minato City 3D model (CC BY 4.0), then corrected against official material and public photographs: entrance, roof plate, low wall, ground slope, frosted guard and interior finishes. Dimensions marked as inferred are not measured. The basement and interior partitions are simplified.</p>
+  <h3>Sources</h3>
   <ul>
-    <li><a href="https://www.2121designsight.jp/designsight/architecture.html" target="_blank" rel="noopener">21_21 DESIGN SIGHT 官网 · 建筑</a></li>
-    <li><a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener">国土交通省 PLATEAU（CC BY 4.0）</a></li>
-    <li>Wikimedia Commons 照片（CC BY / CC BY-SA，作者见仓库 SOURCES）</li>
-    <li>日经 xTECH、《新建築》2007-05、《ディテール》2007-10</li>
+    <li><a href="https://www.2121designsight.jp/designsight/architecture.html" target="_blank" rel="noopener">21_21 DESIGN SIGHT, Architecture</a></li>
+    <li><a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener">MLIT PLATEAU (CC BY 4.0)</a></li>
+    <li>Wikimedia Commons photographs (CC BY, CC BY-SA)</li>
+    <li>Nikkei xTECH. Shinkenchiku 2007-05. Detail 2007-10.</li>
   </ul>
-  <p class="fine">非官方项目，仅供学习与研究。</p>
+  <p class="fine">An unofficial study project.</p>
 </dialog>
 
 <div id="toast" hidden></div>

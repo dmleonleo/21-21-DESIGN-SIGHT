@@ -5,8 +5,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { Sky } from 'three/addons/objects/Sky.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { MeshBVH } from 'three-mesh-bvh';
 
 const $ = (s) => document.querySelector(s);
@@ -28,23 +32,36 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xdfe3e6, 140, 520);
+scene.fog = new THREE.Fog(0x2a2c2e, 90, 420);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.35;
+scene.environmentIntensity = 0.22;
 
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 1500);
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 1500);
 camera.position.copy(M(30, -50, 24));
 
-const sky = new Sky();
-sky.scale.setScalar(4000);
-Object.assign(sky.material.uniforms.turbidity, { value: 6 });
-sky.material.uniforms.rayleigh.value = 1.4;
-sky.material.uniforms.mieCoefficient.value = 0.004;
-sky.material.uniforms.mieDirectionalG.value = 0.8;
+// sky: a quiet gradient dome. dark zenith, a low glow toward the sun
+const sky = new THREE.Mesh(new THREE.SphereGeometry(1200, 32, 16), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { sunPosition: { value: new THREE.Vector3(0, 1, 0) }, day: { value: 1 } },
+  vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `uniform vec3 sunPosition; uniform float day; varying vec3 vDir;
+    void main(){
+      vec3 d = normalize(vDir); float h = max(d.y, 0.0);
+      vec3 zen = mix(vec3(0.010,0.012,0.018), vec3(0.16,0.20,0.26), day);
+      vec3 hor = mix(vec3(0.05,0.045,0.05), vec3(0.42,0.43,0.43), day);
+      vec3 c = mix(hor, zen, pow(h, 0.45));
+      float s = max(dot(d, normalize(sunPosition)), 0.0);
+      vec3 warm = vec3(1.0,0.62,0.34) * (1.0 - day * 0.6);
+      c += warm * (pow(s, 6.0) * 0.35 + pow(s, 64.0) * 0.5) * (1.0 - h * 0.6);
+      c = mix(c, hor * 0.6, smoothstep(0.0, -0.15, d.y));
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+}));
+sky.material.uniforms.rayleigh = { value: 0 };
 scene.add(sky);
 
-const hemi = new THREE.HemisphereLight(0xdfe9f3, 0x6f7a5a, 1.1);
+const hemi = new THREE.HemisphereLight(0xc9d3dc, 0x2b2a24, 0.6);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 3.2);
 sun.castShadow = true;
@@ -53,27 +70,34 @@ const sc = sun.shadow.camera; sc.left = -70; sc.right = 70; sc.top = 50; sc.bott
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 scene.add(sun, sun.target);
 sun.target.position.copy(M(28, 3, 0));
-const fill = new THREE.AmbientLight(0xfff4e6, 0);           // raised underground
+const fill = new THREE.AmbientLight(0xfff1de, 0);           // raised underground
 scene.add(fill);
+// warm interior lamps: they carry the building at dusk and underground
+const lamps = [[28, 11, 1.8], [38, 9.5, 1.6], [6, -1.5, 1.3], [36, 2, -4.2], [52, 1, -4.2], [64, 4, -4.2], [50, 12, -3.6]]
+  .map(([x, y, z]) => { const l = new THREE.PointLight(0xffd7a8, 0, 16, 2); l.position.copy(M(x, y, z)); scene.add(l); return l; });
+let lampLevel = 0, baseExposure = 0.8, underK = 0;
 
 // garden context: far ground + cedars (stylised; not part of the measured model)
 {
   const g = new THREE.Mesh(new THREE.CircleGeometry(600, 64).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x86a85e, roughness: 1 }));
+    new THREE.MeshStandardMaterial({ color: 0x262b21, roughness: 1 }));
   g.position.y = -0.45; g.receiveShadow = true; scene.add(g);
   let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const trunk = new THREE.CylinderGeometry(0.18, 0.28, 1, 6).translate(0, 0.5, 0);
-  const crown = new THREE.ConeGeometry(1, 1, 8).translate(0, 0.5, 0);
+  // crown: a loose cluster of low-poly blobs, read as silhouette at dusk
+  const crown = BufferGeometryUtils.mergeGeometries([[0, 0.55, 0, 0.62], [0.32, 0.4, 0.1, 0.45], [-0.28, 0.35, -0.12, 0.44], [0.05, 0.8, 0.05, 0.4], [-0.1, 0.22, 0.3, 0.36]]
+    .map(([x, y, z, r]) => new THREE.IcosahedronGeometry(r, 1).translate(x, y, z)));
   const pts = [];
   for (let i = 0; i < 48; i++) pts.push([-14 + rnd() * 104, 34 + rnd() * 26]);          // north grove (Midtown garden)
   for (let i = 0; i < 10; i++) pts.push([88 + rnd() * 18, -10 + rnd() * 40]);            // east edge
-  const tI = new THREE.InstancedMesh(trunk, new THREE.MeshStandardMaterial({ color: 0x4a3c30, roughness: 1 }), pts.length);
-  const cI = new THREE.InstancedMesh(crown, new THREE.MeshStandardMaterial({ color: 0x3e5a3c, roughness: 1 }), pts.length);
+  const tI = new THREE.InstancedMesh(trunk, new THREE.MeshStandardMaterial({ color: 0x1d1814, roughness: 1 }), pts.length);
+  const cI = new THREE.InstancedMesh(crown, new THREE.MeshStandardMaterial({ color: 0x1b2419, roughness: 1, flatShading: true }), pts.length);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion();
   pts.forEach(([x, y], i) => {
     const h = 11 + rnd() * 10, r = 2.2 + rnd() * 1.6, p = M(x, y, -0.4);
     m.compose(p, q, new THREE.Vector3(1, h * 0.35, 1)); tI.setMatrixAt(i, m);
-    m.compose(p.clone().add(new THREE.Vector3(0, h * 0.25, 0)), q, new THREE.Vector3(r, h * 0.8, r)); cI.setMatrixAt(i, m);
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6.28);
+    m.compose(p.clone().add(new THREE.Vector3(0, h * 0.3, 0)), q, new THREE.Vector3(r * 1.5, h * 0.75, r * 1.5)); cI.setMatrixAt(i, m); q.identity();
   });
   tI.castShadow = cI.castShadow = true;
   scene.add(tI, cI);
@@ -92,16 +116,22 @@ function setSun(hour) {
   const dir = M(Math.sin(az) * Math.cos(alt), Math.cos(az) * Math.cos(alt), Math.sin(alt));
   sky.material.uniforms.sunPosition.value.copy(dir);
   sun.position.copy(sun.target.position).addScaledVector(dir, 200);
-  const day = THREE.MathUtils.smoothstep(alt, -0.05, 0.25);
-  sun.intensity = 3.4 * day;
-  sun.color.setHSL(0.09, 0.55 * (1 - day) + 0.1, 0.62 + 0.3 * day);
-  hemi.intensity = 0.25 + 0.9 * day;
-  renderer.toneMappingExposure = 0.55 + 0.4 * day;
+  const day = THREE.MathUtils.smoothstep(alt, -0.04, 0.35);
+  const lit = THREE.MathUtils.smoothstep(alt, -0.02, 0.05);
+  sun.intensity = 3.8 * lit * (0.6 + 0.4 * day);
+  sun.color.setHSL(0.075, 0.75 * (1 - day) + 0.08, 0.55 + 0.3 * day);
+  hemi.intensity = 0.12 + 0.75 * day;
+  hemi.color.setHSL(0.6, 0.25, 0.35 + 0.4 * day);
+  scene.fog.color.setHSL(0.6, 0.08, 0.04 + 0.14 * day);
+  scene.environmentIntensity = 0.1 + 0.3 * day;
+  sky.material.uniforms.day.value = day;
+  baseExposure = 0.55 + 0.25 * day;
+  lampLevel = 1 - day;
   const hh = Math.floor(hour), mm = Math.round((hour - hh) * 60);
   $('#sunOut').value = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 $('#sunRange').addEventListener('input', (e) => setSun(+e.target.value));
-setSun(14);
+setSun(14.5);
 
 // ---------- controls ----------
 const orbit = new OrbitControls(camera, canvas);
@@ -153,12 +183,17 @@ function floorBelow(p, from = 0.6) {               // p = eye position (three)
 }
 
 // ---------- modes ----------
-let mode = 'orbit', fly = null;
+const fovFor = (m) => { const base = { orbit: 38, tour: 50, walk: 62 }[m]; const a = innerWidth / innerHeight;
+  return a < 1 ? Math.min(base * THREE.MathUtils.clamp(0.8 / a, 1, 1.75), 88) : base; };
+let mode = 'orbit', fly = null, fovTarget = fovFor('orbit');
+camera.fov = fovTarget; camera.updateProjectionMatrix();
 const stations = await (await fetch('data/stations.json')).json();
 let tIdx = 0, tAuto = null;
 
 function setMode(m) {
   mode = m;
+  document.body.className = m;
+  fovTarget = fovFor(m);
   document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
   orbit.enabled = m === 'orbit';
   $('#tourCard').hidden = m !== 'tour';
@@ -175,7 +210,7 @@ function setMode(m) {
   } else if (m === 'walk') {
     const s = stations.find((x) => x.id === 'plaza');
     flyTo(M(...s.cam), M(...s.look));
-    toast('漫游模式：从广场出发');
+    toast('Walk from the plaza');
   }
 }
 document.querySelectorAll('#modes [data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
@@ -202,16 +237,18 @@ function stepFly(dt) {
 function goStation(i) {
   tIdx = (i + stations.length) % stations.length;
   const s = stations[tIdx];
-  $('#tIdx').textContent = `${String(tIdx + 1).padStart(2, '0')} / ${String(stations.length).padStart(2, '0')}`;
-  $('#tTitle').textContent = s.title; $('#tEn').textContent = s.en; $('#tText').textContent = s.text;
+  $('#tIdx').textContent = String(tIdx + 1).padStart(2, '0');
+  $('#tOf').textContent = `/ ${String(stations.length).padStart(2, '0')}`;
+  $('#tTitle').textContent = s.title; $('#tText').textContent = s.text;
+  for (const el of [$('#tTitle'), $('#tText')]) { el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade'); }
   flyTo(M(...s.cam), M(...s.look));
 }
-function stopAuto() { if (tAuto) { clearInterval(tAuto); tAuto = null; $('#tPlay').textContent = '自动播放'; } }
+function stopAuto() { if (tAuto) { clearInterval(tAuto); tAuto = null; $('#tPlay').textContent = 'Play'; } }
 $('#tPrev').onclick = () => { stopAuto(); goStation(tIdx - 1); };
 $('#tNext').onclick = () => { stopAuto(); goStation(tIdx + 1); };
 $('#tPlay').onclick = () => {
   if (tAuto) return stopAuto();
-  $('#tPlay').textContent = '暂停'; goStation(tIdx + 1);
+  $('#tPlay').textContent = 'Pause'; goStation(tIdx + 1);
   tAuto = setInterval(() => goStation(tIdx + 1), 9000);
 };
 
@@ -282,14 +319,13 @@ let level = '1F';
 function updateMap() {
   const m = toModel(camera.position);
   const lv = m.z < -1.3 ? 'B1' : '1F';
-  if (lv !== level) { level = lv; $('#planimg').src = lv === 'B1' ? 'plan_b1.png' : 'plan_f1.png'; $('#lvlname').textContent = lv === 'B1' ? 'B1 地下一层' : '1F 地面层'; }
+  if (lv !== level) { level = lv; $('#planimg').src = lv === 'B1' ? 'plan_b1.png' : 'plan_f1.png'; $('#lvlname').textContent = lv === 'B1' ? 'Basement' : 'Ground floor'; }
   const px = (m.x - MAP.x0) / (MAP.x1 - MAP.x0), py = (MAP.y1 - m.y) / (MAP.y1 - MAP.y0);
   you.style.display = px < -0.05 || px > 1.05 || py < -0.1 || py > 1.1 ? 'none' : '';
   you.style.left = `${px * 100}%`; you.style.top = `${py * 100}%`;
   const d = new THREE.Vector3(); camera.getWorldDirection(d);
   you.style.setProperty('--rot', `${Math.atan2(d.x, -d.z) * 180 / Math.PI}deg`);
 }
-$('#lvlname').textContent = '1F 地面层';
 $('#map').addEventListener('click', (e) => {
   const r = $('#map .frame').getBoundingClientRect();
   const x = MAP.x0 + (e.clientX - r.left) / r.width * (MAP.x1 - MAP.x0);
@@ -298,7 +334,7 @@ $('#map').addEventListener('click', (e) => {
   if (mode === 'tour') setMode('walk');
   const top = level === 'B1' ? -1.6 : 6;
   const h = hit(M(x, y, top), DOWN, 12);
-  if (!h) return toast('那里没有可以站的地面');
+  if (!h) return toast('Nowhere to stand there');
   const pos = h.point.clone(); pos.y += EYE;
   const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
   flyTo(pos, pos.clone().add(fwd.multiplyScalar(5)));
@@ -311,6 +347,7 @@ let toastT;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), 2600); }
 
 // ---------- load model ----------
+const lightMats = [];
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 loader.load('model/2121.glb', (gltf) => {
   const root = gltf.scene;
@@ -319,19 +356,25 @@ loader.load('model/2121.glb', (gltf) => {
   root.traverse((o) => {
     if (!o.isMesh) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
-    const name = mats[0].name || '';
-    const isGlass = /glass|frosted/.test(name);
-    const isLight = /light/.test(name);
+    const name = (mats[0].name || '') + ' ' + o.name + ' ' + (o.parent ? o.parent.name : '');
+    const isGlass = /glass|frosted/.test(name) || mats[0].transparent;
+    const isLight = /light/.test(name) || (mats[0].emissive && mats[0].emissive.r > 0.5);
+    if (/lawn/.test(mats[0].name)) mats.forEach((m) => m.color.setRGB(0.15, 0.13, 0.14));   // quiet the grass  // quiet the grass
     o.castShadow = !isGlass && !isLight;
     o.receiveShadow = !isLight;
     mats.forEach((m) => {
       if (isGlass) { m.transparent = true; m.depthWrite = false; m.envMapIntensity = 1.2; }
-      if (isLight) { m.emissive = new THREE.Color(1, 0.94, 0.82); m.emissiveIntensity = 2.2; }
+      if (isLight) { m.emissive = new THREE.Color(1, 0.9, 0.74); m.emissiveIntensity = 3.0; lightMats.push(m); }
       if (m.map) m.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
     });
     if (!isLight) {
       const g = o.geometry.clone();
       for (const k of Object.keys(g.attributes)) if (k !== 'position') g.deleteAttribute(k);
+      { // quantized (int16 normalized) positions would clamp to [-1,1] when transformed: expand to float first
+        const src = g.attributes.position, f = new Float32Array(src.count * 3);
+        for (let i = 0; i < src.count; i++) { f[i * 3] = src.getX(i); f[i * 3 + 1] = src.getY(i); f[i * 3 + 2] = src.getZ(i); }
+        g.setAttribute('position', new THREE.BufferAttribute(f, 3));
+      }
       g.applyMatrix4(o.matrixWorld);
       geos.push(g.index ? g.toNonIndexed() : g);
     }
@@ -343,8 +386,32 @@ loader.load('model/2121.glb', (gltf) => {
   setTimeout(() => $('#loader').remove(), 1000);
   orbit.update();
 }, (e) => {
-  if (e.total) $('#loadbar').style.width = `${(e.loaded / e.total) * 100}%`;
-}, (err) => { $('#loadtext').textContent = '模型载入失败：' + err.message; });
+  if (e.total) { const k = e.loaded / e.total; $('#loadbar').style.width = `${k * 100}%`; $('#loadpct').textContent = Math.round(k * 100); }
+}, (err) => { $('#loadtext').textContent = 'Could not load the model. ' + err.message; });
+
+// ---------- post: AO, bloom, grade ----------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.3, 0.5, 0.97);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+const grade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, grain: { value: 0.035 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float time; uniform float grain; varying vec2 vUv;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + time) * 43758.5453); }
+    void main(){
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      float l = dot(c, vec3(0.299,0.587,0.114));
+      c = mix(vec3(l), c, 0.7);                                  // restrained saturation
+      c = mix(c, c * vec3(0.92,0.98,1.06), 1.0 - smoothstep(0.0, 0.5, l));  // cool shadows
+      c = mix(c, c * vec3(1.05,1.0,0.93), smoothstep(0.45, 1.0, l));       // warm highlights
+      c = (c - 0.5) * 1.06 + 0.5;
+      c += (h(vUv * 1000.0) - 0.5) * grain;
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }`,
+});
+composer.addPass(grade);
 
 // ---------- loop ----------
 const clock = new THREE.Timer();
@@ -354,15 +421,23 @@ function frame() {
   if (mode === 'orbit' && !fly) orbit.update();
   else if (!fly) { if (mode === 'walk') stepWalk(dt); applyLook(); }
   const under = toModel(camera.position).z < -1.2;
-  fill.intensity += ((under ? 0.9 : 0) - fill.intensity) * 0.08;
+  underK += ((under ? 1 : 0) - underK) * 0.08;
+  renderer.toneMappingExposure = baseExposure * (1 - 0.28 * underK);
+  fill.intensity += ((under ? 0.22 : 0.05 * lampLevel) - fill.intensity) * 0.08;
+  const lampOn = Math.max(0.35, lampLevel, under ? 1 : 0);
+  lamps.forEach((l, i) => { const k = i < 3 ? lampLevel * 0.6 : lampOn; l.intensity += (k * 7 - l.intensity) * 0.08; });
+  for (const m of lightMats) m.emissiveIntensity = 1.6 + 2.4 * lampLevel;
+  if (Math.abs(camera.fov - fovTarget) > 0.05) { camera.fov += (fovTarget - camera.fov) * 0.05; camera.updateProjectionMatrix(); }
+  grade.uniforms.time.value = (grade.uniforms.time.value + 0.37) % 100;
   updateMap();
-  renderer.render(scene, camera);
+  composer.render(dt);
   requestAnimationFrame(frame);
 }
 frame();
 addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  camera.aspect = innerWidth / innerHeight; fovTarget = fovFor(mode); camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
 });
 // debug hook for automated checks
-window.__2121 = { setMode, goStation, camera, setSun, ready: () => !!bvh };
+window.__2121 = { get bvh() { return bvh; }, THREE, setMode, goStation, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };
