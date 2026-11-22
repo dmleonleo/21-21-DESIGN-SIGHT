@@ -260,7 +260,7 @@ function setCut(kind, v) {
     $('#cutOut').value = c.label(v);
   }
   const planes = on ? [cutPlane] : null;
-  for (const m of clipMats) { m.clippingPlanes = planes; m.side = on ? THREE.DoubleSide : THREE.FrontSide; m.needsUpdate = true; }
+  for (const m of clipMats) { m.clippingPlanes = planes; m.needsUpdate = true; }
   if (groundMat) { groundMat.clippingPlanes = planes; groundMat.needsUpdate = true; }
   coverU.cutOn.value = on ? 1 : 0;
   earthMat.clippingPlanes = planes; earthMat.needsUpdate = true; earth.visible = on;
@@ -509,6 +509,7 @@ loader.load('model/2121.glb', (gltf) => {
     const isGlass = /glass|frosted/.test(name) || mats[0].transparent;
     const isLight = /light/.test(name) || (mats[0].emissive && mats[0].emissive.r > 0.5);
     if (/lawn/.test(mats[0].name)) mats.forEach((m) => m.color.setRGB(0.15, 0.13, 0.14));   // quiet the grass  // quiet the grass
+    if (/__roof$/.test(o.name)) mats.forEach((m) => { if (!m.userData.roofed) { m.userData.roofed = true; m.color.multiplyScalar(0.42); m.metalness = 0.55; m.roughness = 0.42; } });
     o.castShadow = !isGlass && !isLight;
     o.receiveShadow = !isLight;
     mats.forEach((m) => {
@@ -516,7 +517,7 @@ loader.load('model/2121.glb', (gltf) => {
       if (isLight) { m.emissive = new THREE.Color(1, 0.9, 0.74); m.emissiveIntensity = 3.0; lightMats.push(m); }
       if (m.map) m.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
       if (!isGlass && !isLight && !m.userData.cover) { m.userData.cover = true; addCover(m); }
-      if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); }
+      if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); if (!isGlass && !isLight) m.side = THREE.DoubleSide; }
     });
     if (!isLight) {
       const g = o.geometry.clone();
