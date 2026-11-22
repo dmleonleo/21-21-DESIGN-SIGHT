@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -36,6 +37,12 @@ scene.fog = new THREE.Fog(0x2a2c2e, 90, 420);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.22;
+let envK = 1;   // real sky light (Poly Haven CC0 HDRI) replaces the studio env once loaded
+new RGBELoader().load('env/kloofendal_48d_partly_cloudy_puresky.hdr', (t) => {
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  scene.environment = pmrem.fromEquirectangular(t).texture; t.dispose();
+  envK = 0.35; setSun(+$('#sunRange').value);
+});
 
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 1500);
 camera.position.copy(M(30, -50, 24));
@@ -83,7 +90,7 @@ let lampLevel = 0, baseExposure = 0.8, underK = 0;
 // garden context: far ground + cedars (stylised; not part of the measured model)
 {
   const g = new THREE.Mesh(new THREE.CircleGeometry(600, 64).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x262b21, roughness: 1 }));
+    new THREE.MeshStandardMaterial({ color: 0x30352a, roughness: 1 }));
   g.position.y = -0.45; g.receiveShadow = true; scene.add(g); realList.push(g); groundMat = g.material;
   let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const trunk = new THREE.CylinderGeometry(0.18, 0.28, 1, 6).translate(0, 0.5, 0);
@@ -121,14 +128,14 @@ function setSun(hour) {
   sun.position.copy(sun.target.position).addScaledVector(dir, 200);
   const day = THREE.MathUtils.smoothstep(alt, -0.04, 0.35);
   const lit = THREE.MathUtils.smoothstep(alt, -0.02, 0.05);
-  sun.intensity = 4.6 * lit * (0.6 + 0.4 * day);
+  sun.intensity = 2.8 * lit * (0.6 + 0.4 * day);
   sun.color.setHSL(0.075, 0.75 * (1 - day) + 0.08, 0.55 + 0.3 * day);
-  hemi.intensity = 0.1 + 0.55 * day;
+  hemi.intensity = 0.16 + 0.14 * day;   // night floor: Roppongi city glow
   hemi.color.setHSL(0.6, 0.25, 0.35 + 0.4 * day);
   scene.fog.color.setHSL(0.6, 0.08, 0.04 + 0.14 * day);
-  scene.environmentIntensity = 0.1 + 0.3 * day;
+  scene.environmentIntensity = (0.22 + 0.3 * day) * envK;
   sky.material.uniforms.day.value = day;
-  baseExposure = 0.55 + 0.25 * day;
+  baseExposure = 0.62 + 0.9 * (1 - day) * (1 - day);   // eye adapts at night
   lampLevel = 1 - day;
   for (const m of nightMats) m.color.copy(m.userData.night).multiplyScalar(0.45 + 0.55 * day);   // surfaces sink at night
   const hh = Math.floor(hour), mm = Math.round((hour - hh) * 60);
@@ -510,9 +517,11 @@ loader.load('model/2121.glb', (gltf) => {
     const name = (mats[0].name || '') + ' ' + o.name + ' ' + (o.parent ? o.parent.name : '');
     const isGlass = /glass|frosted/.test(name) || mats[0].transparent;
     const isLight = /light/.test(name) || (mats[0].emissive && mats[0].emissive.r > 0.5);
-    if (/lawn/.test(mats[0].name)) mats.forEach((m) => m.color.setRGB(0.15, 0.13, 0.14));   // quiet the grass  // quiet the grass
+    if (/lawn/.test(mats[0].name)) mats.forEach((m) => m.color.setRGB(0.17, 0.18, 0.15));   // quiet the grass
     if (/__roof$/.test(o.name)) mats.forEach((m) => { if (!m.userData.roofed) { m.userData.roofed = true; m.color.multiplyScalar(0.28); m.metalness = 0.7; m.roughness = 0.38; } });
     if (/concrete/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.multiplyScalar(0.5); m.roughness = 0.92; } });
+    if (/__stone$/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.multiplyScalar(0.42); m.roughness = 0.9; } });
+    if (/__ceiling$/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.multiplyScalar(0.72); } });
     if (/__steel$/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.setRGB(0.07, 0.075, 0.08); m.metalness = 0.8; m.roughness = 0.35; } });
     mats.forEach((m) => { if (!isLight && !m.userData.night) { m.userData.night = m.color.clone(); nightMats.push(m); } });
     o.castShadow = !isGlass && !isLight;
@@ -636,7 +645,7 @@ const grade = new ShaderPass({
       c = mix(vec3(l), c, 0.7);                                  // restrained saturation
       c = mix(c, c * vec3(0.92,0.98,1.06), 1.0 - smoothstep(0.0, 0.5, l));  // cool shadows
       c = mix(c, c * vec3(1.05,1.0,0.93), smoothstep(0.45, 1.0, l));       // warm highlights
-      c = (c - 0.5) * 1.06 + 0.5;
+      c = (c - 0.25) * 1.05 + 0.25;
       c += (h(vUv * 1000.0) - 0.5) * grain;
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
