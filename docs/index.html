@@ -1,627 +1,87 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<meta name="color-scheme" content="dark"/>
-<link rel="icon" href="data:,"/>
-<title>21_21 DESIGN SIGHT 3D — 可进入的建筑与展厅</title>
-<!-- three.js r186 as ES modules (issue #8): the import map pins the version;
-     the page code lives in assets/js/*.js, the three.js build in assets/.
-     assets/meshopt_decoder.js stays a classic script: it defines the
-     global MeshoptDecoder that parseModel() passes to the GLTFLoader. -->
-<script type="importmap">
-{
-  "imports": {
-    "three": "./assets/three.module.min.js",
-    "three/addons/": "./assets/addons/"
-  }
-}
-</script>
-<script src="assets/meshopt_decoder.js"></script>
-<style>
-  /* ============================================================
-     21_21 DESIGN SIGHT — interface as a drawing sheet's margins.
-     Design principles (the house rules, applied to the interface
-     itself, not just described by it):
-     1. Idea first: the building is the experience; the interface
-        only frames it. Nothing on screen competes with the scene.
-     2. One surprise only: a single vermilion mark — the current
-        position. Everything else is ink, paper and hairline.
-     3. Honest materials: surfaces are flat paper, never frosted
-        glass, gradients or shadows pretending to be something else.
-     4. Few elements, used fully: one margin, one type scale, one
-        rule weight system. Delete until it breaks, then stop.
-     5. Beautiful when off: with the UI hidden the page is just the
-        building; with it shown, every element sits on the sheet's
-        margin grid — header, cards and index strip share --edge.
-     6. Slow, still motion: fades only, no lifts, no bounces.
-     7. Built to last: no trend effects — no pills, no filled
-        blocks, no floating cards, no glow.
-     Layout system: --edge is the sheet margin (22px / 14px on
-     phones); all type sits on an 8px rhythm; numerals are tabular
-     mono everywhere so columns of figures align like a spec table.
-     Player-Apple V5.3 (Hark) supplies the state grammar on top:
-     — a grey ladder, never decoration colour: full ink = current/
-       selected, --ink2 = labels, --ink3 = unselected; rollover
-       only steps one rung up the ladder, it never jumps to red.
-     — red means HAPPENING, only: the current mode's numeral and
-       rule, the tour's progress, the standby square. Nothing else
-       on the page is red, ever. (On paper the signal red #FF2A1F
-       fails small-text contrast, so the happening mark uses the
-       deeper shu-iro #b3402f — same role, paper-true derivation.)
-     — the readout frame: the current mode is shown as mono
-       lettering held between two hairlines, top right.
-     — type that rests directly on the scene (header, prologue,
-       vertical margin text, in-scene exhibit labels) is plain
-       white with one tight dark shade — no light halo, no glow;
-       ink on paper is reserved for type that sits on paper.
-     — two typefaces, two jobs: names and titles in Mincho serif,
-       labels and body in gothic sans — his Carvique/Gothic split,
-       in the Japanese faces this building asks for.
-     — one type scale: labels 10.5, body 12.5, titles 15–17,
-       display 21. Rows never rescale; only gaps stretch. Touch
-       targets grow to 44px without growing the glyphs.
-     — progress is drawn his way: a solid segment on a hairline
-       remainder, ending in a small square knob.
-     #6 (page design): one chapter on screen at a time — exterior is
-     title + mode bar, tour is only the subtitle card, walk is only
-     the walk controls + current exhibit name; the introduction shows
-     on first entry only. Opening: a 7 s glide along the roof edge
-     after load, the scene sharpening from blur as the deferred work
-     finishes. Fonts: subsetted Noto Serif/Sans JP served locally
-     (assets/fonts/), zero external requests. The vertical margin
-     text appears only at chapter transitions. Vermilion stays
-     current-state only — the one exception is the brand's red
-     square, kept as Leon's approved logo mark (see issue #6).
-     ============================================================ */
-  /* ---- #6.3 webfonts: subsetted Noto Serif SC / Noto Sans SC ----
-     (Hark #13-1: the JP subsets missed 123 of the page's 535 CJK chars;
-      the SC subsets cover all 535 + kana の — files in docs/assets/fonts/)
-     Variable-weight woff2, served locally from assets/fonts/ — zero
-     external requests, works offline. Generated from the variable
-     fonts with pyftsubset, covering exactly the glyphs this page
-     uses (source + unicodes list live in page-design/fonts/).
-     font-display:swap + full system fallbacks: if the files are not
-     yet uploaded, the page falls back silently and nothing blocks. */
-  @font-face{font-family:'Noto Serif SC';font-style:normal;font-weight:200 900;font-display:swap;src:url('assets/fonts/noto-serif-sc.woff2') format('woff2')}
-  @font-face{font-family:'Noto Sans SC';font-style:normal;font-weight:100 900;font-display:swap;src:url('assets/fonts/noto-sans-sc.woff2') format('woff2')}
-  :root{
-    /* Night is the default ground (Leon's direction): the sheet is
-       near-black, the ink a warm off-white, and the grey ladder runs
-       --ink (current) → --ink2 (labels) → --ink3 (unselected, held
-       above 4.5:1 on the sheet). Vermilion keeps its single job —
-       HAPPENING — lifted to #e8503a: the same shu-iro hue raised
-       until it clears small-text contrast on black, the way
-       Player's signal red works on a dark ground. body.day carries
-       the paper palette, with the deeper paper-true #b3402f. */
-    --ink:#eceae3; --ink2:#a9a59c; --ink3:#8b887f;
-    --paper:#0a0a0c; --sheet:rgba(15,15,17,.97); --sheet2:rgba(15,15,17,.94);
-    --line:rgba(236,234,227,.16); --line2:rgba(236,234,227,.34);
-    --onink:#111113; --verm:#e8503a; --ghost:rgba(236,234,227,.06);
-    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    --serif:"Noto Serif SC","Noto Serif JP","Hiragino Mincho ProN","YuMincho","Yu Mincho","Songti SC",serif;
-    --edge:22px;
-    color-scheme:dark;
-    /* Type that rests directly on the scene is plain white with ONE
-       tight dark shade (1px offset, 2px blur) — never a light halo.
-       The old blurred paper-coloured outline around every label is
-       what made the whole interface look lit up / glowing. */
-    --wt:#ffffff; --wt2:rgba(255,255,255,.82); --wt3:rgba(255,255,255,.62);
-    --wline:rgba(255,255,255,.5);
-    --shade:0 1px 2px rgba(5,7,5,.45);
-  }
-  /* the day palette — the same ladder on paper, reached only from
-     the sun/moon switch, never from the system setting.
-     Type that rests directly on the scene is DARK in day mode, not
-     white: white header text on a pale day sky was unreadable
-     (issue #2.5). --wt* flip to ink-on-paper values and the tight
-     shade flips to a light one, so the header, chips, badge, vertical
-     margin text, prologue and walk tip all read against bright sky
-     and lawn. (The in-scene 3D labels keep their own white-on-dark
-     canvas treatment — they sit on the building, not the sky.) */
-  body.day{
-    --ink:#1c1c1e; --ink2:#62615c; --ink3:#8f8c84;
-    --paper:#f4f3ef; --sheet:rgba(246,245,241,.97); --sheet2:rgba(246,245,241,.94);
-    --line:rgba(28,28,30,.16); --line2:rgba(28,28,30,.34);
-    --onink:#f4f3ef; --verm:#b3402f; --ghost:rgba(28,28,30,.05);
-    --wt:#1c1c1e; --wt2:rgba(28,28,30,.78); --wt3:rgba(28,28,30,.58);
-    --wline:rgba(28,28,30,.45);
-    --shade:0 1px 2px rgba(255,255,255,.55);
-    color-scheme:light;
-  }
-  body.day .chip:focus-visible,body.day .themeBtn:focus-visible{outline-color:var(--ink)}
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;font-family:"Noto Sans SC","Noto Sans JP","Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","YuGothic","PingFang SC","Microsoft YaHei",sans-serif;background:#0d0d0f;color:var(--ink);overflow:hidden;font-weight:400;-webkit-font-smoothing:antialiased}
-  body.day{background:#dfe3dc}
-  button,[role="button"],select,summary,input:not([type="checkbox"],[type="radio"]){min-height:36px}
-  button{font:inherit;cursor:pointer;color:inherit}
-  /* one precise focus line — the same hairline language, in the
-     single accent colour, so keyboard position is always visible */
-  button:focus-visible,a:focus-visible{outline:1px solid var(--ink);outline-offset:3px}
-  ::selection{background:rgba(236,234,227,.26)}
-  body.day ::selection{background:rgba(28,28,30,.14)}
-  /* figures align in columns everywhere they appear */
-  .badge,#modebar .mno,#side .stats b,#exhibitCard .no,#tourHud .tno,#loading .lmicro{font-variant-numeric:tabular-nums}
-  #app{position:fixed;inset:0;display:flex;flex-direction:column}
-
-  /* ---- header: type resting directly on the scene, no plate ---- */
-  header{position:absolute;top:0;left:0;right:0;z-index:20;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px var(--edge);pointer-events:none}
-  .brand{pointer-events:auto;max-width:min(480px,60vw);color:var(--wt);text-shadow:var(--shade)}
-  .brand h1{margin:0;font-size:21px;font-weight:300;letter-spacing:.16em;line-height:1.1;display:flex;align-items:baseline;gap:11px;white-space:nowrap}
-  .brand h1::before{content:"";flex:none;width:6px;height:6px;background:var(--verm);align-self:center}
-  .brand h1 span{font-size:10.5px;font-weight:400;letter-spacing:.38em;color:var(--wt2)}
-  .brand p{margin:7px 0 0 17px;font-size:11.5px;line-height:1.7;color:var(--wt2);letter-spacing:.03em}
-  .brand p b{color:var(--wt);font-weight:500}
-  .hgroup{display:flex;gap:18px;align-items:baseline;pointer-events:auto}
-  /* header actions are a contents list, not buttons: text + rule */
-  .chip{flex:none;background:transparent;border:0;border-bottom:1px solid transparent;color:var(--wt3);border-radius:0;padding:2px 1px 5px;min-height:0;font-size:10.5px;font-weight:400;letter-spacing:.18em;white-space:nowrap;text-shadow:var(--shade);transition:color .25s,border-color .25s}
-  .chip:hover{color:var(--wt2)}
-  .chip[aria-pressed="true"]{color:var(--wt);border-bottom-color:var(--wt)}
-  .chip[aria-pressed="false"]{color:var(--wt3)}
-  .chip:focus-visible{outline-color:#fff}
-  #sideToggle{display:block}
-  /* the mode badge is a readout frame: the current state as white
-     mono lettering held between two hairlines — white like all type
-     that rests on the scene; vermilion stays on paper, in the mode
-     index numeral and the tour progress */
-  .badge{flex:none;background:transparent;color:var(--wt);padding:5px 2px;border-top:1px solid var(--wline);border-bottom:1px solid var(--wline);font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.26em;white-space:nowrap;text-shadow:var(--shade)}
-  /* day/night switch: one stroke icon at the chips' weight — the
-     sun is shown at night (tap for day), the moon by day */
-  .themeBtn{flex:none;background:transparent;border:0;color:var(--wt3);border-radius:0;padding:2px 1px 5px;min-height:0;display:flex;align-items:center;transition:color .25s}
-  .themeBtn:hover{color:var(--wt)}
-  .themeBtn:focus-visible{outline-color:#fff}
-  .themeBtn svg{width:17px;height:17px;display:block}
-  .themeBtn .ic-moon{display:none}
-  body.day .themeBtn .ic-moon{display:block}
-  body.day .themeBtn .ic-sun{display:none}
-  #uiToggle{transition:opacity .3s}
-  body.ui-hidden #uiToggle{opacity:.45}
-  body.ui-hidden #uiToggle:hover{opacity:1}
-
-  /* ---- hide everything: the building alone ---- */
-  body.ui-hidden .brand,body.ui-hidden #modeBadge,body.ui-hidden #sideToggle,
-  body.ui-hidden #labelToggle,body.ui-hidden #side,body.ui-hidden #modebar,
-  body.ui-hidden #caption,body.ui-hidden #tourHud,body.ui-hidden #exhibitCard,
-  body.ui-hidden #walkTip,body.ui-hidden #vertical,body.ui-hidden #walkExit{display:none!important}
-
-  /* ---- #6.1 per-mode mutually exclusive UI ----
-     Only the current chapter's elements are on screen. Exterior:
-     title + mode bar. Tour: only the subtitle card (the mode bar
-     fades out). Walk: only the walk controls + current exhibit name
-     (mode bar fades out; #walkExit replaces it as the way out).
-     G3 / gallery: title + mode bar + their card. An open archive
-     is hidden while touring / walking and returns afterwards. */
-  body[data-mode="tour"] header,body[data-mode="walk"] header{display:none}
-  body[data-mode="tour"] #side,body[data-mode="walk"] #side{display:none}
-  body[data-mode="tour"] #modebar,body[data-mode="walk"] #modebar{opacity:0;visibility:hidden;pointer-events:none}
-  #modebar{transition:opacity .45s ease,visibility 0s linear .45s}
-  body[data-mode="exterior"] #modebar,body[data-mode="lobby"] #modebar,body[data-mode="g3"] #modebar,body[data-mode="gallery"] #modebar{transition:opacity .45s ease,visibility 0s linear 0s}
-  /* walk-mode exhibit card clears the direction pad (#2 item 4's fix,
-     applied here too so this branch shows it correctly on its own) */
-  body[data-mode="walk"] #exhibitCard{bottom:224px}
-  /* ---- #6.1 first entry only: the two-line introduction + prologue
-     collapse once seen (see endIntro / armIntro in the script) ---- */
-  .brand{cursor:pointer}
-  body.intro-done .brand p{display:none}
-  /* ---- #6.2 opening: the scene starts blurred (Sugimoto) and
-     sharpens as the deferred loading work finishes; the opening
-     glide hides every control except the title + vertical text ---- */
-  #stage{transition:filter 1.6s ease}
-  body.scene-blur #stage{filter:blur(18px) saturate(1.05)}
-  body.opening .hgroup,body.opening #modeBadge{display:none}
-  body.opening .brand p{display:none}
-  body.opening #modebar,body.opening #caption,body.opening #side,body.opening #walkHud,body.opening #walkTip,body.opening #tourHud,body.opening #exhibitCard,body.opening #cross,body.opening #walkExit{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .45s ease,visibility 0s linear .45s}
-  #skipOpening{position:absolute;left:50%;transform:translateX(-50%);bottom:28px;z-index:30;color:var(--wt3);font-size:11px;letter-spacing:.22em;display:none;text-shadow:var(--shade);pointer-events:none;white-space:nowrap}
-  body.opening #skipOpening{display:block}
-  /* ---- #6.1 walk exit: a minimal text control, top right ---- */
-  #walkExit{position:absolute;top:18px;right:var(--edge);z-index:24;display:none;background:transparent;border:0;border-bottom:1px solid transparent;color:var(--wt3);padding:2px 1px 5px;font-size:10.5px;letter-spacing:.18em;text-shadow:var(--shade)}
-  #walkExit:hover{color:var(--wt);border-bottom-color:var(--wt)}
-  body[data-mode="walk"] #walkExit{display:block}
-  /* ---- #6.5 bottom-drawer handle (mobile only) ---- */
-  .drawerHandle{display:none}
-  @media (prefers-reduced-motion: reduce){ body.scene-blur #stage{filter:none} }
-
-  #stage{position:absolute;inset:0}
-  #stage canvas{display:block;width:100%;height:100%}
-  /* ---- atmosphere: vignette + grain over the scene, never the UI ---- */
-  #vignette{position:absolute;inset:0;z-index:5;pointer-events:none;background:radial-gradient(ellipse at 50% 42%,transparent 52%,rgba(28,30,32,.12) 100%)}
-  #grain{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:.030;mix-blend-mode:overlay;background-image:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E")}
-  /* ---- vertical Japanese margin text (Kage) ---- */
-  #vertical{position:absolute;left:var(--edge);top:50%;transform:translateY(-50%);z-index:15;writing-mode:vertical-rl;font-size:13px;font-weight:300;letter-spacing:.46em;color:var(--wt);opacity:0;pointer-events:none;text-shadow:var(--shade);transition:opacity .6s ease}
-  /* #6.4: the margin text is hidden except at chapter transitions
-     (mode changes, tour stops) and during the opening — see
-     flashVertical() and beginOpening(). */
-  #vertical.on{opacity:.8}
-  #err{position:absolute;left:12px;top:110px;z-index:50;max-width:520px;background:#2b1611;border:1px solid #71402f;color:#f2bda9;padding:10px 12px;border-radius:0;font-size:13px;line-height:1.5;display:none;white-space:pre-wrap}
-  body.day #err{background:#fdf3f1;border-color:#e3c4bd;color:#8a3b2e}
-  /* ---- debug HUD (issue #3): renderer.info readout, hidden unless ?debug=1 / #debug / Shift+D ---- */
-  #dbgHud{position:absolute;left:12px;bottom:12px;z-index:60;display:none;font-family:var(--mono);font-size:11px;line-height:1.7;letter-spacing:.04em;color:#f4f2ea;background:rgba(10,12,10,.55);padding:6px 10px;pointer-events:none;white-space:pre}
-  body.debug #dbgHud{display:block}
-
-  /* ---- loading: a sheet of paper, one thin ink line ---- */
-  #loading{position:absolute;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:var(--paper);transition:opacity .5s}
-  #loading.hide{opacity:0;pointer-events:none}
-  #loading .mark{font-size:30px;font-weight:300;letter-spacing:.1em;display:flex;align-items:baseline;gap:12px}
-  #loading .mark::before{content:"";width:7px;height:7px;background:var(--verm);align-self:center}
-  #loading .mark i{font-style:normal;color:var(--ink2);font-size:13px;letter-spacing:.36em}
-  #loading .lmicro{font-family:var(--mono);font-size:10px;letter-spacing:.38em;color:var(--ink3)}
-  #loading p{margin:0;color:var(--ink2);font-size:12px;letter-spacing:.08em}
-  #loadBarWrap{width:min(300px,70vw);height:1px;background:var(--line);overflow:hidden;display:none}
-  #loadBar{height:100%;width:0%;background:var(--ink);transition:width .25s}
-  #loadRetry{display:none;border:1px solid var(--line2);background:transparent;border-radius:0;padding:8px 18px;font-size:12px;letter-spacing:.1em}
-  /* ---- no-WebGL error state (issue #2.9) ----
-     The loading screen and the error screen used to be identical
-     (same paper, same 21_21 mark, same message slot), so a visitor
-     whose browser has no WebGL read the error as "still loading" —
-     and every button was dead, because the script returned before
-     wiring any of them. The error state is deliberately a different
-     page: warm dark ground instead of paper, a red error title, a
-     static line drawing of the building in place of the 3D scene,
-     an explanation, and a working reload button. */
-  #errArt{display:none;width:min(320px,72vw);margin:2px 0 4px;color:var(--ink2)}
-  #loading.error{background:#171210}
-  #loading.error .mark{color:#f2e8e0}
-  #loading.error .mark i{color:#d8a08f}
-  #loading.error .lmicro{color:#c98a7a}
-  #loading.error #errArt{display:block}
-  #loading.error #loadMsg{color:#e8c9bd;max-width:min(420px,84vw);text-align:center;line-height:1.8}
-  #loading.error #loadRetry{display:inline-block;border-color:#a8604c;color:#f2e8e0}
-
-  /* ---- mode index: a strip along the bottom edge of the sheet.
-     Six chapters in a row, divided by hairlines. The current one is
-     marked by a vermilion numeral and a short rule above its label —
-     never a filled block. ---- */
-  #modebar{position:absolute;left:0;right:0;bottom:0;z-index:25;display:flex;background:var(--sheet);border-top:1px solid var(--line2);padding:0 10px env(safe-area-inset-bottom);max-width:none;flex-wrap:nowrap;justify-content:stretch}
-  #modebar button{flex:1 1 0;position:relative;border:0;border-left:1px solid var(--line);background:transparent;color:var(--ink3);border-radius:0;padding:12px 6px 13px;font-size:12px;font-weight:400;letter-spacing:.12em;white-space:nowrap;text-align:center;transition:color .25s}
-  #modebar button:first-child{border-left:0}
-  #modebar button:hover{color:var(--ink2)}
-  #modebar button[aria-pressed="true"]{color:var(--ink)}
-  #modebar button[aria-pressed="true"]::before{content:"";position:absolute;top:-1px;left:50%;transform:translateX(-50%);width:26px;height:2px;background:var(--verm)}
-  #modebar .mno{font-family:var(--mono);font-size:10px;font-weight:400;opacity:.6;margin-right:8px;letter-spacing:0}
-  #modebar button[aria-pressed="true"] .mno{opacity:1;color:var(--verm)}
-
-  /* ---- archive: a specification sheet pinned to the right edge.
-     One grid governs the whole panel: every block starts flush at
-     the sheet margin and ends flush at the panel's right edge,
-     sections are separated by the same 24px gap and named by the
-     same mono section label, and every ruled row shares one
-     padding rhythm (9px above the baseline row, 8px below) so
-     terms and values sit on identical lines — nothing in the
-     panel is placed by eye. ---- */
-  #side{position:absolute;right:0;top:0;bottom:0;z-index:20;width:308px;max-width:calc(100vw - 28px);background:var(--sheet);border-left:1px solid var(--line2);border-radius:0;padding:76px var(--edge) 28px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
-  #side::-webkit-scrollbar{width:3px}
-  #side::-webkit-scrollbar-thumb{background:var(--line2)}
-  #side.closed{display:none}
-  #side h2{margin:0 30px 8px 0;font-family:var(--serif);font-size:16px;font-weight:600;letter-spacing:.04em;line-height:1.55}
-  #side .sub{margin:0;font-size:12px;color:var(--ink2);line-height:1.85}
-  /* one section label style for all three blocks of the sheet */
-  #side .slabel{margin:28px 0 10px;font-family:var(--mono);font-size:10.5px;font-weight:400;letter-spacing:.32em;color:var(--ink3)}
-  /* the archive reads as a true specification table: every row is
-     ruled, terms sit in a fixed 68px column, values align — the
-     typographic grid of a drawing's title block */
-  #side dl{margin:0;display:grid;grid-template-columns:68px 1fr;gap:0 16px;font-size:12.5px;line-height:1.7;border-top:1px solid var(--line2)}
-  #side dt{color:var(--ink3);font-weight:400;letter-spacing:.08em;font-size:11.5px;line-height:1.7;padding:9px 0 8px;border-bottom:1px solid var(--line)}
-  #side dd{margin:0;line-height:1.7;padding:9px 0 8px;border-bottom:1px solid var(--line)}
-  /* viewpoint index: ruled rows with an arrow, not pills. Rows are
-     flush at both edges and hover changes colour only — the type
-     never shifts position. */
-  #side .views{display:block;border-top:1px solid var(--line2)}
-  #side .views button{display:flex;align-items:center;justify-content:space-between;width:100%;min-width:0;border:0;border-bottom:1px solid var(--line);background:transparent;border-radius:0;padding:13px 0;font-size:12.5px;letter-spacing:.06em;white-space:nowrap;text-align:left;transition:color .25s}
-  #side .views button::after{content:"↗";flex:none;margin-left:6px;color:var(--ink3);font-size:11px;transition:color .25s}
-  #side .views button:hover{color:var(--ink)}
-  #side .views button:hover::after{color:var(--ink)}
-  /* ---- data strip: hairline-divided numbers on the same grid ---- */
-  #side .stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line2);border-bottom:1px solid var(--line);padding:14px 0 13px}
-  #side .stats div{padding:0 10px;border-left:1px solid var(--line)}
-  #side .stats div:first-child{padding-left:0;border-left:0}
-  #side .stats b{display:block;font-size:16px;font-weight:300;letter-spacing:.01em;line-height:1.15;font-family:var(--mono)}
-  #side .stats b i{font-style:normal;font-size:9.5px;color:var(--ink2);margin-left:2px;font-family:inherit}
-  #side .stats span{display:block;margin-top:5px;font-size:10.5px;letter-spacing:.14em;color:var(--ink3)}
-  /* the close mark sits on the title's first line, its glyph flush
-     with the panel's right text edge */
-  .mini-x{position:absolute;top:73px;right:calc(var(--edge) - 6px);border:0;background:transparent;color:var(--ink3);font-size:13px;line-height:1;padding:6px;min-height:24px;min-width:24px}
-  .mini-x:hover{color:var(--ink)}
-
-  /* ---- exhibit caption: a museum label, ruled at the top only ---- */
-  #exhibitCard{position:absolute;left:var(--edge);bottom:88px;z-index:22;width:350px;max-width:calc(100vw - 44px);background:var(--sheet);border:0;border-top:1px solid var(--ink);border-radius:0;padding:26px 30px 18px;display:none;overflow:hidden}
-  #exhibitCard.show{display:block;animation:fadeIn .45s ease}
-  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-  #exGhost{position:absolute;right:2px;top:2px;font-size:56px;font-weight:200;line-height:1.1;letter-spacing:.01em;color:var(--ghost);pointer-events:none;font-family:var(--mono)}
-  .cardhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
-  #exhibitCard .no{font-size:10.5px;font-weight:400;letter-spacing:.24em;color:var(--ink3);font-family:var(--mono)}
-  .cardtools{display:flex;gap:2px;align-items:center;flex:none}
-  .cardtools button{border:0;background:transparent;color:var(--ink2);font-size:11px;letter-spacing:.1em;padding:4px 6px;min-height:24px}
-  .cardtools button:hover{color:var(--ink)}
-  .cardtools .x{font-size:13px;padding:4px 5px}
-  #exhibitCard h3{margin:10px 0 8px;font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:.03em;line-height:1.5}
-  #exhibitCard p{margin:0;font-size:12.5px;line-height:1.9;color:var(--ink2)}
-  #exhibitCard.folded p{display:none}
-  /* actions are a ruled index row: words and arrows, one verb in ink */
-  #exhibitCard .row{display:flex;gap:0;margin-top:16px;border-top:1px solid var(--line)}
-  #exhibitCard .row button{flex:1;border-radius:0;border:0;border-left:1px solid var(--line);background:transparent;color:var(--ink2);font-size:12px;letter-spacing:.06em;padding:12px 4px 0;transition:color .25s}
-  #exhibitCard .row button:first-child{border-left:0}
-  #exhibitCard .row button:hover{color:var(--ink)}
-  #exhibitCard .row button.go{background:transparent;color:var(--ink);border-color:var(--line);font-weight:500}
-
-  /* in walk mode the card is raised clear of the direction pad
-     (issue #2.4): the pad tops out ~212px from the bottom edge, and
-     the card used to sit at 88px, so the pad covered its left side
-     and the centred WASD tip crossed it. Raised, the card clears the
-     pad and the tip passes underneath it instead. (Mobile already did
-     this at 232px; this is the desktop equivalent.) */
-  body.walking #exhibitCard{bottom:224px}
-
-  /* ---- walk controls: quiet square keys at the sheet's corners ---- */
-  #walkHud{position:absolute;inset:auto 0 76px 0;z-index:24;display:none;justify-content:space-between;align-items:flex-end;padding:0 var(--edge);pointer-events:none}
-  #walkHud.show{display:flex}
-  .pad{pointer-events:auto;display:grid;grid-template-columns:44px 44px 44px;grid-template-rows:44px 44px 44px;gap:1px;background:var(--line);border:1px solid var(--line2)}
-  .pad button,.lookpad button{width:44px;height:44px;border-radius:0;border:0;background:var(--sheet2);color:var(--ink);font-size:15px;font-weight:300}
-  .pad button:active,.lookpad button:active{background:var(--ink);color:var(--onink)}
-  .pad .up{grid-column:2}.pad .left{grid-column:1;grid-row:2}.pad .down{grid-column:2;grid-row:2}.pad .right{grid-column:3;grid-row:2}
-  .lookpad{pointer-events:auto;display:flex;gap:1px;background:var(--line);border:1px solid var(--line2);align-items:center}
-  .lookpad button{border:0}
-  /* item 6: optional pointer lock (desktop walk mode only) */
-  #lockBtn{width:auto;padding:0 12px;font-size:11.5px;letter-spacing:.1em;white-space:nowrap}
-  #lockBtn[aria-pressed="true"]{background:var(--ink);color:var(--onink)}
-  @media (pointer:coarse){ #lockBtn{display:none} }
-  #walkTip{position:absolute;left:50%;transform:translateX(-50%);bottom:140px;z-index:23;background:transparent;border:0;color:var(--wt);font-size:11.5px;letter-spacing:.05em;padding:7px 12px;border-radius:0;display:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis;text-shadow:var(--shade)}
-  #walkTip.show{display:block}
-  #cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;color:rgba(255,255,255,.85);font-size:15px;font-weight:300;display:none;text-shadow:var(--shade)}
-  #cross.show{display:block}
-
-  /* ---- prologue: plain text under a hairline, no box ---- */
-  #caption{position:absolute;left:var(--edge);bottom:76px;z-index:18;background:transparent;border:0;color:var(--wt2);border-radius:0;padding:10px 26px 0 0;font-size:12px;line-height:1.85;max-width:330px;letter-spacing:.02em;text-shadow:var(--shade)}
-  #caption::before{content:"序 · PROLOGUE";display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.3em;color:var(--wt3);margin-bottom:6px;padding-top:9px;border-top:1px solid var(--wline)}
-  #caption b{color:var(--wt);font-weight:500}
-  #captionHide{position:absolute;top:12px;right:0;border:0;background:transparent;color:var(--wt3);font-size:12px;padding:5px;min-height:22px;min-width:22px;line-height:1;text-shadow:var(--shade)}
-  #captionHide:hover{color:var(--wt)}
-
-  /* ---- tour: a chapter card that floats clear of the sheet's
-     edges — B&O restraint: a narrower card, real margins from the
-     screen edge on every side, and generous internal padding so no
-     line of type or row of actions ever touches the card's edge ---- */
-  #tourHud{position:absolute;left:50%;transform:translateX(-50%);bottom:28px;z-index:26;width:520px;max-width:calc(100vw - 48px);background:var(--sheet);border:0;border-top:1px solid var(--ink);border-radius:0;padding:28px 32px 22px;display:none}
-  #tourHud.show{display:block;animation:fadeIn .45s ease}
-  #tourHud .tno{font-size:10.5px;font-weight:400;letter-spacing:.24em;color:var(--ink3);font-family:var(--mono)}
-  #tourHud h3{margin:12px 0 8px;font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:.03em;line-height:1.5}
-  #tourHud p{margin:0;font-size:12.5px;line-height:1.9;color:var(--ink2);min-height:42px}
-  /* progress, drawn his way: solid segment on a hairline
-     remainder, ending in a 7px square knob */
-  #tourTrack{height:2px;background:var(--line);overflow:visible;margin:16px 0 6px}
-  #tourFill{height:100%;width:0%;background:var(--verm);transition:width .3s linear;position:relative}
-  #tourFill::after{content:"";position:absolute;right:0;top:50%;transform:translate(50%,-50%);width:7px;height:7px;background:var(--verm)}
-  #tourDots{display:flex;gap:3px;margin:9px 0 4px;flex-wrap:wrap}
-  #tourDots button{flex:1;min-width:14px;height:2px;min-height:2px;padding:0;border:0;background:var(--line)}
-  #tourDots button.done{background:var(--ink3)}
-  #tourDots button.now{background:var(--verm)}
-  #tourHud .trow{display:flex;gap:0;margin-top:16px;border-top:1px solid var(--line)}
-  #tourHud .trow button{flex:1;border-radius:0;border:0;border-left:1px solid var(--line);background:transparent;color:var(--ink2);font-size:12px;letter-spacing:.06em;padding:12px 6px 0;transition:color .25s}
-  #tourHud .trow button:first-child{border-left:0}
-  #tourHud .trow button:hover{color:var(--ink)}
-  #tourHud .trow button.main{background:transparent;color:var(--ink);border-color:var(--line);font-weight:500}
-  #tourHud .trow button.exit{flex:0 0 auto;padding:12px 4px 0 14px}
-  #tourHud .thead{display:flex;justify-content:space-between;align-items:center;gap:8px}
-  #tourFold{flex:none;border:0;background:transparent;color:var(--ink2);border-radius:0;padding:4px 6px;min-height:24px;font-size:11px;letter-spacing:.1em}
-  #tourFold:hover{color:var(--ink)}
-  #tourHud.folded #tourTrack,#tourHud.folded #tourDots{display:none}
-  /* #6.1 the tour card is a subtitle card: station name + ONE line of
-     narration while folded; 展开讲解 reveals the full text. */
-  #tourHud.folded p{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;min-height:0}
-  #tourHud.folded h3{font-size:14px;margin:6px 0 0}
-  #tourHud.folded .trow{margin-top:14px}
-  #tourHud.folded .trow button{padding:10px 4px 0;font-size:11.5px}
-  .lbl-short{display:none}
-
-  @media (max-width:760px){
-    /* ---- Mobile: the scene owns the screen; type at the edges ---- */
-    :root{--edge:14px}
-    #modeBadge{display:none}
-    header{padding:12px var(--edge);gap:6px}
-    .brand{max-width:52vw}
-    .brand h1{font-size:16px;gap:7px}
-    .brand h1 span{display:none}
-    .brand p{display:none}
-    .hgroup{gap:14px;flex-wrap:wrap;justify-content:flex-end;padding-top:2px}
-    .chip{font-size:10.5px;letter-spacing:.12em}
-    #side{display:none}
-    #side.open{display:block;top:0;right:0;left:0;width:auto;bottom:auto;max-height:calc(100dvh - 120px);overflow-y:auto;padding-top:56px;border-left:0;border-bottom:1px solid var(--line2)}
-    #side .mini-x{top:53px}
-    #err{top:56px;left:8px;right:8px;max-width:none}
-    #caption{display:none}
-    /* #6.5 the mode bar is one horizontally scrollable row, not two —
-       it costs ~44px instead of ~88px and every mode stays one tap
-       away; the current mode is scrolled into view on change. */
-    #modebar{left:0;right:0;transform:none;bottom:0;display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:0 0 env(safe-area-inset-bottom)}
-    #modebar::-webkit-scrollbar{display:none}
-    #modebar button{flex:0 0 auto;min-width:96px;padding:12px 10px 13px;font-size:12px;min-height:44px;letter-spacing:.06em;border-left:1px solid var(--line);border-top:0}
-    #modebar button:first-child{border-left:0}
-    #modebar button[aria-pressed="true"]::before{width:20px}
-    .lbl-full{display:none}
-    .lbl-short{display:inline}
-    #tourHud{left:0;right:0;transform:none;width:auto;max-width:none;bottom:calc(52px + env(safe-area-inset-bottom));padding:18px 20px 16px}
-    #tourHud h3{font-size:15px;margin:6px 0 4px}
-    #tourHud p{font-size:12.5px;line-height:1.75;min-height:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-    #tourHud.folded p{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;min-height:0}
-    #tourTrack{margin:12px 0 4px}
-    #tourDots{flex-wrap:nowrap;margin:7px 0 2px}
-    #tourDots button{min-width:0}
-    #tourHud .trow{margin-top:12px}
-    #tourHud .trow button{font-size:11.5px;padding:10px 2px 0}
-    #tourHud .trow button.exit{padding:10px 6px 0 10px}
-    .drawerHandle{display:block;width:26px;height:14px;margin:2px auto 10px;position:relative;cursor:pointer;flex:none}
-    .drawerHandle::after{content:"";position:absolute;left:0;right:0;top:6px;height:2px;background:var(--line2)}
-    #exhibitCard{left:0;right:0;width:auto;max-width:none;bottom:calc(52px + env(safe-area-inset-bottom));padding:18px 20px 14px}
-    #exhibitCard h3{font-size:15px;margin:6px 0 4px}
-    #exhibitCard p{font-size:12.5px;line-height:1.75;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
-    #exhibitCard.folded p{display:none}
-    #exhibitCard .row{margin-top:12px}
-    #exhibitCard .row button{font-size:11.5px;padding:10px 2px 0}
-    body.walking #exhibitCard{bottom:calc(180px + env(safe-area-inset-bottom))}
-    #walkHud{bottom:calc(56px + env(safe-area-inset-bottom));padding:0 var(--edge)}
-    /* item 1: on phones the direction pad is hidden by default —
-       tap-to-move is the way around; the turn buttons stay. */
-    #walkHud .pad{display:none}
-    .pad{grid-template-columns:38px 38px 38px;grid-template-rows:38px 38px 38px}
-    .pad button,.lookpad button{width:38px;height:38px;min-height:38px;font-size:14px}
-    #walkTip{top:54px;bottom:auto;left:8px;right:8px;transform:none;width:auto;white-space:normal;text-align:center;font-size:11px;line-height:1.55;padding:6px 10px}
-    #vertical{display:none!important}
-    #loading .mark{font-size:24px}
-    #loading .mark i{font-size:11px}
-  }
-  @media (prefers-reduced-motion: reduce){
-    #exhibitCard.show,#tourHud.show{animation:none}
-    #modebar button,.chip,#side .views button{transition:none}
-  }
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>21_21 DESIGN SIGHT · 数字建筑体验</title>
+<meta name="description" content="安藤忠雄设计的 21_21 DESIGN SIGHT（东京中城）三维线上体验：鸟瞰、导览与自由漫游。">
+<link rel="stylesheet" href="css/app.css">
 </head>
-<body data-mode="exterior">
-<div id="app">
-  <div id="stage" aria-label="21_21 DESIGN SIGHT 三维建筑与展厅"></div>
-  <div id="vignette" aria-hidden="true"></div>
-  <div id="grain" aria-hidden="true"></div>
+<body>
+<canvas id="view"></canvas>
 
-  <header>
-    <div class="brand" title="点按展开 / 收起介绍">
-      <h1>21_21 <span>DESIGN SIGHT</span></h1>
-      <p><b>东京六本木 · Tokyo Midtown</b> — 安藤忠雄设计的地下美术馆。<span class="long">拖动环视两栋建筑，进入展厅，在展品之间走动参观。</span></p>
-    </div>
-    <div class="hgroup">
-      <button id="sideToggle" class="chip" type="button">建筑档案</button>
-      <button id="labelToggle" class="chip" type="button" aria-pressed="true">标牌</button>
-      <button id="uiToggle" class="chip" type="button">隐藏</button>
-      <button id="themeToggle" class="themeBtn" type="button" aria-pressed="true" aria-label="切换到白天">
-        <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.2 5.2l1.7 1.7M17.1 17.1l1.7 1.7M18.8 5.2l-1.7 1.7M6.9 17.1l-1.7 1.7"/></svg>
-        <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.2 13.8A8.4 8.4 0 1 1 10.2 3.8a6.8 6.8 0 0 0 10 10z"/></svg>
-      </button>
-      <div class="badge" id="modeBadge">外观 · 环视</div>
-    </div>
-  </header>
-
-  <div id="vertical" aria-hidden="true">一枚の布、一筋の光</div>
-
-  <div id="err" role="alert"></div>
-  <div id="dbgHud" aria-hidden="true"></div>
-  <div id="loading"><div class="mark">21_21 <i>DESIGN SIGHT</i></div><div class="lmicro">TOKYO MIDTOWN · TADAO ANDO</div><div id="errArt" aria-hidden="true"><svg viewBox="0 0 320 118" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 96 L62 44 L104 74 L152 30 L200 74 L248 44 L306 96"/><path d="M14 96 L306 96"/><path d="M40 96 V78 M80 96 V70 M120 96 V70 M160 96 V66 M200 96 V70 M240 96 V70 M280 96 V78" stroke-width="0.8" opacity="0.65"/><path d="M152 30 L152 14" opacity="0.65"/><circle cx="152" cy="10" r="3.5"/><path d="M30 108 H290" opacity="0.5"/><path d="M52 108 v6 M268 108 v6" opacity="0.5"/></svg></div><p id="loadMsg">正在载入建筑模型…</p><div id="loadBarWrap"><div id="loadBar"></div></div><button id="loadRetry" type="button">重新加载</button></div>
-  <div id="cross">+</div>
-  <div id="skipOpening">点按任意处跳过</div>
-  <div id="walkTip">W A S D 或左下按钮移动 · 拖动画面转头 · 楼梯口可上下层 · 穿暖帘门洞去 Gallery 2 · 下沉庭院隔着玻璃看 · 过庭院去西翼 Gallery 3</div>
-  <button type="button" id="walkExit" aria-label="退出步行参观">退出步行 ✕</button>
-
-  <aside id="side" class="closed" aria-label="建筑档案">
-    <button type="button" class="mini-x" id="sideHide" aria-label="关闭建筑档案">✕</button>
-    <h2>一枚钢板，折成一栋建筑</h2>
-    <p class="sub">灵感来自三宅一生 A-POC 的「一块布」——博物馆翼的屋顶是一整张长达 54 米的钢板折叠而成；西侧还有一栋较小的咖啡翼。约八成空间藏在地下，靠三角形下沉庭院把光引进展厅。</p>
-    <div class="slabel">概要 · PROFILE</div>
-    <dl>
-      <dt>建筑师</dt><dd>安藤忠雄（Tadao Ando）</dd>
-      <dt>发起人</dt><dd>三宅一生（Issey Miyake）</dd>
-      <dt>馆长团队</dt><dd>三宅一生 · 佐藤卓 · 深泽直人</dd>
-      <dt>开馆</dt><dd>2007 年 · 东京 Midtown 草坪区</dd>
-      <dt>构成</dt><dd>两栋建筑：博物馆翼 + 咖啡翼</dd>
-      <dt>结构</dt><dd>地上 1 层 · 地下 1 层，约 80% 体量在地下；清水混凝土 + 钢板屋顶</dd>
-      <dt>展厅</dt><dd>Gallery 1 · 133m²（梯形，天窗采光）<br/>Gallery 2 · 443m²（层高 4.8m）<br/>Gallery 3 · 110m²（地上层）</dd>
-      <dt>本页展览</dt><dd>虚拟体验展《一块布 · 一束光》· 全馆 12 件展品；地下层约 1,336 m²，轮廓向东延展，Gallery 2 到东端 x=52</dd>
-    </dl>
-    <div class="slabel">数据 · FIGURES</div>
-    <div class="stats" aria-label="建筑数据">
-      <div><b>54<i>m</i></b><span>钢板屋顶</span></div>
-      <div><b>1,336<i>m²</i></b><span>地下层</span></div>
-      <div><b>30<i>级</i></b><span>入口楼梯</span></div>
-      <div><b>12<i>件</i></b><span>全馆展品</span></div>
-    </div>
-    <div class="slabel">视角 · VIEWS</div>
-    <div class="views">
-      <button type="button" data-view="front">正面 · 玻璃立面</button>
-      <button type="button" data-view="aerial">鸟瞰 · 两栋与庭院</button>
-      <button type="button" data-view="court">铺地庭院 · 两栋之间</button>
-      <button type="button" data-view="night">黄昏灯光</button>
-    </div>
-  </aside>
-
-  <section id="exhibitCard" class="folded" aria-live="polite">
-    <div class="drawerHandle" aria-hidden="true"></div>
-    <div id="exGhost" aria-hidden="true">01</div>
-    <div class="cardhead">
-      <div class="no" id="exNo">EXHIBIT 01</div>
-      <div class="cardtools">
-        <button type="button" id="exFold" aria-expanded="false">展开说明</button>
-        <button type="button" id="exHide" class="x" aria-label="关闭说明">✕</button>
-      </div>
-    </div>
-    <h3 id="exTitle">—</h3>
-    <p id="exDesc">—</p>
-    <div class="row">
-      <button type="button" id="exPrev">← 上一件</button>
-      <button type="button" class="go" id="exGo">走到这件展品前</button>
-      <button type="button" id="exNext">下一件 →</button>
-    </div>
-  </section>
-
-  <div id="caption"><button type="button" id="captionHide" aria-label="关闭提示">✕</button><b>先看建筑，再进展厅。</b><br/>草坪上是两栋折叠钢板屋顶的建筑：博物馆翼与西侧咖啡翼（Gallery 3 所在）。点下方「▶ 自动游览」可沿固定路线自动参观全程；也可点「进入展厅」，经入口大堂与 30 级楼梯下到地下展厅参观。</div>
-
-  <section id="tourHud" class="folded" aria-live="polite" aria-label="自动游览">
-    <div class="drawerHandle" aria-hidden="true"></div>
-    <div class="thead">
-      <div class="tno" id="tourNo">自动游览 · 1 / 14</div>
-      <button type="button" id="tourFold" aria-expanded="false">展开讲解</button>
-    </div>
-    <h3 id="tourTitle">—</h3>
-    <p id="tourDesc">—</p>
-    <div id="tourTrack" tabindex="0" role="slider" aria-label="游览进度" aria-valuemin="1" aria-valuemax="14" aria-valuenow="1" aria-valuetext="第 1 站"><div id="tourFill"></div></div>
-    <div id="tourDots" aria-label="游览站点"></div>
-    <div class="trow">
-      <button type="button" id="tourPrev">← 上一站</button>
-      <button type="button" class="main" id="tourPause">暂停</button>
-      <button type="button" id="tourNext">下一站 →</button>
-      <button type="button" class="exit" id="tourExit">退出游览</button>
-    </div>
-  </section>
-
-  <div id="walkHud">
-    <div class="pad" aria-label="移动">
-      <button type="button" class="up" data-move="f" aria-label="前进">↑</button>
-      <button type="button" class="left" data-move="l" aria-label="左移">←</button>
-      <button type="button" class="down" data-move="b" aria-label="后退">↓</button>
-      <button type="button" class="right" data-move="r" aria-label="右移">→</button>
-    </div>
-    <div class="lookpad" aria-label="转头">
-      <button type="button" data-look="1" aria-label="向左看">⟲</button>
-      <button type="button" data-look="-1" aria-label="向右看">⟳</button>
-      <button type="button" id="lockBtn" aria-pressed="false" aria-label="锁定视角">锁定</button>
-    </div>
-  </div>
-
-  <nav id="modebar" aria-label="参观模式">
-    <button type="button" data-mode="exterior" aria-pressed="true"><span class="mno">01</span><span class="lbl-full">外观环视</span><span class="lbl-short">外观</span></button>
-    <button type="button" data-mode="lobby" aria-pressed="false"><span class="mno">02</span><span class="lbl-full">入口大堂</span><span class="lbl-short">大堂</span></button>
-    <button type="button" data-mode="g3" aria-pressed="false"><span class="mno">03</span><span class="lbl-full">Gallery 3 · 西翼</span><span class="lbl-short">G3 · 西翼</span></button>
-    <button type="button" data-mode="gallery" aria-pressed="false"><span class="mno">04</span><span class="lbl-full">展厅全景</span><span class="lbl-short">展厅</span></button>
-    <button type="button" data-mode="walk" class="enter" aria-pressed="false"><span class="mno">05</span><span class="lbl-full">进入展厅 · 步行参观</span><span class="lbl-short">步行参观</span></button>
-    <button type="button" data-mode="tour" class="tour" aria-pressed="false"><span class="mno">06</span><span class="lbl-full">▶ 自动游览</span><span class="lbl-short">▶ 游览</span></button>
-  </nav>
+<div id="loader">
+  <div class="mark">21_21<br>DESIGN SIGHT</div>
+  <div class="bar"><i id="loadbar"></i></div>
+  <div class="hint" id="loadtext">正在载入建筑模型…</div>
 </div>
 
-<script type="module">
-import { initScene, startLoop } from './assets/js/scene.js';
-import { initLighting } from './assets/js/lighting.js';
-import { initCamera } from './assets/js/camera.js';
-import { initTour } from './assets/js/tour.js';
-import { initWalk } from './assets/js/walk.js';
-import { initUi } from './assets/js/ui.js';
-/* ES module split of the former ~134 KB inline script (issue #8, resplit
-   from merged14: #9-#14 serial chain + round-2 review fixes).
-   Behaviour is unchanged; the six init calls below run in the same
-   order the original single script ran in. */
-if (initScene()) {
-  initLighting();
-  initCamera();
-  initTour();
-  initWalk();
-  initUi();
-  startLoop();
-}
-</script>
+<header id="brand">
+  <div class="mark">21_21 DESIGN SIGHT</div>
+  <div class="sub">Tadao Ando · Tokyo Midtown · 2007</div>
+</header>
+
+<nav id="modes" aria-label="浏览模式">
+  <button data-mode="orbit" class="on">鸟瞰</button>
+  <button data-mode="tour">导览</button>
+  <button data-mode="walk">漫游</button>
+  <button id="infoBtn" class="ghost" aria-label="关于">i</button>
+</nav>
+
+<aside id="map" title="平面图">
+  <div class="lvl"><span id="lvlname">1F</span></div>
+  <div class="frame"><img id="planimg" src="plan_f1.png" alt="平面图"><i id="you"></i></div>
+</aside>
+
+<section id="tourCard" hidden>
+  <div class="idx" id="tIdx">01 / 09</div>
+  <h2 id="tTitle"></h2>
+  <div class="en" id="tEn"></div>
+  <p id="tText"></p>
+  <div class="row">
+    <button id="tPrev" aria-label="上一站">←</button>
+    <button id="tPlay">自动播放</button>
+    <button id="tNext" aria-label="下一站">→</button>
+  </div>
+</section>
+
+<section id="walkHelp" hidden>
+  <div class="desk">拖动画面环视 · <b>W A S D</b> / 方向键移动 · <b>Shift</b> 快走 · 点平面图瞬移</div>
+  <div class="touch">左下摇杆移动 · 拖动画面环视 · 点平面图瞬移</div>
+</section>
+<div id="stick" hidden><i></i></div>
+
+<footer id="sun">
+  <label>时间 <output id="sunOut">14:00</output></label>
+  <input id="sunRange" type="range" min="6" max="18.5" step="0.25" value="14">
+</footer>
+
+<dialog id="info">
+  <button class="close" id="infoClose" aria-label="关闭">×</button>
+  <h2>21_21 DESIGN SIGHT</h2>
+  <p>由安藤忠雄与日建设计设计，2007 年 3 月落成于东京中城花园。三宅一生“一块布”（A Piece of Cloth）的理念化作两片折叠的钢板屋顶：最长 54 m，16 mm 厚，现场焊接成一整张。建筑地上一层、地下一层，约八成面积位于地下。</p>
+  <table>
+    <tr><td>场地面积</td><td>2,653.3 m²</td></tr>
+    <tr><td>建筑面积</td><td>597.3 m²</td></tr>
+    <tr><td>总楼面</td><td>1,932 m²</td></tr>
+    <tr><td>展厅</td><td>Gallery 1 133 m² · Gallery 2 443 m² · Gallery 3 110 m²</td></tr>
+    <tr><td>最高</td><td>地面以上 4.8 m</td></tr>
+    <tr><td>清水混凝土模板</td><td>1800 × 900 mm，每块 6 个对拉螺栓孔</td></tr>
+  </table>
+  <h3>模型说明</h3>
+  <p>三维模型以一份 SketchUp 模型（作者未知）为基础，按 PLATEAU 港区 3D 城市模型（CC BY 4.0）校正平面位置与尺度，再对照官方资料与公开照片逐项修正入口、屋面、矮墙、场地坡度、磨砂玻璃护栏与室内饰面。标注为推测的尺寸并非实测，地下层与室内隔墙为简化。</p>
+  <h3>资料来源</h3>
+  <ul>
+    <li><a href="https://www.2121designsight.jp/designsight/architecture.html" target="_blank" rel="noopener">21_21 DESIGN SIGHT 官网 · 建筑</a></li>
+    <li><a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener">国土交通省 PLATEAU（CC BY 4.0）</a></li>
+    <li>Wikimedia Commons 照片（CC BY / CC BY-SA，作者见仓库 SOURCES）</li>
+    <li>日经 xTECH、《新建築》2007-05、《ディテール》2007-10</li>
+  </ul>
+  <p class="fine">非官方项目，仅供学习与研究。</p>
+</dialog>
+
+<div id="toast" hidden></div>
+
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

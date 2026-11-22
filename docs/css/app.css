@@ -1,0 +1,86 @@
+:root{
+  --ink:#1d1d1b; --paper:#f4f2ee; --line:rgba(29,29,27,.14);
+  --glass:rgba(250,249,246,.82); --accent:#8a8780;
+  --font:"Helvetica Neue","Hiragino Sans","PingFang SC","Noto Sans SC",Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:#d9d8d4;color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* loader */
+#loader{position:fixed;inset:0;z-index:50;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;transition:opacity .9s}
+#loader.done{opacity:0;pointer-events:none}
+#loader .mark{font-weight:300;letter-spacing:.32em;font-size:22px;line-height:1.5;text-align:center}
+#loader .bar{width:220px;height:1px;background:var(--line);position:relative}
+#loader .bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--ink);transition:width .2s}
+#loader .hint{font-size:12px;letter-spacing:.12em;color:var(--accent)}
+
+/* brand */
+#brand{position:fixed;left:28px;top:24px;z-index:10;pointer-events:none}
+#brand .mark{font-weight:400;letter-spacing:.26em;font-size:14px}
+#brand .sub{font-size:11px;letter-spacing:.14em;color:var(--accent);margin-top:6px}
+
+/* modes */
+#modes{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:10;display:flex;gap:2px;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:999px;padding:4px}
+#modes button{padding:9px 20px;border-radius:999px;font-size:13px;letter-spacing:.18em;transition:background .25s,color .25s}
+#modes button.on{background:var(--ink);color:var(--paper)}
+#modes button.ghost{width:36px;padding:9px 0;letter-spacing:0;font-style:italic;font-family:Georgia,serif}
+
+/* minimap */
+#map{position:fixed;right:24px;top:20px;z-index:10;width:300px;background:rgba(29,29,27,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:6px;padding:10px 10px 8px;color:#eee;cursor:crosshair}
+#map .lvl{font-size:11px;letter-spacing:.2em;margin-bottom:6px;opacity:.85}
+#map .frame{position:relative;width:100%;aspect-ratio:900/360}
+#map img{width:100%;height:100%;display:block;opacity:.9;pointer-events:none}
+#you{position:absolute;width:0;height:0;pointer-events:none}
+#you::before{content:"";position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:#e2c27a;box-shadow:0 0 0 3px rgba(226,194,122,.3)}
+#you::after{content:"";position:absolute;left:-1px;top:-22px;width:2px;height:17px;background:linear-gradient(#e2c27a00,#e2c27a);transform-origin:1px 22px;transform:rotate(var(--rot,0deg))}
+
+/* tour card */
+#tourCard{position:fixed;left:28px;bottom:92px;z-index:10;width:min(380px,calc(100vw - 56px));background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:6px;padding:20px 22px 16px}
+#tourCard .idx{font-size:11px;letter-spacing:.22em;color:var(--accent)}
+#tourCard h2{font-weight:400;font-size:20px;letter-spacing:.08em;margin-top:10px}
+#tourCard .en{font-size:11px;letter-spacing:.16em;color:var(--accent);margin-top:4px;text-transform:uppercase}
+#tourCard p{font-size:13.5px;line-height:1.85;margin-top:12px;color:#33332f}
+#tourCard .row{display:flex;justify-content:space-between;align-items:center;margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+#tourCard .row button{padding:6px 10px;font-size:13px;letter-spacing:.12em}
+#tourCard .row button:hover{opacity:.6}
+
+/* walk help + joystick */
+#walkHelp{position:fixed;left:50%;bottom:88px;transform:translateX(-50%);z-index:10;font-size:12px;letter-spacing:.08em;color:#fff;background:rgba(29,29,27,.6);padding:8px 14px;border-radius:999px;white-space:nowrap}
+#walkHelp b{font-weight:600}
+#walkHelp .touch{display:none}
+#stick{position:fixed;left:28px;bottom:96px;width:116px;height:116px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:rgba(29,29,27,.25);z-index:11;touch-action:none}
+#stick i{position:absolute;left:38px;top:38px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.85)}
+
+/* sun */
+#sun{position:fixed;right:24px;bottom:30px;z-index:10;display:flex;align-items:center;gap:12px;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:12px;letter-spacing:.12em}
+#sun output{font-variant-numeric:tabular-nums;display:inline-block;width:42px}
+#sun input{width:140px;accent-color:var(--ink)}
+
+/* info */
+dialog#info{margin:auto;max-width:560px;width:calc(100vw - 40px);max-height:84vh;overflow:auto;border:0;border-radius:8px;padding:30px 32px;background:var(--paper);color:var(--ink);line-height:1.8;font-size:14px}
+dialog#info::backdrop{background:rgba(20,20,18,.45);backdrop-filter:blur(4px)}
+dialog#info h2{font-weight:400;letter-spacing:.2em;font-size:18px;margin-bottom:12px}
+dialog#info h3{font-weight:500;font-size:13px;letter-spacing:.16em;margin:20px 0 6px;color:var(--accent)}
+dialog#info table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+dialog#info td{border-top:1px solid var(--line);padding:6px 0;vertical-align:top}
+dialog#info td:first-child{width:9em;color:var(--accent)}
+dialog#info ul{padding-left:1.2em;font-size:13px}
+dialog#info a{color:inherit}
+dialog#info .fine{font-size:11px;color:var(--accent);margin-top:16px}
+dialog#info .close{position:absolute;right:16px;top:10px;font-size:24px}
+
+#toast{position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:20;background:rgba(29,29,27,.8);color:#fff;font-size:12px;letter-spacing:.1em;padding:8px 14px;border-radius:999px}
+
+@media (max-width:720px){
+  #brand{left:16px;top:14px} #brand .sub{display:none}
+  #map{width:176px;right:12px;top:12px;padding:6px}
+  #modes{bottom:16px} #modes button{padding:8px 14px}
+  #sun{right:auto;left:50%;transform:translateX(-50%);bottom:68px;padding:6px 12px} #sun input{width:120px}
+  #tourCard{left:12px;right:12px;width:auto;bottom:116px;padding:14px 16px}
+  #tourCard p{font-size:13px;line-height:1.7}
+  #walkHelp{bottom:116px} #walkHelp .desk{display:none} #walkHelp .touch{display:inline}
+  #stick{left:20px;bottom:120px}
+}
+@media (hover:none){ #walkHelp .desk{display:none} #walkHelp .touch{display:inline} }
