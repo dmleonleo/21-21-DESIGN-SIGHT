@@ -60,6 +60,7 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1200, 32, 16), new THREE.Sha
 }));
 sky.material.uniforms.rayleigh = { value: 0 };
 scene.add(sky);
+const nightMats = [];
 const realList = [sky];
 let groundMat = null; const trees = [];
 
@@ -129,6 +130,7 @@ function setSun(hour) {
   sky.material.uniforms.day.value = day;
   baseExposure = 0.55 + 0.25 * day;
   lampLevel = 1 - day;
+  for (const m of nightMats) m.color.copy(m.userData.night).multiplyScalar(0.45 + 0.55 * day);   // surfaces sink at night
   const hh = Math.floor(hour), mm = Math.round((hour - hh) * 60);
   $('#sunOut').value = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
@@ -260,7 +262,7 @@ function setCut(kind, v) {
     $('#cutOut').value = c.label(v);
   }
   const planes = on ? [cutPlane] : null;
-  for (const m of clipMats) { m.clippingPlanes = planes; m.side = on ? THREE.DoubleSide : THREE.FrontSide; m.needsUpdate = true; }
+  for (const m of clipMats) { m.clippingPlanes = planes; m.needsUpdate = true; }
   if (groundMat) { groundMat.clippingPlanes = planes; groundMat.needsUpdate = true; }
   coverU.cutOn.value = on ? 1 : 0;
   earthMat.clippingPlanes = planes; earthMat.needsUpdate = true; earth.visible = on;
@@ -509,14 +511,18 @@ loader.load('model/2121.glb', (gltf) => {
     const isGlass = /glass|frosted/.test(name) || mats[0].transparent;
     const isLight = /light/.test(name) || (mats[0].emissive && mats[0].emissive.r > 0.5);
     if (/lawn/.test(mats[0].name)) mats.forEach((m) => m.color.setRGB(0.15, 0.13, 0.14));   // quiet the grass  // quiet the grass
+    if (/__roof$/.test(o.name)) mats.forEach((m) => { if (!m.userData.roofed) { m.userData.roofed = true; m.color.multiplyScalar(0.28); m.metalness = 0.7; m.roughness = 0.38; } });
+    if (/concrete/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.multiplyScalar(0.5); m.roughness = 0.92; } });
+    if (/__steel$/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.setRGB(0.07, 0.075, 0.08); m.metalness = 0.8; m.roughness = 0.35; } });
+    mats.forEach((m) => { if (!isLight && !m.userData.night) { m.userData.night = m.color.clone(); nightMats.push(m); } });
     o.castShadow = !isGlass && !isLight;
     o.receiveShadow = !isLight;
     mats.forEach((m) => {
-      if (isGlass) { m.transparent = true; m.depthWrite = false; m.envMapIntensity = 1.2; }
+      if (isGlass) { m.transparent = true; m.depthWrite = false; m.envMapIntensity = 0.7; m.color.setRGB(0.80, 0.86, 0.88); m.opacity = 0.14; m.metalness = 0.0; m.roughness = 0.03; }
       if (isLight) { m.emissive = new THREE.Color(1, 0.9, 0.74); m.emissiveIntensity = 3.0; lightMats.push(m); }
       if (m.map) m.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
       if (!isGlass && !isLight && !m.userData.cover) { m.userData.cover = true; addCover(m); }
-      if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); }
+      if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); if (!isGlass && !isLight) m.side = THREE.DoubleSide; }
     });
     if (!isLight) {
       const g = o.geometry.clone();
@@ -531,7 +537,7 @@ loader.load('model/2121.glb', (gltf) => {
     }
   });
   scene.add(root); realThings.push(...realList, root);
-  buildDiagram(root);
+  buildDiagram(root); setSun(+$('#sunRange').value);
   const merged = BufferGeometryUtils.mergeGeometries(geos, false);
   bvh = new MeshBVH(merged);
   buildCover();

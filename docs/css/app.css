@@ -18,7 +18,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webki
 #bars{position:fixed;inset:0;z-index:6;pointer-events:none}
 #bars i{position:absolute;left:0;right:0;height:0;background:#000;transition:height 1.2s var(--ease)}
 #bars i:first-child{top:0} #bars i:last-child{bottom:0}
-body.tour #bars i{height:7vh}
+body.tour #bars i{height:0}
 body.tour #veil{background:radial-gradient(120% 90% at 50% 46%,transparent 55%,rgba(0,0,0,.55) 100%),radial-gradient(70% 60% at 0% 100%,rgba(0,0,0,.62),transparent 70%),linear-gradient(to bottom,rgba(0,0,0,.35),transparent 18%)}
 
 /* loader */
@@ -54,7 +54,7 @@ body.tour #veil{background:radial-gradient(120% 90% at 50% 46%,transparent 55%,r
 #you::after{content:"";position:absolute;left:-.5px;top:-20px;width:1px;height:16px;background:linear-gradient(rgba(255,255,255,0),#fff);transform-origin:.5px 20px;transform:rotate(var(--rot,0deg))}
 
 /* tour */
-#tourCard{text-shadow:0 0 28px rgba(0,0,0,.55);position:fixed;left:var(--pad);bottom:calc(var(--pad) + 7vh + 40px);z-index:10;width:min(400px,calc(100vw - 2 * var(--pad)))}
+#tourCard{text-shadow:0 0 28px rgba(0,0,0,.55);position:fixed;left:var(--pad);bottom:calc(var(--pad) + 48px);z-index:10;width:min(400px,calc(100vw - 2 * var(--pad)))}
 #tourCard .idx{font-size:11px;letter-spacing:.24em;font-variant-numeric:tabular-nums}
 #tourCard .of{color:var(--mute);margin-left:10px}
 #tourCard h2{font-weight:300;font-size:clamp(26px,3.2vw,40px);letter-spacing:.01em;line-height:1.1;margin-top:18px}
@@ -62,8 +62,8 @@ body.tour #veil{background:radial-gradient(120% 90% at 50% 46%,transparent 55%,r
 #tourCard .row{display:flex;gap:28px;margin-top:22px}
 #tourCard .fade{animation:rise 1.1s var(--ease) both}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-body.tour #modes{bottom:calc(var(--pad) * .5 + 7vh * .5 - 12px)}
-body.tour #sun{bottom:calc(var(--pad) * .5 + 7vh * .5 - 8px)}
+
+
 
 /* walk */
 #walkHelp{position:fixed;left:50%;bottom:calc(var(--pad) + 60px);transform:translateX(-50%);z-index:10;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--mute);white-space:nowrap;animation:rise 1s var(--ease) both}
