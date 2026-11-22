@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -36,6 +37,12 @@ scene.fog = new THREE.Fog(0x2a2c2e, 90, 420);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.22;
+let envK = 1;   // real sky light (Poly Haven CC0 HDRI) replaces the studio env once loaded
+new RGBELoader().load('env/kloofendal_48d_partly_cloudy_puresky.hdr', (t) => {
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  scene.environment = pmrem.fromEquirectangular(t).texture; t.dispose();
+  envK = 0.35; setSun(+$('#sunRange').value);
+});
 
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 1500);
 camera.position.copy(M(30, -50, 24));
@@ -83,7 +90,7 @@ let lampLevel = 0, baseExposure = 0.8, underK = 0;
 // garden context: far ground + cedars (stylised; not part of the measured model)
 {
   const g = new THREE.Mesh(new THREE.CircleGeometry(600, 64).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x262b21, roughness: 1 }));
+    new THREE.MeshStandardMaterial({ color: 0x30352a, roughness: 1 }));
   g.position.y = -0.45; g.receiveShadow = true; scene.add(g); realList.push(g); groundMat = g.material;
   let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const trunk = new THREE.CylinderGeometry(0.18, 0.28, 1, 6).translate(0, 0.5, 0);
@@ -121,21 +128,21 @@ function setSun(hour) {
   sun.position.copy(sun.target.position).addScaledVector(dir, 200);
   const day = THREE.MathUtils.smoothstep(alt, -0.04, 0.35);
   const lit = THREE.MathUtils.smoothstep(alt, -0.02, 0.05);
-  sun.intensity = 4.6 * lit * (0.6 + 0.4 * day);
+  sun.intensity = 2.8 * lit * (0.6 + 0.4 * day);
   sun.color.setHSL(0.075, 0.75 * (1 - day) + 0.08, 0.55 + 0.3 * day);
-  hemi.intensity = 0.1 + 0.55 * day;
+  hemi.intensity = 0.16 + 0.14 * day;   // night floor: Roppongi city glow
   hemi.color.setHSL(0.6, 0.25, 0.35 + 0.4 * day);
   scene.fog.color.setHSL(0.6, 0.08, 0.04 + 0.14 * day);
-  scene.environmentIntensity = 0.1 + 0.3 * day;
+  scene.environmentIntensity = (0.22 + 0.3 * day) * envK;
   sky.material.uniforms.day.value = day;
-  baseExposure = 0.55 + 0.25 * day;
+  baseExposure = 0.62 + 0.9 * (1 - day) * (1 - day);   // eye adapts at night
   lampLevel = 1 - day;
   for (const m of nightMats) m.color.copy(m.userData.night).multiplyScalar(0.45 + 0.55 * day);   // surfaces sink at night
   const hh = Math.floor(hour), mm = Math.round((hour - hh) * 60);
   $('#sunOut').value = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 $('#sunRange').addEventListener('input', (e) => setSun(+e.target.value));
-setSun(14.5);
+setSun(23);
 
 // ---------- controls ----------
 const orbit = new OrbitControls(camera, canvas);
@@ -283,18 +290,18 @@ $('#cutRange').addEventListener('input', (e) => setCut(cutKind, +e.target.value)
 let dayRun = null;
 $('#dayBtn').onclick = () => {
   if (dayRun) { dayRun = null; $('#dayBtn').textContent = 'Day'; return; }
-  dayRun = { h: Math.max(6, +$('#sunRange').value >= 20.5 ? 6 : +$('#sunRange').value) }; $('#dayBtn').textContent = 'Stop';
+  dayRun = { h: Math.max(5, +$('#sunRange').value >= 23 ? 5 : +$('#sunRange').value) }; $('#dayBtn').textContent = 'Stop';
 };
 function stepDay(dt) {
   if (!dayRun) return;
-  dayRun.h += dt * 0.75;                    // a day in 20 s
-  if (dayRun.h > 21) dayRun.h = 6;
+  dayRun.h += dt * 0.9;                     // a day in ~20 s
+  if (dayRun.h > 23.5) dayRun.h = 5;
   $('#sunRange').value = dayRun.h; setSun(dayRun.h);
 }
 
 function setMode(m) {
   mode = m;
-  document.body.className = m;
+  document.body.className = m + (document.body.classList.contains('light') ? ' light' : '');
   fovTarget = fovFor(m);
   document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
   orbit.enabled = m === 'orbit';
@@ -466,17 +473,25 @@ const lightMats = [], clipMats = [];
 // ---------- sky cover: indoor fragments lose the open-sky ambient, so sunlight and lamps model the rooms ----------
 const COVER = { w: 200, h: 80, x0: -14, x1: 86, y0: -16, y1: 24 };   // model metres, 0.5 m cells
 const coverTex = new THREE.DataTexture(new Float32Array(COVER.w * COVER.h * 4).fill(-20), COVER.w, COVER.h, THREE.RGBAFormat, THREE.FloatType);
-coverTex.magFilter = coverTex.minFilter = THREE.LinearFilter; coverTex.needsUpdate = true;
+coverTex.magFilter = coverTex.minFilter = THREE.NearestFilter;   // linear blending of open(-20)/covered(+4.8) cells made dark wedges on walls coverTex.needsUpdate = true;
 const coverU = { coverTex: { value: coverTex }, coverBox: { value: new THREE.Vector4(COVER.x0, COVER.x1, COVER.y0, COVER.y1) }, coverK: { value: 0.22 }, cutOn: { value: 0 } };
 function addCover(m) {
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, coverU);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    // normals always face the viewer: SketchUp export has triangles with reversed winding, which DoubleSide
+    // shading flipped to the dark side (the black slivers on the walls)
+    sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin
+      .replace('float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;', '\n#ifdef FLAT_SHADED\nfloat faceDirection = 1.0;\n#else\nfloat faceDirection = dot(vNormal, vViewPosition) >= 0.0 ? 1.0 : -1.0;\n#endif\n'));
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vWPos; uniform sampler2D coverTex; uniform vec4 coverBox; uniform float coverK; uniform float cutOn;
       float skyOpen(){
-        vec2 uv = vec2((vWPos.x - coverBox.x) / (coverBox.y - coverBox.x), (-vWPos.z - coverBox.z) / (coverBox.w - coverBox.z));
+        // sample a little off the surface, on the viewer's side, so a wall under the eave reads as outside from outside
+        vec3 gn = normalize(cross(dFdx(vWPos), dFdy(vWPos)));
+        if (dot(gn, cameraPosition - vWPos) < 0.0) gn = -gn;
+        vec3 sp = vWPos + gn * 0.35;
+        vec2 uv = vec2((sp.x - coverBox.x) / (coverBox.y - coverBox.x), (-sp.z - coverBox.z) / (coverBox.w - coverBox.z));
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 1.0;
         vec4 c = texture2D(coverTex, uv);
         float roof = vWPos.y > -0.6 ? c.r : c.g;          // covering height above this level
@@ -510,9 +525,11 @@ loader.load('model/2121.glb', (gltf) => {
     const name = (mats[0].name || '') + ' ' + o.name + ' ' + (o.parent ? o.parent.name : '');
     const isGlass = /glass|frosted/.test(name) || mats[0].transparent;
     const isLight = /light/.test(name) || (mats[0].emissive && mats[0].emissive.r > 0.5);
-    if (/lawn/.test(mats[0].name)) mats.forEach((m) => m.color.setRGB(0.15, 0.13, 0.14));   // quiet the grass  // quiet the grass
+    if (/lawn/.test(mats[0].name)) mats.forEach((m) => m.color.setRGB(0.17, 0.18, 0.15));   // quiet the grass
     if (/__roof$/.test(o.name)) mats.forEach((m) => { if (!m.userData.roofed) { m.userData.roofed = true; m.color.multiplyScalar(0.28); m.metalness = 0.7; m.roughness = 0.38; } });
     if (/concrete/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.multiplyScalar(0.5); m.roughness = 0.92; } });
+    if (/__stone$/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.multiplyScalar(0.42); m.roughness = 0.9; } });
+    if (/__ceiling$/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.multiplyScalar(0.72); } });
     if (/__steel$/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.setRGB(0.07, 0.075, 0.08); m.metalness = 0.8; m.roughness = 0.35; } });
     mats.forEach((m) => { if (!isLight && !m.userData.night) { m.userData.night = m.color.clone(); nightMats.push(m); } });
     o.castShadow = !isGlass && !isLight;
@@ -522,7 +539,7 @@ loader.load('model/2121.glb', (gltf) => {
       if (isLight) { m.emissive = new THREE.Color(1, 0.9, 0.74); m.emissiveIntensity = 3.0; lightMats.push(m); }
       if (m.map) m.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
       if (!isGlass && !isLight && !m.userData.cover) { m.userData.cover = true; addCover(m); }
-      if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); if (!isGlass && !isLight) m.side = THREE.DoubleSide; }
+      if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); if (!isGlass && !isLight) { m.side = THREE.DoubleSide; m.flatShading = true; } }   // planar architecture: geometric normals, ignores broken exported vertex normals
     });
     if (!isLight) {
       const g = o.geometry.clone();
@@ -626,9 +643,9 @@ const bloom = window.__bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth,
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 const grade = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, grain: { value: 0.035 } },
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, grain: { value: 0.035 }, paper: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float time; uniform float grain; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float time; uniform float grain; uniform float paper; varying vec2 vUv;
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)) + time) * 43758.5453); }
     void main(){
       vec3 c = texture2D(tDiffuse, vUv).rgb;
@@ -636,19 +653,47 @@ const grade = new ShaderPass({
       c = mix(vec3(l), c, 0.7);                                  // restrained saturation
       c = mix(c, c * vec3(0.92,0.98,1.06), 1.0 - smoothstep(0.0, 0.5, l));  // cool shadows
       c = mix(c, c * vec3(1.05,1.0,0.93), smoothstep(0.45, 1.0, l));       // warm highlights
-      c = (c - 0.5) * 1.06 + 0.5;
+      c = (c - 0.25) * 1.05 + 0.25;
+      c = mix(c, vec3(0.93,0.92,0.89) * (0.5 + 0.7 * c), paper);   // Light: morning haze, lifted paper blacks
       c += (h(vUv * 1000.0) - 0.5) * grain;
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
 });
 composer.addPass(grade);
 
+// ---------- light / dark: morning 08:00 vs late night 23:00 ----------
+const THEME = { light: { h: 8.5, paper: 0.5 }, dark: { h: 23, paper: 0 } };
+let themeRun = null, paperK = 0;
+function setTheme(t, instant) {
+  document.body.classList.toggle('light', t === 'light');
+  document.querySelectorAll('#theme button').forEach((b) => b.classList.toggle('on', b.dataset.theme === t));
+  dayRun = null; $('#dayBtn').textContent = 'Day';
+  const to = THEME[t];
+  if (instant) { paperK = to.paper; setSun(to.h); $('#sunRange').value = to.h; return; }
+  themeRun = { h0: +$('#sunRange').value, h1: to.h, p0: paperK, p1: to.paper, k: 0 };
+  try { localStorage.setItem('2121.theme', t); } catch (e) {}
+}
+document.querySelectorAll('#theme button').forEach((b) => (b.onclick = () => setTheme(b.dataset.theme)));
+function stepTheme(dt) {
+  if (!themeRun) return;
+  themeRun.k = Math.min(1, themeRun.k + dt / 2.4);
+  const e = themeRun.k * themeRun.k * (3 - 2 * themeRun.k);
+  // always run forward in time: 08 -> 23 crosses the afternoon and dusk, 23 -> 08 crosses the night to dawn
+  const h1 = themeRun.h1 < themeRun.h0 ? themeRun.h1 + 24 : themeRun.h1;
+  const hh = (themeRun.h0 + (h1 - themeRun.h0) * e) % 24;
+  paperK = themeRun.p0 + (themeRun.p1 - themeRun.p0) * e;
+  const hs = hh < 5 ? 23.5 : Math.min(23.5, hh);
+  $('#sunRange').value = hs; setSun(hs);
+  if (themeRun.k >= 1) themeRun = null;
+}
+{ let t0 = 'dark'; try { t0 = localStorage.getItem('2121.theme') || 'dark'; } catch (e) {} setTheme(t0, true); }
+
 // ---------- loop ----------
 const clock = new THREE.Timer();
 function frame() {
   clock.update(); const dt = Math.min(clock.getDelta(), 0.05);
   if (fly) stepFly(dt);
-  stepDay(dt);
+  stepDay(dt); stepTheme(dt); grade.uniforms.paper.value = paperK;
   if (mode === 'diagram') stepDiagram();
   else if (mode === 'tour' && J.on && !fly) stepJourney(dt);
   else if (mode === 'orbit' && !fly) orbit.update();
@@ -658,7 +703,7 @@ function frame() {
   renderer.toneMappingExposure = baseExposure * (1 - 0.28 * underK);
   fill.intensity += ((under ? 0.9 : 0.35 + 0.3 * lampLevel) - fill.intensity) * 0.08;
   const lampOn = Math.max(0.35, lampLevel, under ? 1 : 0);
-  lamps.forEach((l, i) => { const k = i < 3 ? lampLevel * 0.6 : lampOn; l.intensity += (k * 7 - l.intensity) * 0.08; });
+  lamps.forEach((l, i) => { const k = i < 3 ? lampLevel : lampOn; l.intensity += (k * (i < 3 ? 14 : 7) - l.intensity) * 0.08; });
   for (const m of lightMats) m.emissiveIntensity = 1.6 + 2.4 * lampLevel;
   if (Math.abs(camera.fov - fovTarget) > 0.05) { camera.fov += (fovTarget - camera.fov) * 0.05; camera.updateProjectionMatrix(); }
   grade.uniforms.time.value = (grade.uniforms.time.value + 0.37) % 100;
@@ -673,4 +718,4 @@ addEventListener('resize', () => {
   composer.setSize(innerWidth, innerHeight); sizeDiag();
 });
 // debug hook for automated checks
-window.__2121 = { get bvh() { return bvh; }, THREE, setMode, goStation, setCut, J, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };
+window.__2121 = { get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };
