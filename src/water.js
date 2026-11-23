@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { M, B1, label, onWall, onFloor } from './exhibit.js';
 
 const SERIF = '"Bella Gothic",Arial,sans-serif';
-const MAXD = 12;
+const MAXD = 24;
 const rimM = new THREE.MeshStandardMaterial({ color: 0x5e5c58, roughness: 0.85 });
 const dropM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.7, envMapIntensity: 1.4 });
 
@@ -170,5 +170,6 @@ export async function buildWater(scene, { ground = () => null } = {}) {
   g.add(onFloor(credit, 25.4, 15.6, 0));
 
   scene.add(g);
-  return { group: g, update: (t) => { for (const m of mats) m.userData.time.value = t; anim.forEach((f) => f(t)); }, colliders: g.userData.colliders };
+  const surfaces = []; g.traverse((o) => { if (o.isMesh && o.material && o.material.drop) surfaces.push(o); });
+  return { surfaces, group: g, update: (t) => { for (const m of mats) m.userData.time.value = t; anim.forEach((f) => f(t)); }, colliders: g.userData.colliders };
 }

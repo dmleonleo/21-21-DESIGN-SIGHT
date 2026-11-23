@@ -75,7 +75,7 @@ sky.material.uniforms.rayleigh = { value: 0 };
 scene.add(sky);
 const nightMats = [];
 const realList = [sky];
-let groundMat = null; const trees = [];
+let groundMat = null, outerGround = null; const trees = []; const treePts = [];
 
 const hemi = new THREE.HemisphereLight(0xc9d3dc, 0x2b2a24, 0.6);
 scene.add(hemi);
@@ -95,9 +95,10 @@ let lampLevel = 0, baseExposure = 0.8, underK = 0;
 
 // garden context: far ground + cedars (stylised; not part of the measured model)
 {
-  const g = new THREE.Mesh(new THREE.CircleGeometry(600, 64).rotateX(-Math.PI / 2),
+  // the outer ground: a 5 m grid that takes the lawn's own heights at its edges (fitGround), so the garden reads level with it
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200, 240, 240).rotateX(-Math.PI / 2),
     new THREE.MeshStandardMaterial({ color: 0x30352a, roughness: 1 }));
-  g.position.y = -0.45; g.receiveShadow = true; scene.add(g); realList.push(g); groundMat = g.material;
+  g.position.y = -0.45; g.receiveShadow = true; scene.add(g); realList.push(g); groundMat = g.material; outerGround = g;
   let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const trunk = new THREE.CylinderGeometry(0.18, 0.28, 1, 6).translate(0, 0.5, 0);
   // crown: a loose cluster of low-poly blobs, read as silhouette at dusk
@@ -110,7 +111,7 @@ let lampLevel = 0, baseExposure = 0.8, underK = 0;
   const cI = new THREE.InstancedMesh(crown, new THREE.MeshStandardMaterial({ color: 0x1b2419, roughness: 1, flatShading: true }), pts.length);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion();
   pts.forEach(([x, y], i) => {
-    const h = 11 + rnd() * 10, r = 2.2 + rnd() * 1.6, p = M(x, y, -0.4);
+    const h = 11 + rnd() * 10, r = 2.2 + rnd() * 1.6, p = M(x, y, -0.4); treePts.push([x, y, h, r]);
     m.compose(p, q, new THREE.Vector3(1, h * 0.35, 1)); tI.setMatrixAt(i, m);
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6.28);
     m.compose(p.clone().add(new THREE.Vector3(0, h * 0.3, 0)), q, new THREE.Vector3(r * 1.5, h * 0.75, r * 1.5)); cI.setMatrixAt(i, m); q.identity();
@@ -220,6 +221,16 @@ function pick(e) {
   pickRay.setFromCamera(ndc, camera);
   return pickRay;
 }
+// Still Water: the pointer stirs any water surface it passes over; a tap drops a bigger ring
+let rippleT = 0; const rippleP = new THREE.Vector3(1e9, 0, 0);
+function stir(e, amp) {
+  if (show !== 'water' || !exhibit || !exhibit.surfaces || (mode !== 'tour' && mode !== 'walk')) return false;
+  const rc = pick(e), hs = rc.intersectObjects(exhibit.surfaces, false); if (!hs.length) return false;
+  const h = hit(rc.ray.origin, rc.ray.direction, 200); if (h && hs[0].distance > h.distance + 0.06) return false;
+  const p = hs[0].point; if (amp < 1 && rippleP.distanceTo(p) < 0.12) return false;
+  rippleP.copy(p); hs[0].object.material.drop(p.x, -p.z, amp); return true;
+}
+canvas.addEventListener('pointermove', (e) => { const now = performance.now(); if (now - rippleT < 45) return; if (stir(e, look.drag ? 0.4 : 0.8)) rippleT = now; });
 let tapStart = null;
 canvas.addEventListener('pointerdown', (e) => { tapStart = { x: e.clientX, y: e.clientY, t: performance.now() }; });
 canvas.addEventListener('pointerup', (e) => {
@@ -240,6 +251,7 @@ canvas.addEventListener('pointerup', (e) => {
     return;
   }
   if (!exhibit) return;
+  stir(e, 1.3);
   const hs = rc.intersectObject(exhibit.group, true);
   for (const x of hs) {
     if (h && x.distance > h.distance + 0.08) break;              // behind a wall
@@ -801,6 +813,38 @@ function buildCover() {
   }
   openTex.needsUpdate = true;
 }
+// The lawn falls about 0.9 m from west to east. The flat outer disc cut across it on a diagonal and made the whole garden look tilted.
+// Sample the lawn on a 5 m grid; the outer ground takes the nearest lawn height (clamped at its edges) a little below it, trees stand on it.
+function fitGround(lawn) {
+  if (!lawn || !outerGround) return;
+  const rc = new THREE.Raycaster(), X0 = -30, X1 = 95, Y0 = -30, Y1 = 40, S = 5, nx = (X1 - X0) / S + 1, ny = (Y1 - Y0) / S + 1;
+  const H = new Float32Array(nx * ny).fill(NaN);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const X = Math.min(X1 - 0.3, Math.max(X0 + 0.3, X0 + i * S)), Y = Math.min(Y1 - 0.3, Math.max(Y0 + 0.3, Y0 + j * S));
+    rc.set(M(X, Y, 3), DOWN); const h = rc.intersectObject(lawn, false).find((x) => x.point.y > -0.98);
+    if (h) H[j * nx + i] = h.point.y;
+  }
+  // holes (court, building): fill from the row's mean
+  for (let j = 0; j < ny; j++) { let sum = 0, n = 0; for (let i = 0; i < nx; i++) if (!isNaN(H[j * nx + i])) { sum += H[j * nx + i]; n++; } for (let i = 0; i < nx; i++) if (isNaN(H[j * nx + i])) H[j * nx + i] = n ? sum / n : -0.45; }
+  const at = (X, Y) => { const fx = (Math.min(X1, Math.max(X0, X)) - X0) / S, fy = (Math.min(Y1, Math.max(Y0, Y)) - Y0) / S; const i = Math.min(nx - 2, Math.floor(fx)), j = Math.min(ny - 2, Math.floor(fy)), u = fx - i, v = fy - j;
+    return (H[j * nx + i] * (1 - u) + H[j * nx + i + 1] * u) * (1 - v) + (H[(j + 1) * nx + i] * (1 - u) + H[(j + 1) * nx + i + 1] * u) * v; };
+  const pos = outerGround.geometry.attributes.position;
+  for (let k = 0; k < pos.count; k++) pos.setY(k, at(pos.getX(k), -pos.getZ(k)) - 0.08 + 0.45);
+  pos.needsUpdate = true; outerGround.geometry.computeVertexNormals(); outerGround.geometry.computeBoundingSphere();
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), [tI, cI] = trees;
+  treePts.forEach(([x, y, h, r], i) => {
+    const p = M(x, y, at(x, y) - 0.05);
+    m.compose(p, q.identity(), new THREE.Vector3(1, h * 0.35, 1)); tI.setMatrixAt(i, m);
+    cI.getMatrixAt(i, m); const e = new THREE.Vector3(); m.decompose(e, q, new THREE.Vector3()); m.compose(p.clone().add(new THREE.Vector3(0, h * 0.3, 0)), q, new THREE.Vector3(r * 1.5, h * 0.75, r * 1.5)); cI.setMatrixAt(i, m);
+  });
+  tI.instanceMatrix.needsUpdate = cI.instanceMatrix.needsUpdate = true; tI.computeBoundingSphere(); cI.computeBoundingSphere();
+}
+// Narrow gaps between separately modelled solids (stair against the spine wall, slab against wall) showed as black slits and saw-teeth.
+// data/fill.json: runs found by a downward-ray scan of the model, [x0, x1, y, bottom, top, depth = 4.8 cm]; each becomes a thin concrete block.
+function buildFill(rows, mat) {
+  const parts = rows.map(([x0, x1, y, b, t, dy = 0.048]) => new THREE.BoxGeometry(x1 - x0, t - 0.004 - (b - 0.02), dy).translate((x0 + x1) / 2, (t - 0.004 + b - 0.02) / 2, -y));
+  const m = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(parts, false), mat); m.name = 'FILL_slits__concrete'; return m;
+}
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 let exhibit = null;
 loader.load('model/2121.glb', async (gltf) => {
@@ -808,6 +852,13 @@ loader.load('model/2121.glb', async (gltf) => {
   const geos = [];
   root.updateMatrixWorld(true);
   groundWalls(root);
+  try {
+    let conc = null, lawn = null; root.traverse((o) => { if (o.isMesh && o.name === 'F1_walls_RC__concrete_v') conc = o; if (o.isMesh && /lawn$/.test(o.name)) lawn = o; });
+    const rows = await fetch('data/fill.json').then((r) => r.json());
+    const f = buildFill(rows, Array.isArray(conc.material) ? conc.material[0] : conc.material);
+    f.geometry.applyMatrix4(new THREE.Matrix4().copy(root.matrixWorld).invert()); root.add(f); root.updateMatrixWorld(true);
+    fitGround(lawn);
+  } catch (e) { console.error('fill', e); }
   root.traverse((o) => {
     if (!o.isMesh) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
