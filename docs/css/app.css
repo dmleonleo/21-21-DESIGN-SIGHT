@@ -1,8 +1,7 @@
 @font-face{font-family:"Bella Gothic";src:url(../fonts/BellaGothicSansSerifVF.woff2) format("woff2");font-weight:10 1000;font-display:swap}
-@font-face{font-family:"Bella Carvique";src:url(../fonts/BellaCarviqueSerifVF.woff2) format("woff2");font-weight:100 900;font-display:swap}
 :root{
   --bg:#0a0a09; --ink:#e9e6df; --mute:rgba(233,230,223,.46); --faint:rgba(233,230,223,.16);
-  --font:"Bella Gothic","Helvetica Neue",Helvetica,Arial,sans-serif; --serif:"Bella Carvique","Bella Gothic",Georgia,serif;
+  --font:"Bella Gothic","Helvetica Neue",Helvetica,Arial,sans-serif; --serif:var(--font);
   --pad:clamp(20px,3.4vw,48px);
   --ease:cubic-bezier(.2,.7,.1,1);
 }
@@ -203,7 +202,7 @@ body.light dialog#info p,body.light dialog#info li{color:rgba(21,21,19,.74)}
 body.light #brand,body.light #theme,body.light #infoBtn,body.light #modes,body.light #sun,body.light #cut,body.light #map .lvl,body.light #rail,body.light #toast,body.light #walkHelp,body.light #intro{text-shadow:0 0 16px rgba(0,0,0,.42),0 0 2px rgba(0,0,0,.25)}
 body.light #tourCard{text-shadow:0 0 28px rgba(0,0,0,.6)}
 /* type r2 (Leon 2026-11-23): Bella Carvique Light for titles, everything a step smaller */
-#tourCard h2{font-weight:300;font-size:clamp(26px,2.9vw,40px);letter-spacing:-.005em;line-height:1.08;margin-top:14px}
+#tourCard h2{font-weight:280;font-size:clamp(26px,2.9vw,40px);letter-spacing:-.005em;line-height:1.08;margin-top:14px}
 dialog#info h2{font-weight:300;font-size:30px}
 #brand .mark{font-size:13px} #brand .sub{font-size:9px;margin-top:8px}
 .link,#modes button,#theme button{font-size:10px}
@@ -291,3 +290,13 @@ body.light #axis{text-shadow:0 0 16px rgba(0,0,0,.42),0 0 2px rgba(0,0,0,.25)}
 @media (hover:none) and (max-width:720px){#axis{left:calc(var(--pad) + 128px);right:var(--pad);transform:none;width:auto;bottom:calc(var(--pad) + 40px)} #axOut{display:none}}
 @media (max-width:720px){#axis{bottom:calc(var(--pad) + 74px)} body.walk #walkHelp{bottom:calc(var(--pad) + 112px)}}
 @media (hover:none) and (max-width:720px){#axis{bottom:calc(var(--pad) + 74px)}}
+
+/* type r4 (Leon 13:08): one family, Bella Gothic only. Weight scale:
+   700 wordmark · 280 display titles · 560 small caps labels · 380 body · 300 meta */
+html,body{font-weight:380}
+#brand .mark{font-family:var(--font);font-weight:700;font-size:15px;letter-spacing:.02em}
+#loader .mark{font-family:var(--font);font-weight:700;font-size:22px;letter-spacing:.02em}
+#tourCard h2,dialog#info h2{font-family:var(--font);font-weight:280;letter-spacing:-.015em;line-height:1.06}
+#chooser .t{font-weight:280;letter-spacing:-.01em}
+dialog#info .lede{font-weight:300}
+dialog#info h3,#tKick,.kick,nav button,#axis,#chooser .k{font-weight:560}

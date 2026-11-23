@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { M, B1, label, onWall, onFloor } from './exhibit.js';
 
-const SERIF = '"Bella Carvique",Georgia,serif';
+const SERIF = '"Bella Gothic",Arial,sans-serif';
 const MAXD = 12;
 const rimM = new THREE.MeshStandardMaterial({ color: 0x5e5c58, roughness: 0.85 });
 const dropM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.7, envMapIntensity: 1.4 });
@@ -49,14 +49,14 @@ function basin(g, x, y, z, r, env) {
 // one small text, set quietly in serif and grotesk
 function caption(title, lines, w = 1.2) {
   return label([
-    { t: title, size: 40, weight: 300, font: SERIF },
+    { t: title, size: 40, weight: 280, font: SERIF },
     { t: ' ', size: 10 },
     ...lines.map((t) => ({ t, size: 19, color: '#b8b4ac' })),
   ], { w, px: 900 });
 }
 
 export async function buildWater(scene, { ground = () => null } = {}) {
-  try { await Promise.all([document.fonts.load(`300 40px ${SERIF}`), document.fonts.load('400 19px "Bella Gothic"')]); } catch (e) {}
+  try { await Promise.all([document.fonts.load(`280 40px ${SERIF}`), document.fonts.load('560 19px "Bella Gothic"')]); } catch (e) {}
   const g = new THREE.Group(); g.name = 'water'; g.userData.colliders = [];
   const anim = [], mats = [];
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -162,7 +162,7 @@ export async function buildWater(scene, { ground = () => null } = {}) {
   }
 
   const credit = label([
-    { t: 'Still Water', size: 44, weight: 300, font: SERIF },
+    { t: 'Still Water', size: 44, weight: 280, font: SERIF },
     { t: ' ', size: 8 },
     { t: 'An independent homage to "water" (21_21 DESIGN SIGHT, 2007).', size: 18, color: '#bdb9b0' },
     { t: 'Not affiliated. No works from that exhibition are shown; everything here is made for this model.', size: 18, color: '#bdb9b0' },

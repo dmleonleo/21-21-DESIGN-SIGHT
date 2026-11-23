@@ -16,9 +16,9 @@ function tag(g, n, title, anchor, at, info) {
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const c = cv.getContext('2d');
   c.fillStyle = INK; c.textBaseline = 'middle';
-  c.font = '300 30px "Bella Carvique",Georgia,serif'; c.fillText(String(n).padStart(2, '0'), 0, H / 2 + 1);
+  c.font = '280 30px "Bella Gothic",Arial'; c.fillText(String(n).padStart(2, '0'), 0, H / 2 + 1);
   c.fillRect(52, H / 2, 56, 1);
-  c.font = '400 19px "Bella Gothic",Arial'; c.letterSpacing = '5px'; c.fillText(title.toUpperCase(), 124, H / 2 + 1);
+  c.font = '560 19px "Bella Gothic",Arial'; c.letterSpacing = '5px'; c.fillText(title.toUpperCase(), 124, H / 2 + 1);
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, sizeAttenuation: false, toneMapped: false, transparent: true, depthWrite: false }));
   sp.center.set(0, 0.5); sp.scale.set(0.026 * W / H, 0.026, 1); sp.position.copy(M(...at)); sp.renderOrder = 20; sp.userData.info = info; fade(sp, 0.92); g.add(sp);
@@ -32,7 +32,7 @@ function tag(g, n, title, anchor, at, info) {
 }
 
 export async function buildRules(scene) {
-  try { await Promise.all(['300 30px "Bella Carvique"', '400 19px "Bella Gothic"'].map((f) => document.fonts.load(f))); } catch (e) {}
+  try { await Promise.all(['280 30px "Bella Gothic"', '560 19px "Bella Gothic"'].map((f) => document.fonts.load(f))); } catch (e) {}
   const g = new THREE.Group(); g.name = 'rules'; g.userData.colliders = [];
   const anim = [];
 
@@ -80,21 +80,21 @@ export async function buildRules(scene) {
     const draw = () => {
       for (const k of ['yes', 'no']) {
         if (pads[k].count) { g.remove(pads[k].count); pads[k].count.material.map.dispose(); }
-        const l = label([{ t: String(v[k]), size: 96, weight: 1000 }], { w: 0.6, px: 256, align: 'center', pad: 0.01 });
+        const l = label([{ t: String(v[k]), size: 96, weight: 560 }], { w: 0.6, px: 256, align: 'center', pad: 0.01 });
         onFloor(l, pads[k].x, pads[k].y - 0.25, B1 + 0.01); g.add(l); pads[k].count = l;
       }
     };
     for (const [k, x] of [['yes', 32.4], ['no', 35.4]]) {
       const pad = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), new THREE.MeshStandardMaterial({ color: k === 'yes' ? 0xbab6ae : 0x2a2b2e, roughness: 0.7 }));
       onFloor(pad, x, 6.6, B1); g.add(pad);
-      const t = label([{ t: k.toUpperCase(), size: 80, weight: 1000, track: 8, color: '#f2f0ea' }], { w: 0.8, px: 320, align: 'center', pad: 0.01 });
+      const t = label([{ t: k.toUpperCase(), size: 80, weight: 560, track: 8, color: '#f2f0ea' }], { w: 0.8, px: 320, align: 'center', pad: 0.01 });
       onFloor(t, x, 6.95, B1 + 0.005); g.add(t);
       pads[k] = { x, y: 6.6, mesh: pad };
       pad.userData.onTap = () => { v = load(); v[k]++; localStorage.setItem(KEY, JSON.stringify(v)); draw(); return `Counted: ${k.toUpperCase()}. ${v.yes} yes, ${v.no} no on this device.`; };
       pad.userData.info = 'Tap to vote.';
     }
     draw();
-    g.add(onFloor(label([{ t: 'SHOULD EVERY RULE BE WRITTEN DOWN?', size: 34, weight: 1000, track: 3 }, { t: 'Step on a square to vote. Tallies stay on this device.', size: 20, color: '#bdb9b0' }], { w: 2.6, px: 1024 }), 33.9, 8.1, B1));
+    g.add(onFloor(label([{ t: 'SHOULD EVERY RULE BE WRITTEN DOWN?', size: 34, weight: 560, track: 3 }, { t: 'Step on a square to vote. Tallies stay on this device.', size: 20, color: '#bdb9b0' }], { w: 2.6, px: 1024 }), 33.9, 8.1, B1));
   }
 
   // 07 squares that follow a rule, in Gallery 2 (our own small simulation)
@@ -112,7 +112,7 @@ export async function buildRules(scene) {
     ];
     let rule = 1;
     const A = [...Array(N)].map((_, i) => ({ x: AREA.x0 + Math.random() * (AREA.x1 - AREA.x0), y: AREA.y0 + Math.random() * (AREA.y1 - AREA.y0), vx: 0, vy: 0, dir: i % 2 ? 1 : -1, s: Math.random() * 1000, h: Math.random() * 6.28 }));
-    const signs = rules.map((r, i) => { const l = label([{ t: `RULE: ${r.name.toUpperCase()}`, size: 40, weight: 1000, track: 4, color: '#ece9e2' }, { t: 'tap a square to change it', size: 22, color: '#bdb9b0' }], { w: 2.6, px: 1024 }); onFloor(l, 54.2, -6.6, B1); l.visible = i === rule; g.add(l); return l; });
+    const signs = rules.map((r, i) => { const l = label([{ t: `RULE: ${r.name.toUpperCase()}`, size: 40, weight: 560, track: 4, color: '#ece9e2' }, { t: 'tap a square to change it', size: 22, color: '#bdb9b0' }], { w: 2.6, px: 1024 }); onFloor(l, 54.2, -6.6, B1); l.visible = i === rule; g.add(l); return l; });
     const cx = (AREA.x0 + AREA.x1) / 2, cy = (AREA.y0 + AREA.y1) / 2, rx = (AREA.x1 - AREA.x0) / 2 - 1, ry = (AREA.y1 - AREA.y0) / 2 - 1;
     const loopPt = (s) => { const t = s % (Math.PI * 2); return [cx + rx * Math.cos(t), cy + ry * Math.sin(t)]; };
     inst.userData.onTap = () => { rule = (rule + 1) % rules.length; signs.forEach((l, i) => (l.visible = i === rule)); A.forEach((a, i) => (a.s = (i / N) * Math.PI * 2)); return `Rule: ${rules[rule].name}. ${rules[rule].text}`; };
@@ -145,7 +145,7 @@ export async function buildRules(scene) {
     g.add(onWall(wallText('Square goes, our way', 'one rule at a time', 'Rules make behaviour visible. Give these squares one rule and the room organises itself; take it away and they collide. Tap a square to switch between no rules, keep left, and follow the one ahead.', 1.8), 54.2, -7.26, B1 + 1.7, Math.PI / 2));
   }
 
-  const credit = label([{ t: 'READ THE BUILDING', size: 30, weight: 1000, track: 4 }, { t: 'An independent homage to "Rules?" (21_21 DESIGN SIGHT, 2021).', size: 18, color: '#bdb9b0' }, { t: 'Not affiliated. Facts restated from its public document; objects and texts original.', size: 18, color: '#bdb9b0' }], { w: 1.4, px: 900 });
+  const credit = label([{ t: 'READ THE BUILDING', size: 30, weight: 560, track: 4 }, { t: 'An independent homage to "Rules?" (21_21 DESIGN SIGHT, 2021).', size: 18, color: '#bdb9b0' }, { t: 'Not affiliated. Facts restated from its public document; objects and texts original.', size: 18, color: '#bdb9b0' }], { w: 1.4, px: 900 });
   g.add(onFloor(credit, 29.9, 10.55, 0));
 
   scene.add(g);
