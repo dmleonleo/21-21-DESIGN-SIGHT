@@ -100,7 +100,7 @@ export async function buildExhibit(scene, root) {
     const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(1.4, 0); sh.lineTo(1.4, 1.4 * Math.tan(35.67 * Math.PI / 180)); sh.lineTo(0, 0);   // the style rises northwards at the latitude
     const gn = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.016, bevelEnabled: false }), steel);
     gn.position.copy(M(gx - 0.008, gy - 0.7, B1)); gn.rotation.y = Math.PI / 2; gn.castShadow = true; g.add(gn);
-    gn.userData.info = 'The style leans at 35.67°, Tokyo\'s latitude, so it points at the celestial pole. Move the time slider and read the hour from its shadow.';
+    gn.userData.info = 'The gnomon is tilted at 35.67°, Tokyo\'s latitude, so it points to the celestial pole. Move the time slider and read the hour from its shadow.';
     g.userData.colliders.push(gn);
     // hour lines, 6:00 to 18:00, as a horizontal sundial for Tokyo (35.67 N)
     const lat = 35.67 * Math.PI / 180;
@@ -111,7 +111,7 @@ export async function buildExhibit(scene, root) {
       strip(g, ox + Math.sin(ang) * r0, oy + Math.cos(ang) * r0, ox + Math.sin(ang) * r1, oy + Math.cos(ang) * r1, B1, h % 3 ? 0.012 : 0.02, h === 12 ? signal : tape);
       if (!(h % 3)) g.add(onFloor(label([{ t: String(h), size: 40, weight: 560 }], { w: 0.2, px: 128, align: 'center', pad: 0.01 }), ox + Math.sin(ang) * 1.8, oy + Math.cos(ang) * 1.8, B1));
     }
-    g.add(onFloor(label([{ t: 'SUN CLOCK', size: 30, weight: 560, track: 3 }, { t: 'Tokyo, 35.67° N. The shadow is the hour.', size: 20, color: '#bdb9b0' }], { w: 1.2 }), gx - 0.1, gy - 1.25, B1));
+    g.add(onFloor(label([{ t: 'SUNDIAL', size: 30, weight: 560, track: 3 }, { t: 'Tokyo, 35.67° N. The shadow tells the hour.', size: 20, color: '#bdb9b0' }], { w: 1.2 }), gx - 0.1, gy - 1.25, B1));
     // a tape up the court glass, in metres
     const tx = 52.6, ty = 11.97, top = 2.6;           // just inside the court glass (Y 12.03); the roof steel starts at about +2.7 here
     const t = new THREE.Mesh(new THREE.PlaneGeometry(0.03, top - B1), tape); t.position.copy(M(tx, ty, (top + B1) / 2)); g.add(t);
@@ -140,7 +140,7 @@ export async function buildExhibit(scene, root) {
     bags.forEach(([u, v], i) => {
       const x = 34.6 - 1.0 + i * 0.4;
       const b = new THREE.Mesh(bagG, bagM); b.position.copy(M(x, 4.25, top + 0.065)); b.castShadow = true; g.add(b);
-      b.userData.info = `${u}: ${v}. Same bag, same size. ` + ['Lift it and your arm drops: the heaviest of the six.', 'Half a kan, still the second heaviest.', 'The pound, from the Roman libra.', 'Eight ounces, half a pound.', 'The kilogram, a litre of water.', 'Half a kilogram.'][i];
+      b.userData.info = `${u}: ${v}. Same bag, same size. ` + ['Lift it and your arm drops: the heaviest of the six.', 'Half a kan, and still the second heaviest.', 'The pound, from the Roman libra.', 'Eight ounces, half a pound.', 'The kilogram, a litre of water.', 'Half a kilogram.'][i];
       g.add(onFloor(label([{ t: u.toUpperCase(), size: 30, weight: 560, track: 2 }, { t: v, size: 24, color: '#bdb9b0' }], { w: 0.3, px: 300, align: 'center', pad: 0.01 }), x, 4.04, top));
     });
     // (c) 1,000 discs of 3.75 g make one kan: ten stacks of a hundred
@@ -155,7 +155,7 @@ export async function buildExhibit(scene, root) {
     inst.userData.info = 'One thousand discs of 3.75 g each, one monme apiece: together they weigh one kan, 3.75 kg.';
     g.add(onFloor(label([{ t: '1,000 × 3.75 g = 1 KAN', size: 26, weight: 560, track: 1 }], { w: 0.6, px: 600, pad: 0.01 }), 34.6, 0.82, top));
     // wall text on the east wall
-    g.add(onWall(wallText('Basic units', '1 litre, 1 kan, 1 second', 'Same size, different weight: units only mean something when we can feel them. One litre of water weighs one kilogram. One kan, the old Japanese weight, is 3.75 kilograms, a thousand monme.'), G1E.x(4.2) - 0.012, 4.2, B1 + 1.75, G1E.yaw));
+    g.add(onWall(wallText('Basic units', '1 litre, 1 kan, 1 second', 'Same size, different weight: a unit only means something once we can feel it. One litre of water weighs one kilogram. One kan, the old Japanese weight, is 3.75 kilograms, a thousand monme.'), G1E.x(4.2) - 0.012, 4.2, B1 + 1.75, G1E.yaw));
     // (d) from 1 to 100: ten plywood cubes, 10 cm to 1 m, along the west wall
     let y = -1.5;
     for (let i = 1; i <= 10; i++) {
@@ -188,7 +188,7 @@ export async function buildExhibit(scene, root) {
     const band = new THREE.Mesh(new THREE.PlaneGeometry(W, 0.05), new THREE.MeshBasicMaterial({ color: 0xf4f2ec, side: THREE.DoubleSide }));
     band.position.copy(M(cx, y0 + W / 2, z + 0.9)); band.rotation.y = Math.PI / 2; g.add(band);
     g.add(onFloor(label([{ t: '23.77 × 10.97 m', size: 56, weight: 560 }, { t: 'a doubles court, 260.8 m², inside a 443 m² hall', size: 26, color: '#bdb9b0' }], { w: 2.4, px: 1024 }), cx - 3.8, y0 + 2.6, z));
-    g.add(onWall(wallText('How big is this building?', 'Gallery 2, 443 m²', 'Gallery 2 is 443 square metres: about 134 tsubo, or some 273 tatami mats, and big enough to hold a full tennis court. From the garden the building is a low folded roof. Underground, it opens into this hall.', 1.8), 54.2, -7.26, B1 + 1.7, Math.PI / 2));
+    g.add(onWall(wallText('How big is this building?', 'Gallery 2, 443 m²', 'Gallery 2 is 443 square metres: about 134 tsubo, or some 273 tatami mats: big enough for a full tennis court. From the garden the building is only a low folded roof; underground, it opens into this hall.', 1.8), 54.2, -7.26, B1 + 1.7, Math.PI / 2));
     // the building at 1:100 on a table by the east wall
     const top = plinth(g, 1.0, 0.6, 0.9, 67.7, -1.2);
     if (root) {
@@ -218,7 +218,7 @@ export async function buildExhibit(scene, root) {
     const bar = box(0.012, 0.012, 1.0, white, px, py + 0.55, z + H - 1.06); g.add(bar);
     const bl = label([{ t: '0.994 m', size: 30, weight: 560 }, { t: 'beats once a second', size: 18, color: '#bdb9b0' }], { w: 0.42, px: 420 });
     g.add(onWall(bl, px + 0.02, py - 0.75, z + 1.6, 0));
-    g.add(onWall(wallText('Bodies and tools', 'the seconds pendulum', 'In the 1790s the metre was nearly defined by a pendulum that beats once a second. That pendulum is just short of one metre long. Bodies, swings and shadows were our first rulers.', 1.4), 39.24, -1.2, B1 + 1.7, 0));
+    g.add(onWall(wallText('Bodies and tools', 'the seconds pendulum', 'In the 1790s the metre was nearly defined by a pendulum that beats once a second, a pendulum just short of one metre long. Bodies, swings and shadows were our first rulers.', 1.4), 39.24, -1.2, B1 + 1.7, 0));
   }
 
   // ===== 6. Gallery 3: 54 metres of steel, at 1:10 =====
@@ -226,13 +226,13 @@ export async function buildExhibit(scene, root) {
     const z = 0, x = -2.6, y = -3.0;
     const top = plinth(g, 5.6, 0.32, 0.45, x + 2.7, y, z);
     const plate = box(5.4, 0.26, 0.016, steel, x + 2.7, y, top);   // 1:10 in length, 1:1 in thickness
-    plate.userData.info = 'The roof plate: 5.4 m here stands for 54 m. The thickness, 16 mm, is real. Steel this long grows by about 30 mm from winter to summer.'; g.add(plate);
+    plate.userData.info = 'The roof plate: 5.4 m here stands for 54 m, but the 16 mm thickness is real. Steel this long grows by about 30 mm from winter to summer.'; g.add(plate);
     const t = label([{ t: '54 m AT 1:10, 16 mm AT 1:1', size: 32, weight: 560, track: 2 }, { t: 'one folded steel plate; it moves about 30 mm between winter and summer', size: 20, color: '#bdb9b0' }], { w: 2.2, px: 1024 });
     g.add(onFloor(t, x + 1.25, y - 0.3, z));
   }
 
   // credit
-  const credit = label([{ t: 'MEASURE THE SIGHT', size: 30, weight: 560, track: 4 }, { t: 'An independent homage to "Measuring" (21_21 DESIGN SIGHT, 2015).', size: 18, color: '#bdb9b0' }, { t: 'Not affiliated. All objects and texts are original.', size: 18, color: '#bdb9b0' }], { w: 1.2, px: 800 });
+  const credit = label([{ t: 'MEASURE THE SIGHT', size: 30, weight: 560, track: 4 }, { t: 'An independent homage to "Measuring" (21_21 DESIGN SIGHT, 2015).', size: 18, color: '#bdb9b0' }, { t: 'Not affiliated. All objects and texts are our own.', size: 18, color: '#bdb9b0' }], { w: 1.2, px: 800 });
   g.add(onFloor(credit, 29.85, 10.55, 0));
 
   g.traverse((o) => { if (o.isMesh && !o.userData.label && o.castShadow === false) o.receiveShadow = true; });

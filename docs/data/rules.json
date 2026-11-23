@@ -27,7 +27,7 @@
    1.9,
    -4.75
   ],
-  "text": "Concrete remembers its moulds. Each plywood panel is 900 by 1800 mm, and the ties that held it leave six holes on a 450 by 600 mm grid. The blue outline shows two panels; count the rest yourself."
+  "text": "Concrete remembers its moulds. Each plywood panel is 900 by 1800 mm, and the ties that held it leave six holes on a 450 by 600 mm grid. The outline marks two panels; count the rest yourself."
  },
  {
   "id": "r-stair",
@@ -42,7 +42,7 @@
    15.0,
    -4.6
   ],
-  "text": "The stair follows the same grid: 300 mm treads to match the tie holes, 150 mm rises, a sixth of a panel. Our model misses this by about 2 cm a step, and we would rather tell you than hide it."
+  "text": "The stair follows the same grid: 300 mm treads to match the tie holes and 150 mm rises, a sixth of a panel. Our model is off by about 2 cm a step, and we would rather tell you than hide it."
  },
  {
   "id": "r-mullion",
@@ -57,11 +57,11 @@
    12.0,
    -2.6
   ],
-  "text": "The court glass is held by solid steel mullions, only 235 by 69 mm, because hollow ones would have to be fatter. The tallest reach about 11.7 m."
+  "text": "The court glass is held by solid steel mullions only 235 by 69 mm, because hollow ones would have to be thicker. The tallest reach about 11.7 m."
  },
  {
   "id": "r-vote",
-  "title": "Should Every Rule Be Written?",
+  "title": "Should Every Rule Be Written Down?",
   "cam": [
    33.9,
    2.2,
@@ -72,11 +72,11 @@
    7.2,
    -6.0
   ],
-  "text": "A question for you. Step on a square to vote. The tally lives only on this device, which is a rule too."
+  "text": "A question for you. Step on or tap a square to vote. The tally stays on this device, which is a rule too."
  },
  {
   "id": "r-squares",
-  "title": "Square Goes",
+  "title": "Forty-Two Squares",
   "cam": [
    43.4,
    -5.2,
@@ -87,7 +87,7 @@
    0.0,
    -6.0
   ],
-  "text": "Forty-two squares and one rule. Keep left and lanes appear; follow the one ahead and a queue forms; take the rule away and they bump. Tap a square to change the rule."
+  "text": "Forty-two squares and one rule. Keep left and lanes appear; follow the one ahead and a queue forms; take the rule away and they bump into each other. Tap a square to change the rule."
  },
  {
   "id": "r-roof",
@@ -102,6 +102,6 @@
    8.0,
    1.2
   ],
-  "text": "The roof: 16 mm steel plate, welded on site because 54 m could not travel by road, and built to move by up to 30 mm with the heat. Rules of transport and weather, folded into one shape."
+  "text": "The roof is 16 mm steel plate, welded on site because a 54 m sheet could not travel by road, and built to move by up to 30 mm with the heat. Rules of transport and weather, folded into one shape."
  }
 ]

@@ -247,7 +247,7 @@ canvas.addEventListener('pointerup', (e) => {
       const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rulerPts), lineM); ln.renderOrder = 10; rulerG.add(ln);
       const m = rulerPts[0].distanceTo(rulerPts[1]);
       rulerShow(`${m < 1 ? (m * 100).toFixed(1) + ' cm' : m.toFixed(2) + ' m'}   ·   ${(m / SHAKU).toFixed(m / SHAKU < 10 ? 2 : 1)} shaku`);
-    } else rulerShow('And the second point');
+    } else rulerShow('Now the second point');
     return;
   }
   if (!exhibit) return;
