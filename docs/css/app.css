@@ -215,3 +215,12 @@ dialog#info h2{font-weight:300;font-size:30px}
 dialog#info{font-size:12px} dialog#info .lede{font-size:19px}
 #theme svg{width:16px;height:16px}
 @media (max-width:720px){#brand .mark{font-size:11px} #modes button{font-size:9px} #tourCard h2{font-size:26px} #tourCard p{font-size:11.5px}}
+#rail button.on::after{background:var(--ink);width:11px;left:1px}
+#rail button::before{content:attr(data-t);position:absolute;right:20px;top:-6px;white-space:nowrap;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink);opacity:0;transform:translateX(6px);transition:opacity .4s var(--ease),transform .4s var(--ease);pointer-events:none;text-shadow:0 0 12px rgba(0,0,0,.6)}
+#rail button:hover::before{opacity:1;transform:none}
+/* type r3 (Leon 10:30): wordmark in Bella Carvique Light, titles in Bella Gothic Black */
+#brand .mark{font-family:var(--serif);font-weight:300;font-size:16px;letter-spacing:.01em}
+#tourCard h2,dialog#info h2{font-family:var(--font);font-weight:1000;letter-spacing:-.01em}
+#tourCard h2{font-size:clamp(24px,2.6vw,36px);line-height:1.05}
+dialog#info h2{font-size:26px}
+@media (max-width:720px){#brand .mark{font-size:14px;letter-spacing:.01em} #tourCard h2{font-size:24px}}

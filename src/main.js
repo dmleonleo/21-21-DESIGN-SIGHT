@@ -25,7 +25,7 @@ const MAP = { x0: -12, x1: 78, y0: -14, y1: 22 };            // plan image exten
 const canvas = $('#view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 const TEST = location.search.includes('test');
-renderer.setPixelRatio(TEST ? 1 : Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(TEST ? 1 : Math.min(devicePixelRatio, matchMedia('(hover:none)').matches ? 1.5 : 2));   // phones: 1.5x keeps the frame rate
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -78,7 +78,7 @@ const hemi = new THREE.HemisphereLight(0xc9d3dc, 0x2b2a24, 0.6);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 3.2);
 sun.castShadow = true;
-sun.shadow.mapSize.set(TEST ? 1024 : 4096, TEST ? 1024 : 4096);
+{ const sm = TEST ? 1024 : matchMedia('(hover:none)').matches ? 2048 : 4096; sun.shadow.mapSize.set(sm, sm); }
 const sc = sun.shadow.camera; sc.left = -70; sc.right = 70; sc.top = 50; sc.bottom = -50; sc.near = 1; sc.far = 400;
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.07; sun.shadow.radius = 2.5;
 scene.add(sun, sun.target);
@@ -208,7 +208,7 @@ let tIdx = 0, tAuto = null;
 
 
 // ---------- Journey: one continuous take, driven by scroll ----------
-const J = { p: 0, t: 0, pos: null, look: null, chapter: -1, on: false };
+const J = { p: 0, t: 0, pos: null, look: null, chapter: -1, on: false, input: 0 };
 function buildJourney() {
   J.reach = stations.map((st) => {                       // how far each shot may dolly forward before meeting a wall
     const c = M(...st.cam), d = M(...st.look).sub(c).normalize();
@@ -216,7 +216,7 @@ function buildJourney() {
     return h ? Math.max(0, Math.min(1.8, h.distance - 2.2)) : 1.8;
   });
   const rail = $('#rail');
-  if (!rail.children.length || rail.children.length < 2) stations.forEach((s, i) => { const b = document.createElement('button'); b.style.top = `${(i / (stations.length - 1)) * 100}%`; b.title = s.title; b.onclick = () => { stopAuto(); J.t = i; }; rail.appendChild(b); });
+  if (!rail.children.length || rail.children.length < 2) stations.forEach((s, i) => { const b = document.createElement('button'); b.style.top = `${(i / (stations.length - 1)) * 100}%`; b.title = s.title; b.dataset.t = s.title; b.onclick = () => { stopAuto(); J.t = i; }; rail.appendChild(b); });
 }
 function chapterText(i) {
   const s = stations[i];
@@ -245,7 +245,9 @@ function stepJourney(dt) {
   if (!J.on) return;
   const N = stations.length - 1;
   J.t = THREE.MathUtils.clamp(J.t, 0, N);
+  if (!tAuto && performance.now() - J.input > 900) J.t += (Math.round(J.t) - J.t) * Math.min(1, dt * 2.2);   // come to rest on a shot, never mid-dissolve
   J.p += (J.t - J.p) * Math.min(1, dt * (TEST ? 60 : 2.4));
+  document.querySelectorAll('#rail button').forEach((b, i) => b.classList.toggle('on', i === Math.round(J.p)));
   if (!J.reach || (!J.bvhOK && bvh)) { J.bvhOK = !!bvh; buildJourney(); }
   const c = THREE.MathUtils.clamp(Math.round(J.p), 0, N);
   const f = THREE.MathUtils.clamp(J.p - c, -0.5, 0.5);
@@ -262,11 +264,16 @@ function stepJourney(dt) {
 }
 addEventListener('wheel', (e) => {
   if (mode !== 'tour' || !J.on) return;
-  stopAuto(); J.t += e.deltaY * 0.0016;
+  stopAuto(); J.input = performance.now(); J.t += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * 0.0016;
 }, { passive: true });
 { let ty = null;
-  canvas.addEventListener('touchstart', (e) => { if (mode === 'tour') ty = e.touches[0].clientY; }, { passive: true });
-  canvas.addEventListener('touchmove', (e) => { if (mode !== 'tour' || ty === null) return; stopAuto(); J.t += (ty - e.touches[0].clientY) * 0.006; ty = e.touches[0].clientY; }, { passive: true });
+  let tx = null;
+  canvas.addEventListener('touchstart', (e) => { if (mode === 'tour') { ty = e.touches[0].clientY; tx = e.touches[0].clientX; } }, { passive: true });
+  canvas.addEventListener('touchmove', (e) => {                  // swipe up or left: forward
+    if (mode !== 'tour' || ty === null) return; stopAuto(); J.input = performance.now();
+    const dy = ty - e.touches[0].clientY, dx = tx - e.touches[0].clientX;
+    J.t += (Math.abs(dx) > Math.abs(dy) ? dx : dy) * 0.006; ty = e.touches[0].clientY; tx = e.touches[0].clientX;
+  }, { passive: true });
   canvas.addEventListener('touchend', () => (ty = null));
 }
 
@@ -409,6 +416,9 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (mode === 'tour' && /ArrowRight|ArrowDown|Space/.test(e.code)) { stopAuto(); goStation(Math.round(J.t) + 1); }
   if (mode === 'tour' && /ArrowLeft|ArrowUp/.test(e.code)) { stopAuto(); goStation(Math.round(J.t) - 1); }
+  const mk = { Digit1: 'tour', Digit2: 'orbit', Digit3: 'walk', Digit4: 'diagram' }[e.code];
+  if (mk && !e.metaKey && !e.ctrlKey && !$('#info').open) setMode(mk);
+  if (e.code === 'Escape') hideIntro();
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
