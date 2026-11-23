@@ -202,3 +202,4 @@ body:not(.orbit) #intro{display:none}
 #walkHelp{left:var(--pad);right:var(--pad);transform:none;text-align:center;white-space:normal;line-height:1.8}
 @media (max-width:720px){#walkHelp{bottom:calc(var(--pad) + 76px)} }
 @media (hover:none) and (max-width:720px){#walkHelp{left:calc(var(--pad) + 128px);text-align:right}}
+body.light #brand,body.light #theme,body.light #infoBtn,body.light #modes,body.light #sun,body.light #cut,body.light #map .lvl{text-shadow:0 0 14px rgba(232,230,225,.9),0 0 3px rgba(232,230,225,.7)}
