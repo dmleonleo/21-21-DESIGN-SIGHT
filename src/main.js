@@ -197,6 +197,55 @@ function floorBelow(p, from = 0.6) {               // p = eye position (three)
   return h ? h.point.y : null;
 }
 
+// ---------- ruler and exhibit notes (Journey stops and Walk) ----------
+const rulerG = new THREE.Group(); scene.add(rulerG);
+const dotG = new THREE.SphereGeometry(0.035, 16, 12), dotM = new THREE.MeshBasicMaterial({ color: 0xff5a1f, depthTest: false, toneMapped: false });
+const lineM = new THREE.LineBasicMaterial({ color: 0xff5a1f, depthTest: false, toneMapped: false });
+let rulerOn = false, rulerPts = [];
+const SHAKU = 10 / 33;
+function rulerClear() { rulerPts = []; rulerG.clear(); }
+function rulerShow(t) { const o = $('#rulerOut'); o.textContent = t; o.hidden = !t; }
+function setRuler(on) {
+  rulerOn = on; $('#rulerBtn').classList.toggle('on', on); rulerClear();
+  rulerShow(on ? (matchMedia('(hover:none)').matches ? 'Tap two points' : 'Click two points') : '');
+}
+$('#rulerBtn').addEventListener('click', () => setRuler(!rulerOn));
+function note(t) { const el = $('#note'); el.textContent = t; el.hidden = !t; clearTimeout(note.t); if (t) note.t = setTimeout(() => (el.hidden = true), 7000); }
+const pickRay = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pick(e) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  pickRay.setFromCamera(ndc, camera);
+  return pickRay;
+}
+let tapStart = null;
+canvas.addEventListener('pointerdown', (e) => { tapStart = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+canvas.addEventListener('pointerup', (e) => {
+  if (!tapStart || (mode !== 'tour' && mode !== 'walk')) return;
+  const moved = Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y), dt = performance.now() - tapStart.t; tapStart = null;
+  if (moved > 6 || dt > 600) return;
+  const rc = pick(e), h = hit(rc.ray.origin, rc.ray.direction, 200);
+  if (rulerOn) {
+    if (!h) return;
+    if (rulerPts.length === 2) rulerClear();
+    const p = h.point.clone(); rulerPts.push(p);
+    const d = new THREE.Mesh(dotG, dotM); d.position.copy(p); d.renderOrder = 10; rulerG.add(d);
+    if (rulerPts.length === 2) {
+      const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rulerPts), lineM); ln.renderOrder = 10; rulerG.add(ln);
+      const m = rulerPts[0].distanceTo(rulerPts[1]);
+      rulerShow(`${m < 1 ? (m * 100).toFixed(1) + ' cm' : m.toFixed(2) + ' m'}   ·   ${(m / SHAKU).toFixed(m / SHAKU < 10 ? 2 : 1)} shaku`);
+    } else rulerShow('And the second point');
+    return;
+  }
+  if (!exhibit) return;
+  const hs = rc.intersectObject(exhibit.group, true);
+  for (const x of hs) {
+    if (h && x.distance > h.distance + 0.08) break;              // behind a wall
+    let o = x.object; while (o && !o.userData.info) o = o.parent;
+    if (o) { note(o.userData.info); return; }
+  }
+});
+
 // ---------- modes ----------
 const fovFor = (m) => { const base = { orbit: 38, tour: 50, walk: 62, diagram: 38 }[m]; const a = innerWidth / innerHeight;
   return a < 1 ? Math.min(base * THREE.MathUtils.clamp(0.8 / a, 1, 1.75), 88) : base; };
@@ -339,6 +388,8 @@ function setMode(m) {
   document.body.className = m + (document.body.classList.contains('light') ? ' light' : '') + (m === 'tour' && program === 'exhibit' ? ' exhibit' : '');
   fovTarget = fovFor(m);
   const shown = m === 'tour' && program === 'exhibit' ? 'exhibit' : m;
+  if (rulerOn && m !== 'tour' && m !== 'walk') setRuler(false);
+  note('');
   document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === shown));
   orbit.enabled = m === 'orbit';
   const D = m === 'diagram';

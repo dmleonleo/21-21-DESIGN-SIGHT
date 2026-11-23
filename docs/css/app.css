@@ -228,3 +228,12 @@ dialog#info h2{font-size:26px}
 #tourCard .kick{font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:#ff7a45;margin-bottom:12px}
 #tourCard .kick:empty{display:none}
 @media (max-width:720px){#modes{gap:12px} #modes button{letter-spacing:.12em}}
+/* ruler + exhibit notes */
+#ruler{position:fixed;right:calc(var(--pad) + 28px);bottom:calc(var(--pad) + 64px);z-index:12;display:none;align-items:center;gap:16px;flex-direction:row-reverse}
+body.walk #ruler,body.tour.exhibit #ruler{display:flex}
+#rulerBtn{font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--mute)}
+#rulerBtn.on{color:#ff7a45}
+#rulerOut{font-size:12px;letter-spacing:.08em;color:var(--ink);font-variant-numeric:tabular-nums}
+#note{position:fixed;left:50%;bottom:calc(var(--pad) + 110px);transform:translateX(-50%);z-index:12;max-width:min(440px,calc(100vw - 2*var(--pad)));font-size:12px;line-height:1.6;color:var(--ink);text-align:center;animation:rise .6s var(--ease) both}
+body.light #ruler,body.light #note{text-shadow:0 0 16px rgba(0,0,0,.42),0 0 2px rgba(0,0,0,.25)}
+@media (max-width:720px){#ruler{right:var(--pad);bottom:calc(var(--pad) + 96px)} #note{bottom:calc(var(--pad) + 150px)}}

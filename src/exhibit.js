@@ -98,6 +98,7 @@ export async function buildExhibit(scene, root) {
     const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(1.4, 0); sh.lineTo(1.4, 1.4 * Math.tan(35.67 * Math.PI / 180)); sh.lineTo(0, 0);   // the style rises northwards at the latitude
     const gn = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.016, bevelEnabled: false }), steel);
     gn.position.copy(M(gx - 0.008, gy - 0.7, B1)); gn.rotation.y = Math.PI / 2; gn.castShadow = true; g.add(gn);
+    gn.userData.info = 'The style leans at 35.67°, Tokyo\'s latitude, so it points at the celestial pole. Move the time slider and read the hour from its shadow.';
     g.userData.colliders.push(gn);
     // hour lines, 6:00 to 18:00, as a horizontal sundial for Tokyo (35.67 N)
     const lat = 35.67 * Math.PI / 180;
@@ -127,6 +128,7 @@ export async function buildExhibit(scene, root) {
     // (a) one litre
     let top = plinth(g, 0.5, 0.5, 0.95, 34.6, 7.0);
     const c = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), glassM); c.position.copy(M(34.6, 7.0, top + 0.05)); g.add(c);
+    c.userData.info = 'One litre: a 10 cm cube. Filled with water it weighs one kilogram, which is how the kilogram was first defined in 1795.';
     const wv = new THREE.Mesh(new THREE.BoxGeometry(0.096, 0.094, 0.096), waterM); wv.position.copy(M(34.6, 7.0, top + 0.049)); g.add(wv);
     g.add(onFloor(label([{ t: '1 L = 1 kg', size: 30, weight: 1000 }, { t: 'a 10 cm cube of water', size: 18, color: '#bdb9b0' }], { w: 0.4, px: 400 }), 34.6, 6.84, top));
     // (b) six bags, one size, six weights
@@ -136,6 +138,7 @@ export async function buildExhibit(scene, root) {
     bags.forEach(([u, v], i) => {
       const x = 34.6 - 1.0 + i * 0.4;
       const b = new THREE.Mesh(bagG, bagM); b.position.copy(M(x, 4.25, top + 0.065)); b.castShadow = true; g.add(b);
+      b.userData.info = `${u}: ${v}. Same bag, same size. ` + ['Lift it and your arm drops: the heaviest of the six.', 'Half a kan, still the second heaviest.', 'The pound, from the Roman libra.', 'Eight ounces, half a pound.', 'The kilogram, a litre of water.', 'Half a kilogram.'][i];
       g.add(onFloor(label([{ t: u.toUpperCase(), size: 30, weight: 1000, track: 2 }, { t: v, size: 24, color: '#bdb9b0' }], { w: 0.3, px: 300, align: 'center', pad: 0.01 }), x, 4.04, top));
     });
     // (c) 1,000 discs of 3.75 g make one kan: ten stacks of a hundred
@@ -147,6 +150,7 @@ export async function buildExhibit(scene, root) {
       mtx.makeTranslation(...M(x, y, top + 0.0006 + k * 0.00125).toArray()); inst.setMatrixAt(s * 100 + k, mtx);
     }
     inst.castShadow = true; g.add(inst);
+    inst.userData.info = 'One thousand discs of 3.75 g each, one monme apiece: together they weigh one kan, 3.75 kg.';
     g.add(onFloor(label([{ t: '1,000 × 3.75 g = 1 KAN', size: 26, weight: 1000, track: 1 }], { w: 0.6, px: 600, pad: 0.01 }), 34.6, 0.82, top));
     // wall text on the east wall
     g.add(onWall(wallText('Basic units', '1 litre, 1 kan, 1 second', 'Same size, different weight: units only mean something when we can feel them. One litre of water weighs one kilogram. One kan, the old Japanese weight, is 3.75 kilograms, a thousand monme.'), 38.86, 4.2, B1 + 1.75, Math.PI));
@@ -155,6 +159,7 @@ export async function buildExhibit(scene, root) {
     for (let i = 1; i <= 10; i++) {
       const s = i / 10;
       const cb = box(s, s, s, i === 10 ? white : ply, 29.25 + s / 2, y + s / 2, B1); g.add(cb); g.userData.colliders.push(cb);
+      cb.userData.info = `${i * 10} cm cube. ` + (i === 10 ? 'One cubic metre: a thousand litres, a tonne of water.' : `${(Math.pow(i / 10, 3) * 1000).toFixed(i < 3 ? 0 : 0)} litres inside.`);
       g.add(onFloor(label([{ t: `${i * 10}`, size: 44, weight: 1000 }, { t: 'cm', size: 22, color: '#bdb9b0' }], { w: 0.22, px: 160, pad: 0.01 }), 29.25 + s + 0.16, y + s / 2, B1, Math.PI / 2));
       y += s + 0.42;
     }
@@ -174,8 +179,10 @@ export async function buildExhibit(scene, root) {
     ln(x0, y0 + W / 2, x0 + 0.1, y0 + W / 2); ln(x0 + L - 0.1, y0 + W / 2, x0 + L, y0 + W / 2);
     // the net
     for (const yy of [y0 + 0.03, y0 + W - 0.03]) { const p = box(0.06, 0.06, 1.07, steel, cx, yy, z); g.add(p); }   // posts on the doubles lines: the hall leaves no more room
+    // the floor lines are informative too
     const net = new THREE.Mesh(new THREE.PlaneGeometry(W, 0.914), new THREE.MeshBasicMaterial({ color: 0x0c0c0c, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
     net.position.copy(M(cx, y0 + W / 2, z + 0.46)); net.rotation.y = Math.PI / 2; g.add(net);
+    net.userData.info = 'A doubles court, 23.77 × 10.97 m. Use the ruler on the baseline to check it.';
     const band = new THREE.Mesh(new THREE.PlaneGeometry(W, 0.05), new THREE.MeshBasicMaterial({ color: 0xf4f2ec, side: THREE.DoubleSide }));
     band.position.copy(M(cx, y0 + W / 2, z + 0.9)); band.rotation.y = Math.PI / 2; g.add(band);
     g.add(onFloor(label([{ t: '23.77 × 10.97 m', size: 56, weight: 1000 }, { t: 'a doubles court, 260.8 m², inside a 443 m² hall', size: 26, color: '#bdb9b0' }], { w: 2.4, px: 1024 }), cx - 3.8, y0 + 2.6, z));
@@ -185,7 +192,7 @@ export async function buildExhibit(scene, root) {
     if (root) {
       const mini = root.clone(true);
       const drop = []; mini.traverse((o) => { if (o.isMesh) { if (/lawn/.test(o.name)) drop.push(o); o.castShadow = true; o.receiveShadow = true; } }); drop.forEach((o) => o.removeFromParent());
-      mini.scale.setScalar(0.01);
+      mini.scale.setScalar(0.01); mini.userData.info = 'The building at 1:100, the same model you are standing in. Only the roof and the glass show above the lawn.';
       // model origin (0,0,0) -> sits so its centre (~X 32, Y 3) lands on the table
       mini.position.copy(M(67.7 - 0.32, -1.2 - 0.03, top + 0.06));
       g.add(mini);
@@ -202,6 +209,7 @@ export async function buildExhibit(scene, root) {
     const arm = new THREE.Group(); arm.position.copy(M(px, py, z + H - 0.06));
     const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.994, 8), steel); rod.position.y = -0.497; arm.add(rod);
     const bob = new THREE.Mesh(new THREE.SphereGeometry(0.045, 24, 16), brass); bob.position.y = -0.994; bob.castShadow = true; arm.add(bob);
+    bob.userData.info = arm.userData.info = 'A seconds pendulum: 0.994 m from pivot to bob, one swing per second. Compare it with the one-metre bar beside it.';
     g.add(arm);
     anim.push((t) => { arm.rotation.x = 0.22 * Math.cos(Math.PI * t); });   // T = 2 s: one beat each second
     // a 1 m bar beside it, from the pivot down
@@ -215,7 +223,8 @@ export async function buildExhibit(scene, root) {
   {
     const z = 0, x = -2.6, y = -3.0;
     const top = plinth(g, 5.6, 0.32, 0.45, x + 2.7, y, z);
-    const plate = box(5.4, 0.26, 0.016, steel, x + 2.7, y, top);   // 1:10 in length, 1:1 in thickness g.add(plate);
+    const plate = box(5.4, 0.26, 0.016, steel, x + 2.7, y, top);   // 1:10 in length, 1:1 in thickness
+    plate.userData.info = 'The roof plate: 5.4 m here stands for 54 m. The thickness, 16 mm, is real. Steel this long grows by about 30 mm from winter to summer.'; g.add(plate);
     const t = label([{ t: '54 m AT 1:10, 16 mm AT 1:1', size: 32, weight: 1000, track: 2 }, { t: 'one folded steel plate; it moves about 30 mm between winter and summer', size: 20, color: '#bdb9b0' }], { w: 2.2, px: 1024 });
     g.add(onFloor(t, x + 1.25, y - 0.3, z));
   }
