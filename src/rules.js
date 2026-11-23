@@ -38,7 +38,7 @@ export async function buildRules(scene) {
 
   // 01 the door handle
   tag(g, 1, 'The Ando handle', [18.86, 11.2, 1.0], [18.2, 10.3, 1.7],
-    'The lever on this door is a stock model by Union (T215). Ando has used it since his early buildings, so often that the maker came to call it the Ando model.');
+    'The lever on this door is a stock model by Union (T215). Ando has used it since his early buildings, so often that its maker came to call it the Ando model.');
 
   // 02 formwork panels and separator holes, drawn on the Gallery 1 wall
   {
@@ -55,13 +55,13 @@ export async function buildRules(scene) {
       }
     }
     tag(g, 2, '900 × 1800, six holes', [X(y0 + 0.9), y0 + 0.9, z0 + 1.35], [38.0, 2.7, B1 + 2.15],
-      'Japanese formwork plywood is 900 × 1800 mm, and every panel here leaves six tie holes on a 450 × 600 mm grid. Count them across any wall: the grid is the building\'s rhythm.');
-    g.add(onWall(wallText('Rules you can read', 'formwork, ties, treads', 'Concrete remembers its moulds. A standard plywood sheet sets the size of every panel; the ties that hold the moulds apart leave six holes in each. Joints, stairs and openings are counted in the same 450 and 600 mm steps.', 1.4), G1E.x(-1.3) - 0.012, -1.3, B1 + 1.7, G1E.yaw));
+      'Japanese formwork plywood is 900 × 1800 mm, and every panel here leaves six tie holes on a 450 × 600 mm grid. Count them across any wall: the grid sets the building\'s rhythm.');
+    g.add(onWall(wallText('Rules you can read', 'formwork, ties, treads', 'Concrete remembers its moulds. A standard plywood sheet sets the size of every panel; the ties that hold the moulds apart leave six holes in each. Joints, stairs and openings all follow the same 450 and 600 mm steps.', 1.4), G1E.x(-1.3) - 0.012, -1.3, B1 + 1.7, G1E.yaw));
   }
 
   // 03 stair: treads and risers
   tag(g, 3, 'Tread 300, rise 150', [50.4, 15.6, -2.33], [49.4, 15.0, -1.75],
-    'The rule: each tread is 300 mm, matching the tie-hole pitch, and each rise 150 mm, a sixth of a 900 mm panel. Our reconstruction rises about 171 mm per step; the drawings we had were not that precise.');
+    'The rule: each tread is 300 mm, matching the tie-hole pitch, and each rise 150 mm, a sixth of a 900 mm panel. Our model rises about 171 mm per step, because the drawings we had were not that precise.');
 
   // 04 the solid steel mullions
   tag(g, 4, 'Solid steel, 235 × 69', [52.28, 11.97, -3.0], [52.9, 11.2, -2.4],
@@ -108,7 +108,7 @@ export async function buildRules(scene) {
     const rules = [
       { name: 'No rules', text: 'Everyone goes where they like. Watch how often they bump.' },
       { name: 'Keep left', text: 'Eastbound on the north side, westbound on the south: the Japanese road rule. Lanes appear by themselves.' },
-      { name: 'Follow the one ahead', text: 'Each square follows the next one round a loop, keeping a gap. One rule, one queue.' },
+      { name: 'Follow the one ahead', text: 'Each square follows the one ahead around a loop, keeping its distance. One rule, one queue.' },
     ];
     let rule = 1;
     const A = [...Array(N)].map((_, i) => ({ x: AREA.x0 + Math.random() * (AREA.x1 - AREA.x0), y: AREA.y0 + Math.random() * (AREA.y1 - AREA.y0), vx: 0, vy: 0, dir: i % 2 ? 1 : -1, s: Math.random() * 1000, h: Math.random() * 6.28 }));
@@ -142,10 +142,10 @@ export async function buildRules(scene) {
       });
       inst.instanceMatrix.needsUpdate = true;
     });
-    g.add(onWall(wallText('Square goes, our way', 'one rule at a time', 'Rules make behaviour visible. Give these squares one rule and the room organises itself; take it away and they collide. Tap a square to switch between no rules, keep left, and follow the one ahead.', 1.8), 54.2, -7.26, B1 + 1.7, Math.PI / 2));
+    g.add(onWall(wallText('Forty-two squares', 'one rule at a time', 'Rules make behaviour visible. Give these squares a single rule and the room organises itself; take it away and they collide. Tap a square to switch between no rules, keep left, and follow the one ahead.', 1.8), 54.2, -7.26, B1 + 1.7, Math.PI / 2));
   }
 
-  const credit = label([{ t: 'READ THE BUILDING', size: 30, weight: 560, track: 4 }, { t: 'An independent homage to "Rules?" (21_21 DESIGN SIGHT, 2021).', size: 18, color: '#bdb9b0' }, { t: 'Not affiliated. Facts restated from its public document; objects and texts original.', size: 18, color: '#bdb9b0' }], { w: 1.4, px: 900 });
+  const credit = label([{ t: 'READ THE BUILDING', size: 30, weight: 560, track: 4 }, { t: 'An independent homage to "Rules?" (21_21 DESIGN SIGHT, 2021).', size: 18, color: '#bdb9b0' }, { t: 'Not affiliated. Facts are drawn from its public materials; objects and texts are our own.', size: 18, color: '#bdb9b0' }], { w: 1.4, px: 900 });
   g.add(onFloor(credit, 29.9, 10.55, 0));
 
   scene.add(g);

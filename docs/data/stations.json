@@ -12,7 +12,7 @@
    10,
    -2
   ],
-  "text": "Hidden in the Tokyo Midtown garden, two folded steel plates settle on the lawn like dropped cloth. Nothing rises more than 4.8 m. Most of the building lies below."
+  "text": "Tucked into the Tokyo Midtown garden, two folded steel plates settle on the lawn like dropped cloth. Nothing rises more than 4.8 m; most of the building lies below."
  },
  {
   "id": "plaza",
@@ -42,7 +42,7 @@
    10.6,
    2.4
   ],
-  "text": "Two concrete walls hold a covered outdoor room. Above the glass door, a concrete band and a slot of glass run up to the steel."
+  "text": "Two concrete walls frame a covered outdoor room. Above the glass door, a band of concrete and a strip of glass rise to meet the steel."
  },
  {
   "id": "lobby",
@@ -87,7 +87,7 @@
    -3,
    -4.8
   ],
-  "text": "133 m², 5 m to the ceiling. Formwork of 1800 × 900 mm and its tie holes set the scale of every wall."
+  "text": "133 m², 5 m to the ceiling. Formwork panels of 1800 × 900 mm, and their tie holes, set the scale of every wall."
  },
  {
   "id": "g2",
@@ -102,7 +102,7 @@
    3,
    -4.0
   ],
-  "text": "443 m², roughly 15 by 31 m, with a single row of six columns. The room for the large exhibitions."
+  "text": "443 m², roughly 15 by 31 m, with a single row of six columns. This is where the large exhibitions are held."
  },
  {
   "id": "court",
@@ -117,7 +117,7 @@
    13,
    -1.5
   ],
-  "text": "Under the east fold, a full-height glass wall opens to the sunken court. Solid steel mullions, 70 mm wide, carry daylight to the basement."
+  "text": "Under the east fold, a full-height glass wall opens onto the sunken court, bringing daylight down to the basement between solid steel mullions about 70 mm wide."
  },
  {
   "id": "tip",
@@ -132,7 +132,7 @@
    8,
    1.2
   ],
-  "text": "The east roof folds to within centimetres of the ground. A frosted glass screen stands square to the building, keeping people from the edge."
+  "text": "The east roof folds down to within centimetres of the ground. A frosted glass screen stands square to the building and keeps visitors back from the edge."
  },
  {
   "id": "g3",
@@ -147,6 +147,6 @@
    -3.2,
    1.0
   ],
-  "text": "The former café in the west wing, a gallery since 2017. A raking ceiling up to 4.3 m, granite underfoot, the plaza beyond the glass."
+  "text": "Once the café in the west wing, a gallery since 2017. A sloping ceiling rising to 4.3 m, granite underfoot, and the plaza beyond the glass."
  }
 ]

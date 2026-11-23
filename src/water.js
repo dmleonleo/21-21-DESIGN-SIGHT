@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { M, B1, label, onWall, onFloor } from './exhibit.js';
 
 const SERIF = '"Bella Gothic",Arial,sans-serif';
-const MAXD = 12;
+const MAXD = 24;
 const rimM = new THREE.MeshStandardMaterial({ color: 0x5e5c58, roughness: 0.85 });
 const dropM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.7, envMapIntensity: 1.4 });
 
@@ -127,7 +127,7 @@ export async function buildWater(scene, { ground = () => null } = {}) {
       inst.instanceMatrix.needsUpdate = true;
     });
     for (const th of threads) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.02, 6), rimM); l.position.copy(M(th.x, th.y, top + 0.01)); g.add(l); }
-    g.add(onFloor(caption('Falling', ['Seven drops let go from the roof.', 'Eight and a half metres: about 1.3 seconds.'], 0.95), cx - 2.0, cy + 1.5, B1, -0.2));
+    g.add(onFloor(caption('Falling', ['Seven drops let go from the roof.', '8.6 metres in about 1.3 seconds.'], 0.95), cx - 2.0, cy + 1.5, B1, -0.2));
   }
 
   // 04 Gallery 1: rain on nine still basins
@@ -136,7 +136,7 @@ export async function buildWater(scene, { ground = () => null } = {}) {
     for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { const w = basin(g, 34.3 + i * 0.95, 2.0 + j * 0.95, B1, 0.36, 0.5); ws.push({ w, x: 34.3 + i * 0.95, y: 2.0 + j * 0.95 }); mats.push(w); }
     let t0 = 0;
     anim.push((t) => { if (t > t0) { t0 = t + rnd(0.08, 0.5); const b = ws[(Math.random() * ws.length) | 0], a = rnd(0, 6.28), r = Math.sqrt(Math.random()) * 0.3; b.w.drop(b.x + Math.cos(a) * r, b.y + Math.sin(a) * r, rnd(0.3, 0.8)); } });
-    g.add(onWall(caption('Rain, indoors', ['Nine basins, one weather.', 'No two rings meet the same way twice.'], 1.0), 30.0, 3.2, B1 + 1.55, 0));
+    g.add(onWall(caption('Rain, indoors', ['Nine basins, one weather.', 'The rings never meet the same way twice.'], 1.0), 30.0, 3.2, B1 + 1.55, 0));
   }
 
   // 05 Gallery 2: one long still plane. Every so often, a single ring crosses it.
@@ -147,8 +147,8 @@ export async function buildWater(scene, { ground = () => null } = {}) {
     const edge = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0 + 0.08, y1 - y0 + 0.08), rimM); onFloor(edge, (x0 + x1) / 2, (y0 + y1) / 2, B1 + 0.001); g.add(edge);
     let t0 = 3;
     anim.push((t) => { if (t > t0) { t0 = t + rnd(6, 11); w.drop(rnd(x0 + 1, x1 - 1), rnd(y0 + 0.5, y1 - 0.5), 1.2); } });
-    pool.userData.info = 'Fourteen metres of water a few millimetres deep. Stand at the end and the ceiling lights lie down in it.';
-    g.add(onWall(caption('Still', ['Fourteen metres of water, millimetres deep.', 'The room, once more, upside down.'], 1.1), 54.2, -7.24, B1 + 1.6, Math.PI / 2));
+    pool.userData.info = 'Fourteen metres of water, a few millimetres deep. Stand at the end and the ceiling lights lie down in it.';
+    g.add(onWall(caption('Still', ['Fourteen metres of water, a few millimetres deep.', 'The room, once more, upside down.'], 1.1), 54.2, -7.24, B1 + 1.6, Math.PI / 2));
   }
 
   // 06 Sunken court: a sheet of water over the whole court floor, the sky laid at your feet
@@ -165,10 +165,11 @@ export async function buildWater(scene, { ground = () => null } = {}) {
     { t: 'Still Water', size: 44, weight: 280, font: SERIF },
     { t: ' ', size: 8 },
     { t: 'An independent homage to "water" (21_21 DESIGN SIGHT, 2007).', size: 18, color: '#bdb9b0' },
-    { t: 'Not affiliated. No works from that exhibition are shown; everything here is made for this model.', size: 18, color: '#bdb9b0' },
+    { t: 'Not affiliated. No works from that exhibition are shown; everything here was made for this model.', size: 18, color: '#bdb9b0' },
   ], { w: 1.5, px: 1000 });
   g.add(onFloor(credit, 25.4, 15.6, 0));
 
   scene.add(g);
-  return { group: g, update: (t) => { for (const m of mats) m.userData.time.value = t; anim.forEach((f) => f(t)); }, colliders: g.userData.colliders };
+  const surfaces = []; g.traverse((o) => { if (o.isMesh && o.material && o.material.drop) surfaces.push(o); });
+  return { surfaces, group: g, update: (t) => { for (const m of mats) m.userData.time.value = t; anim.forEach((f) => f(t)); }, colliders: g.userData.colliders };
 }

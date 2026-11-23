@@ -42,7 +42,7 @@
    12.0,
    -4.9
   ],
-  "text": "Seven drops let go from the roof and fall the full height of the building, 8.6 metres, into a basin in the basement. About 1.3 seconds each. Look up, then down."
+  "text": "Seven drops let go from under the roof and fall 8.6 metres into a basin in the basement, about 1.3 seconds each. Look up, then down."
  },
  {
   "id": "w-rain",
@@ -57,7 +57,7 @@
    2.9,
    -6.0
   ],
-  "text": "Gallery 1 holds nine shallow basins and one private weather. Drops land at random, so no two patterns of rings are ever the same."
+  "text": "Gallery 1 has nine shallow basins and a weather of its own. Drops land at random, so no two patterns of rings are ever the same."
  },
  {
   "id": "w-still",
@@ -87,6 +87,6 @@
    16,
    -5.0
   ],
-  "text": "The sunken court is flooded with a thin sheet of water, so the sky arrives at your feet. Ando's court was always about the sky; here you can look down to see it."
+  "text": "The sunken court is flooded with a thin sheet of water, so the sky arrives at your feet. Ando's court was always about the sky; here you look down to find it."
  }
 ]
