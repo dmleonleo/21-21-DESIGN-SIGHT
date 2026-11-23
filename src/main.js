@@ -45,7 +45,9 @@ new RGBELoader().load('env/kloofendal_48d_partly_cloudy_puresky.hdr', (t) => {
 });
 
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 1500);
-camera.position.copy(M(30, -50, 24));
+const TOUCH = matchMedia('(hover:none)').matches;
+const HOME = () => (innerWidth < innerHeight ? M(29, -92, 52) : M(30, -50, 24));   // portrait phones need to stand further back
+camera.position.copy(HOME());
 
 // sky: a quiet gradient dome. dark zenith, a low glow toward the sun
 const sky = new THREE.Mesh(new THREE.SphereGeometry(1200, 32, 16), new THREE.ShaderMaterial({
@@ -220,6 +222,10 @@ function chapterText(i) {
   $('#tIdx').textContent = String(i + 1).padStart(2, '0');
   $('#tOf').textContent = `/ ${String(stations.length).padStart(2, '0')}`;
   $('#tTitle').textContent = s.title; $('#tText').textContent = s.text;
+  const last = i === stations.length - 1;
+  $('#tPrev').disabled = i === 0;
+  $('#tNext').textContent = last ? 'Walk on' : 'Next'; $('#tNext').classList.toggle('end', last);
+  if (!tAuto) $('#tPlay').textContent = last ? 'Again' : 'Play';
 }
 const jA = new THREE.Vector3(), jB = new THREE.Vector3(), jTmp = new THREE.PerspectiveCamera();
 function stepJourney(dt) {
@@ -300,7 +306,8 @@ function stepDay(dt) {
 }
 
 function setMode(m) {
-  mode = m;
+  const prev = mode;
+  mode = m; hideIntro();
   document.body.className = m + (document.body.classList.contains('light') ? ' light' : '');
   fovTarget = fovFor(m);
   document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
@@ -320,18 +327,26 @@ function setMode(m) {
   if (m === 'orbit') {
     const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
     const tgt = M(28, 3, 0);
-    if (camera.position.y < 3) { flyTo(M(30, -50, 24), tgt, () => orbit.target.copy(tgt)); }
+    if (camera.position.y < 3) { flyTo(HOME(), tgt, () => orbit.target.copy(tgt)); }
     else orbit.target.copy(tgt);
   } else if (m === 'tour') {
     const i = THREE.MathUtils.clamp(Math.round(J.t), 0, stations.length - 1), s = stations[i];
     J.t = J.p = i; J.chapter = -1;
     flyTo(M(...s.cam), M(...s.look), () => { J.on = true; });
     chapterText(i);
-    if (!TEST) toast('Scroll to move through the building');
+    if (!TEST) toast(TOUCH ? 'Swipe up to move through the building' : 'Scroll to move through the building');
   } else if (m === 'walk') {
-    const s = stations.find((x) => x.id === 'plaza');
-    flyTo(M(...s.cam), M(...s.look));
-    toast('Walk from the plaza');
+    const fl = prev === 'tour' ? floorBelow(camera.position, 0.2) : null;
+    if (fl !== null && Math.abs(camera.position.y - EYE - fl) < 1.2) {     // the journey ends indoors: walk on from that spot
+      const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+      const pos = camera.position.clone(); pos.y = fl + EYE;
+      flyTo(pos, pos.clone().add(fwd.multiplyScalar(5)));
+      toast('Walk on from here');
+    } else {
+      const s = stations.find((x) => x.id === 'plaza');
+      flyTo(M(...s.cam), M(...s.look));
+      toast('Walk from the plaza');
+    }
   }
 }
 document.querySelectorAll('#modes [data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
@@ -365,11 +380,12 @@ function goStation(i) {
   for (const el of [$('#tTitle'), $('#tText')]) { el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade'); }
   flyTo(M(...s.cam), M(...s.look));
 }
-function stopAuto() { if (tAuto) { clearInterval(tAuto); tAuto = null; $('#tPlay').textContent = 'Play'; } }
+function stopAuto() { if (tAuto) { clearInterval(tAuto); tAuto = null; $('#tPlay').textContent = Math.round(J.t) >= stations.length - 1 ? 'Again' : 'Play'; } }
 $('#tPrev').onclick = () => { stopAuto(); goStation(Math.round(J.t) - 1); };
-$('#tNext').onclick = () => { stopAuto(); goStation(Math.round(J.t) + 1); };
+$('#tNext').onclick = () => { stopAuto(); if (Math.round(J.t) >= stations.length - 1) return setMode('walk'); goStation(Math.round(J.t) + 1); };
 $('#tPlay').onclick = () => {
   if (tAuto) return stopAuto();
+  if (Math.round(J.t) >= stations.length - 1) { J.t = J.p = 0; J.chapter = -1; }   // from the end: start over, no rewind blur
   $('#tPlay').textContent = 'Pause';
   tAuto = setInterval(() => { J.t += 0.0022; if (J.t >= stations.length - 1) stopAuto(); }, 16);
 };
@@ -465,6 +481,21 @@ $('#map').addEventListener('click', (e) => {
 // ---------- info / toast ----------
 $('#infoBtn').onclick = () => $('#info').showModal();
 $('#infoClose').onclick = () => $('#info').close();
+// first visit: one quiet invitation, gone at the first touch
+const intro = $('#intro');
+let introOn = false;
+function hideIntro() { if (!introOn) return; introOn = false; intro.classList.remove('on'); try { localStorage.setItem('2121.seen', '1'); } catch (e) {} }
+function showIntro() {
+  let seen = null; try { seen = localStorage.getItem('2121.seen'); } catch (e) {}
+  if (TEST && !/intro/.test(location.search)) return;
+  if (seen && !/intro/.test(location.search)) return;
+  if (TOUCH) $('#introHint').textContent = 'Drag to turn. Pinch to zoom.';
+  introOn = true; setTimeout(() => introOn && intro.classList.add('on'), 900);
+  setTimeout(hideIntro, 16000);
+}
+$('#introGo').onclick = () => { J.t = 0; setMode('tour'); };
+$('#introSkip').onclick = hideIntro;
+canvas.addEventListener('pointerdown', () => setTimeout(hideIntro, 1200));
 let toastT;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), 2600); }
 
@@ -560,6 +591,7 @@ loader.load('model/2121.glb', (gltf) => {
   buildCover();
   $('#loader').classList.add('done');
   setTimeout(() => $('#loader').remove(), 1000);
+  showIntro();
   orbit.update();
 }, (e) => {
   if (e.total) { const k = e.loaded / e.total; $('#loadbar').style.width = `${k * 100}%`; $('#loadpct').textContent = Math.round(k * 100); }
