@@ -14,6 +14,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { buildExhibit } from './exhibit.js';
 import { buildRules } from './rules.js';
+import { buildWater } from './water.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { MeshBVH } from 'three-mesh-bvh';
 
@@ -253,8 +254,8 @@ const fovFor = (m) => { const base = { orbit: 38, tour: 50, walk: 62, diagram: 3
 const realThings = [];
 let mode = 'orbit', fly = null, fovTarget = fovFor('orbit');
 camera.fov = fovTarget; camera.updateProjectionMatrix();
-const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), measure: await (await fetch('data/exhibit.json')).json(), rules: await (await fetch('data/rules.json')).json() };
-const SHOWS = { measure: 'Measure the Sight', rules: 'Read the Building' };
+const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), measure: await (await fetch('data/exhibit.json')).json(), rules: await (await fetch('data/rules.json')).json(), water: await (await fetch('data/water.json')).json() };
+const SHOWS = { measure: 'Measure the Sight', rules: 'Read the Building', water: 'Still Water' };
 let program = 'building', stations = PROGRAMS.building;
 let show = (() => { try { return SHOWS[localStorage.getItem('2121.show')] ? localStorage.getItem('2121.show') : 'measure'; } catch (e) { return 'measure'; } })();
 const shows = {}, bvhs = {};
@@ -423,7 +424,7 @@ function setMode(m) {
   $('#tourCard').hidden = m !== 'tour';
   $('#walkHelp').hidden = m !== 'walk';
   $('#stick').hidden = !(m === 'walk' && matchMedia('(hover:none)').matches);
-  stopAuto();
+  stopAuto(); AX.on = false; if (AX.ready) axisUI();
   if (m === 'orbit') {
     const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
     const tgt = M(28, 3, 0);
@@ -526,6 +527,8 @@ function stepWalk(dt) {
   if (keys.has('KeyD') || keys.has('ArrowRight')) r += 1;
   if (keys.has('KeyA') || keys.has('ArrowLeft')) r -= 1;
   f -= stick.y; r += stick.x;
+  if (AX.on && (f || r)) { AX.on = false; axisUI(); }
+  if (AX.on) return stepAxis(dt);
   const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 4.2 : 1.9);
   const fwd = new THREE.Vector3(-Math.sin(look.yaw), 0, -Math.cos(look.yaw));
   const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
@@ -553,6 +556,94 @@ function stepWalk(dt) {
     p.y += (target - p.y) * (target < p.y ? 1 - Math.exp(-dt * 9) : 1 - Math.exp(-dt * 14));
   }
 }
+
+
+// ---------- the axis: one continuous walk through the building, scrubbable, drawn on the plan ----------
+// model XY waypoints, checked against the collision mesh (a named point is a chapter on the axis)
+const AXIS_PTS = [[8, -3, 'Plaza'], [11.5, 0.5], [14.2, 4.6], [16.6, 7.3, 'Forecourt'], [18.4, 9.3], [19.0, 10.5], [20.6, 11.3], [24, 13, 'Lobby'], [32, 14.6], [38.5, 16.6], [42.6, 17.0, 'Stair'], [49.2, 17.0],
+  [51.4, 16.6], [51.6, 15.2], [48.5, 15.0], [45, 15.0], [43.2, 13.8], [42.4, 11.5], [40.3, 8.1], [37, 6.8, 'Gallery 1'], [33.8, 5.6], [32.6, 1.6], [35.4, -0.6], [37.6, 2.6], [38.6, 5.6],
+  [39.6, 5.9], [41.6, 3.2], [45.1, -3, 'Gallery 2'], [52, -3.2], [60, -3], [66, 2], [60, 3.6], [56, 6, 'Court']];
+const AX = { on: false, s: 0, len: 0, pts: [], fz: [], chapters: [], lookHold: 0, yaw: 0, pitch: 0, ready: false, pause: 0 };
+function buildAxis() {
+  const curve = new THREE.CatmullRomCurve3(AXIS_PTS.map(([x, y]) => new THREE.Vector3(x, y, 0)), false, 'centripetal', 0.5);
+  AX.len = curve.getLength();
+  const n = Math.ceil(AX.len / 0.2);
+  AX.pts = curve.getSpacedPoints(n);
+  let z = 0;
+  AX.fz = AX.pts.map((q) => { const h = hit(M(q.x, q.y, z + 0.6), DOWN, 12); if (h) z = toModel(h.point).z; return z; });
+  // chapters: arc position of each named waypoint
+  AX.chapters = AXIS_PTS.map((w, i) => w[2] ? { name: w[2], s: (() => { let best = 0, bd = 1e9; AX.pts.forEach((q, k) => { const d = (q.x - w[0]) ** 2 + (q.y - w[1]) ** 2; if (d < bd) { bd = d; best = k; } }); return best / n; })() } : null).filter(Boolean);
+  AX.ready = true;
+  // the route on the plan, split by level
+  const seg = (lv) => { const out = []; let cur = []; AX.pts.forEach((q, k) => { const on = (AX.fz[k] < -1.3) === (lv === 'B1'); if (on) cur.push(q); else if (cur.length) { out.push(cur); cur = []; } }); if (cur.length) out.push(cur); return out.map((c) => c.map((q) => `${(q.x - MAP.x0).toFixed(2)},${(MAP.y1 - q.y).toFixed(2)}`).join(' ')); };
+  const svg = $('#route');
+  svg.setAttribute('viewBox', `0 0 ${MAP.x1 - MAP.x0} ${MAP.y1 - MAP.y0}`);
+  svg.innerHTML = ['1F', 'B1'].map((lv) => seg(lv).map((d) => `<polyline class="l${lv}" points="${d}"/>`).join('')).join('') + '<polyline id="routeDone" points=""/>';
+  const ticks = $('#axTicks'); ticks.innerHTML = '';
+  for (const c of AX.chapters) { const b = document.createElement('button'); b.style.left = `${c.s * 100}%`; b.title = c.name; b.dataset.n = c.name; b.onclick = () => axisGo(c.s, true); ticks.appendChild(b); }
+}
+function axisAt(u) {                               // u 0..1 -> {p (three, eye), i}
+  const n = AX.pts.length - 1, f = THREE.MathUtils.clamp(u, 0, 1) * n, i = Math.min(n - 1, Math.floor(f)), t = f - i;
+  const a = AX.pts[i], b = AX.pts[i + 1];
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: AX.fz[i] + (AX.fz[i + 1] - AX.fz[i]) * t, i };
+}
+function axisChapter(u) { let c = AX.chapters[0]; for (const k of AX.chapters) if (u + 1e-4 >= k.s) c = k; return c; }
+function axisUI() {
+  $('#axRange').value = Math.round(AX.s * 1000);
+  $('#axPlay').textContent = AX.on ? 'Pause' : AX.s >= 0.999 ? 'Again' : AX.s > 0.001 ? 'Walk on' : 'Walk the axis';
+  $('#axOut').textContent = axisChapter(AX.s).name;
+  $('#axTicks').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.n === axisChapter(AX.s).name));
+  const n = Math.round(AX.s * (AX.pts.length - 1)), lvB1 = level === 'B1';
+  $('#routeDone').setAttribute('points', AX.pts.slice(0, n + 1).filter((q, k) => (AX.fz[k] < -1.3) === lvB1).map((q) => `${(q.x - MAP.x0).toFixed(2)},${(MAP.y1 - q.y).toFixed(2)}`).join(' '));
+}
+function axisPlace(snap) {
+  const a = axisAt(AX.s), ahead = (d) => axisAt(AX.s + d / AX.len);
+  const p = M(a.x, a.y, a.z + EYE);
+  if (snap) camera.position.copy(p); else { camera.position.x = p.x; camera.position.z = p.z; camera.position.y += (p.y - camera.position.y) * 0.18; }
+  // look along the axis: average a few points ahead, tilt with the floor (stairs look down)
+  let dx = 0, dy = 0, dz = 0;
+  for (const d of [2.5, 3.5, 4.5, 5.5]) { const q = ahead(d); dx += q.x - a.x; dy += q.y - a.y; dz += q.z - a.z; }
+  const yaw = Math.atan2(-dx, dy);                 // three: forward = (-sin yaw, 0, -cos yaw); model y = -three z
+  const pitch = THREE.MathUtils.clamp(Math.atan2(dz, Math.hypot(dx, dy)) * 0.8 - 0.03, -0.45, 0.3);
+  if (snap || performance.now() > AX.lookHold) {
+    const k = snap ? 1 : 0.035;
+    let dyaw = yaw - look.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
+    look.yaw += dyaw * k; look.pitch += (pitch - look.pitch) * k;
+  }
+}
+function axisGo(u, snap) {
+  if (!AX.ready) return;
+  if (mode !== 'walk') setMode('walk');
+  fly = null; AX.s = THREE.MathUtils.clamp(u, 0, 1); axisPlace(snap); applyLook(); axisUI();
+}
+function axisPlay(on) {
+  if (!AX.ready) return;
+  if (on && AX.s >= 0.999) AX.s = 0;
+  if (on) {
+    // join the axis at the nearest point; glide there first when far
+    const m = toModel(camera.position); let best = AX.s, bd = 1e9;
+    AX.pts.forEach((q, k) => { const d = (q.x - m.x) ** 2 + (q.y - m.y) ** 2 + ((AX.fz[k] + EYE - m.z) * 3) ** 2; if (d < bd) { bd = d; best = k / (AX.pts.length - 1); } });
+    if (AX.s < 0.001 && bd > 4) best = 0;
+    AX.s = best;
+    if (bd > 4 || best === 0) { const a = axisAt(AX.s), q = axisAt(AX.s + 4 / AX.len); fly = null; flyTo(M(a.x, a.y, a.z + EYE), M(q.x, q.y, q.z + EYE)); }
+  }
+  AX.on = on; AX.pause = 0; axisUI();
+}
+function stepAxis(dt) {
+  if (!AX.on || fly) return;
+  const a = axisAt(AX.s), q = axisAt(AX.s + 1 / AX.len);
+  const steep = Math.abs(q.z - a.z) > 0.25;
+  // linger a moment at each chapter
+  const c = AX.chapters.find((k) => k.s > 0 && Math.abs(k.s - AX.s) * AX.len < 0.05);
+  if (c && AX.pause === 0) AX.pause = 1.6;
+  if (AX.pause > 0) { AX.pause -= dt; if (AX.pause <= 0) { AX.pause = -1; AX.s += 0.1 / AX.len; } }
+  else { AX.s += (steep ? 0.75 : 1.2) * dt / AX.len; if (!c) AX.pause = 0; }
+  if (AX.s >= 1) { AX.s = 1; AX.on = false; }
+  axisPlace(false); axisUI();
+}
+$('#axPlay').onclick = () => axisPlay(!AX.on);
+$('#axRange').addEventListener('input', (e) => { AX.on = false; axisGo(e.target.value / 1000, true); });
+canvas.addEventListener('pointerdown', () => { AX.lookHold = performance.now() + 2600; });
 
 // ---------- minimap ----------
 const you = $('#you');
@@ -759,7 +850,8 @@ loader.load('model/2121.glb', async (gltf) => {
   scene.add(root); realThings.push(...realList, root);
   buildDiagram(root); setSun(+$('#sunRange').value);
   // two exhibitions share the building; each gets its own collision tree with its own plinths
-  for (const [name, build] of [['measure', () => buildExhibit(scene, root)], ['rules', () => buildRules(scene)]]) {
+  bvhs.base = new MeshBVH(BufferGeometryUtils.mergeGeometries(geos, false)); bvh = bvhs.base;   // the bare building, so exhibitions can find its floors
+  for (const [name, build] of [['measure', () => buildExhibit(scene, root)], ['rules', () => buildRules(scene)], ['water', () => buildWater(scene, { ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })]]) {
     try {
       const ex = await build(); shows[name] = ex;
       ex.group.traverse((o) => { if (o.isMesh && !o.userData.label) for (const m of [].concat(o.material)) if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); } });
@@ -768,9 +860,9 @@ loader.load('model/2121.glb', async (gltf) => {
       bvhs[name] = new MeshBVH(BufferGeometryUtils.mergeGeometries([...geos, ...extra], false));
     } catch (e) { console.error('exhibit', name, e); }
   }
-  if (!bvhs.measure && !bvhs.rules) bvhs.base = new MeshBVH(BufferGeometryUtils.mergeGeometries(geos, false));
-  bvh = bvhs[show] || bvhs.measure || bvhs.rules || bvhs.base;
+  bvh = bvhs[show] || bvhs.measure || bvhs.rules || bvhs.water || bvhs.base;
   setShow(show);
+  buildAxis(); axisUI();
   buildCover();
   $('#loader').classList.add('done');
   setTimeout(() => $('#loader').remove(), 1000);
@@ -962,4 +1054,4 @@ addEventListener('resize', () => {
   composer.setSize(innerWidth, innerHeight); xfRT.setSize(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()); sizeDiag();
 });
 // debug hook for automated checks
-window.__2121 = { setShow, get show() { return show; }, view: (c, l) => { if (mode !== 'walk') setMode('walk'); fly = null; camera.position.copy(M(...c)); lookAtPoint(M(...l)); applyLook(); }, get exhibit() { return exhibit; }, get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };
+window.__2121 = { AX, axisGo, axisPlay, axisAt, setShow, get show() { return show; }, view: (c, l) => { if (mode !== 'walk') setMode('walk'); fly = null; camera.position.copy(M(...c)); lookAtPoint(M(...l)); applyLook(); }, get exhibit() { return exhibit; }, get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => AX.ready, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };

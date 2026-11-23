@@ -1,0 +1,92 @@
+[
+ {
+  "id": "w-line",
+  "title": "A Line",
+  "cam": [
+   2.0,
+   0.5,
+   1.6
+  ],
+  "look": [
+   10,
+   -3,
+   -0.4
+  ],
+  "text": "Still Water, an homage to the 2007 exhibition on water. It begins outside: ten metres of water, one hand wide, cut into the paving and pointing at the door."
+ },
+ {
+  "id": "w-drop",
+  "title": "One Drop",
+  "cam": [
+   25.6,
+   14.6,
+   1.5
+  ],
+  "look": [
+   29.0,
+   11.7,
+   0.0
+  ],
+  "text": "Inside, a single drop hangs on a hairline. Every four and a half seconds it lets go. The rings reach the rim of the basin just before the next one falls."
+ },
+ {
+  "id": "w-fall",
+  "title": "Falling",
+  "cam": [
+   44.4,
+   9.7,
+   -4.4
+  ],
+  "look": [
+   47.6,
+   12.0,
+   -4.9
+  ],
+  "text": "Seven drops let go from the roof and fall the full height of the building, 8.6 metres, into a basin in the basement. About 1.3 seconds each. Look up, then down."
+ },
+ {
+  "id": "w-rain",
+  "title": "Rain, Indoors",
+  "cam": [
+   37.4,
+   6.4,
+   -4.5
+  ],
+  "look": [
+   35.2,
+   2.9,
+   -6.0
+  ],
+  "text": "Gallery 1 holds nine shallow basins and one private weather. Drops land at random, so no two patterns of rings are ever the same."
+ },
+ {
+  "id": "w-still",
+  "title": "Still",
+  "cam": [
+   45.0,
+   -0.6,
+   -4.7
+  ],
+  "look": [
+   61.0,
+   0.6,
+   -6.4
+  ],
+  "text": "Gallery 2 is given to one long plane of water, a few millimetres deep. Stand at its end: the ceiling, the lights and the columns lie down in it. Every so often, one ring crosses."
+ },
+ {
+  "id": "w-sky",
+  "title": "The Sky, Lowered",
+  "cam": [
+   58,
+   8.8,
+   -4.4
+  ],
+  "look": [
+   66,
+   16,
+   -5.0
+  ],
+  "text": "The sunken court is flooded with a thin sheet of water, so the sky arrives at your feet. Ando's court was always about the sky; here you can look down to see it."
+ }
+]

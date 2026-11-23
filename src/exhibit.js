@@ -31,7 +31,7 @@ function label(lines, { w = 1, px = 512, size = 40, weight = 400, color = '#f2f0
   if (bg) { g.fillStyle = bg; g.fillRect(0, 0, px, H); }
   let y = pad * scale;
   L.forEach((l, i) => {
-    g.font = `${l.weight || weight} ${l.size || size}px ${FONT}`; g.fillStyle = l.color || color; g.textBaseline = 'top';
+    g.font = `${l.weight || weight} ${l.size || size}px ${l.font || FONT}`; g.fillStyle = l.color || color; g.textBaseline = 'top';
     g.textAlign = align; const x = align === 'center' ? px / 2 : align === 'right' ? px - pad * scale : pad * scale;
     if (l.track) g.letterSpacing = `${l.track}px`;
     g.fillText(l.t, x, y + (hs[i] - (l.size || size)) / 2);

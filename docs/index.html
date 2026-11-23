@@ -32,7 +32,7 @@
 
 <aside id="map" title="Plan">
   <div class="lvl" id="lvlname">Ground floor</div>
-  <div class="frame"><img id="planimg" src="plan_f1.png" alt="Plan"><i id="you"></i></div>
+  <div class="frame"><img id="planimg" src="plan_f1.png" alt="Plan"><svg id="route" preserveAspectRatio="none" aria-hidden="true"></svg><i id="you"></i></div>
 </aside>
 
 <section id="tourCard" hidden>
@@ -63,6 +63,11 @@
   <span class="touch">Stick to move. Drag to look. Tap the plan to jump.</span>
 </section>
 <div id="stick" hidden><i></i></div>
+<div id="axis" aria-label="Walk the axis">
+  <button id="axPlay" class="link">Walk the axis</button>
+  <div class="track"><input id="axRange" type="range" min="0" max="1000" value="0" aria-label="Position on the axis"><div id="axTicks"></div></div>
+  <output id="axOut">Plaza</output>
+</div>
 
 <nav id="modes" aria-label="View">
   <button data-mode="tour">Journey</button>
@@ -139,6 +144,7 @@
     <p class="eyebrow">Now in the building</p>
     <button data-show="measure"><span class="t">Measure the Sight</span><span class="d">After "Measuring", 2015. Metres and shaku, a litre and a kan, a tennis court in Gallery 2.</span><span class="n">8 stops</span></button>
     <button data-show="rules"><span class="t">Read the Building</span><span class="d">After "Rules?", 2021. The building's own rules, a floor vote, and squares that obey.</span><span class="n">7 stops</span></button>
+    <button data-show="water"><span class="t">Still Water</span><span class="d">After "water", 2007. A line, one drop, falling threads, rain indoors, a still plane, the sky at your feet.</span><span class="n">6 stops</span></button>
     <p class="fine">Independent homages. Not affiliated with 21_21 DESIGN SIGHT.</p>
   </div>
 </section>

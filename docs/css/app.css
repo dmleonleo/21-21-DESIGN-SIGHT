@@ -265,3 +265,29 @@ body.light #ruler,body.light #note{text-shadow:0 0 16px rgba(0,0,0,.42),0 0 2px 
 #chooser{animation:none;background:rgba(6,7,8,.82)}
 @media (max-width:720px){#explode{top:calc(var(--pad) + 64px);bottom:auto;left:var(--pad);right:calc(var(--pad) + 40px)}}
 #chooser{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(6,7,8,.88)}
+
+/* the axis: one continuous walk, a line you can scrub, the same line on the plan */
+#route{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;display:none}
+body.walk #route{display:block}
+#route polyline{fill:none;stroke:rgba(255,255,255,.28);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:2 3}
+#route #routeDone{stroke:#fff;stroke-dasharray:none;stroke-width:1.2}
+#axis{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--pad) + 46px);z-index:11;display:none;align-items:center;gap:20px;width:min(560px,calc(100vw - 2*var(--pad)))}
+body.walk #axis{display:flex}
+body.walk #walkHelp{bottom:calc(var(--pad) + 92px)}
+#axPlay{font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink);white-space:nowrap;min-width:108px;text-align:left}
+#axis .track{position:relative;flex:1;height:22px}
+#axRange{-webkit-appearance:none;appearance:none;position:absolute;inset:0;width:100%;height:22px;background:transparent;cursor:pointer;margin:0}
+#axRange::-webkit-slider-runnable-track{height:1px;background:var(--faint)}
+#axRange::-moz-range-track{height:1px;background:var(--faint)}
+#axRange::-webkit-slider-thumb{-webkit-appearance:none;width:1px;height:13px;background:var(--ink);margin-top:-6px;border:0;border-radius:0}
+#axRange::-moz-range-thumb{width:1px;height:13px;background:var(--ink);border:0;border-radius:0}
+#axTicks{position:absolute;inset:0;pointer-events:none}
+#axTicks button{position:absolute;top:50%;width:13px;height:13px;margin:-6px 0 0 -6px;pointer-events:auto;background:none;border:0;padding:0;cursor:pointer}
+#axTicks button::before{content:"";position:absolute;left:6px;top:3px;width:1px;height:5px;background:var(--mute)}
+#axTicks button.on::before{background:var(--ink)}
+#axOut{font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--mute);min-width:80px;text-align:right;white-space:nowrap}
+body.light #axis{text-shadow:0 0 16px rgba(0,0,0,.42),0 0 2px rgba(0,0,0,.25)}
+@media (max-width:720px){#axis{bottom:calc(var(--pad) + 40px);gap:12px} #axPlay{min-width:80px;font-size:9px} #axOut{min-width:60px;font-size:9px} body.walk #walkHelp{bottom:calc(var(--pad) + 120px)}}
+@media (hover:none) and (max-width:720px){#axis{left:calc(var(--pad) + 128px);right:var(--pad);transform:none;width:auto;bottom:calc(var(--pad) + 40px)} #axOut{display:none}}
+@media (max-width:720px){#axis{bottom:calc(var(--pad) + 74px)} body.walk #walkHelp{bottom:calc(var(--pad) + 112px)}}
+@media (hover:none) and (max-width:720px){#axis{bottom:calc(var(--pad) + 74px)}}
