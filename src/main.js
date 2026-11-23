@@ -12,6 +12,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { buildExhibit } from './exhibit.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { MeshBVH } from 'three-mesh-bvh';
 
@@ -202,7 +203,14 @@ const fovFor = (m) => { const base = { orbit: 38, tour: 50, walk: 62, diagram: 3
 const realThings = [];
 let mode = 'orbit', fly = null, fovTarget = fovFor('orbit');
 camera.fov = fovTarget; camera.updateProjectionMatrix();
-const stations = await (await fetch('data/stations.json')).json();
+const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), exhibit: await (await fetch('data/exhibit.json')).json() };
+let program = 'building', stations = PROGRAMS.building;
+function setProgram(p) {
+  if (p === program) return;
+  program = p; stations = PROGRAMS[p]; J.reach = null; J.t = J.p = 0; J.chapter = -1;
+  $('#rail').querySelectorAll('button').forEach((b) => b.remove());
+  $('#tKick').textContent = p === 'exhibit' ? 'Measure the Sight' : '';
+}
 
 let tIdx = 0, tAuto = null;
 
@@ -326,10 +334,12 @@ function stepDay(dt) {
 
 function setMode(m) {
   const prev = mode;
+  if (m === 'exhibit') { setProgram('exhibit'); m = 'tour'; } else if (m === 'tour') setProgram('building');
   mode = m; hideIntro();
-  document.body.className = m + (document.body.classList.contains('light') ? ' light' : '');
+  document.body.className = m + (document.body.classList.contains('light') ? ' light' : '') + (m === 'tour' && program === 'exhibit' ? ' exhibit' : '');
   fovTarget = fovFor(m);
-  document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+  const shown = m === 'tour' && program === 'exhibit' ? 'exhibit' : m;
+  document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === shown));
   orbit.enabled = m === 'orbit';
   const D = m === 'diagram';
   diagCtl.enabled = D; diagRoot.visible = D; renderPass.camera = D ? diagCam : camera; bloom.enabled = !D;
@@ -599,7 +609,8 @@ function buildCover() {
   openTex.needsUpdate = true;
 }
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-loader.load('model/2121.glb', (gltf) => {
+let exhibit = null;
+loader.load('model/2121.glb', async (gltf) => {
   const root = gltf.scene;
   const geos = [];
   root.updateMatrixWorld(true);
@@ -644,6 +655,12 @@ loader.load('model/2121.glb', (gltf) => {
   }
   scene.add(root); realThings.push(...realList, root);
   buildDiagram(root); setSun(+$('#sunRange').value);
+  try {                                       // the exhibition lives in the building: walk collides with its plinths
+    exhibit = await buildExhibit(scene, root);
+    realThings.push(exhibit.group);
+    exhibit.group.traverse((o) => { if (o.isMesh && !o.userData.label) for (const m of [].concat(o.material)) if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); } });
+    for (const c of exhibit.colliders) { c.updateMatrixWorld(true); const g = c.geometry.clone(); for (const k of Object.keys(g.attributes)) if (k !== 'position') g.deleteAttribute(k); g.applyMatrix4(c.matrixWorld); geos.push(g.index ? g.toNonIndexed() : g); }
+  } catch (e) { console.error('exhibit', e); }
   const merged = BufferGeometryUtils.mergeGeometries(geos, false);
   bvh = new MeshBVH(merged);
   buildCover();
@@ -806,6 +823,7 @@ function stepTheme(dt) {
 const clock = new THREE.Timer();
 function frame() {
   clock.update(); const dt = Math.min(clock.getDelta(), 0.05);
+  if (exhibit && mode !== 'diagram') exhibit.update(clock.getElapsed());
   if (fly) stepFly(dt);
   stepDay(dt); stepTheme(dt); grade.uniforms.paper.value = paperK;
   if (mode === 'diagram') stepDiagram();

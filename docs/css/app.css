@@ -224,3 +224,7 @@ dialog#info{font-size:12px} dialog#info .lede{font-size:19px}
 #tourCard h2{font-size:clamp(24px,2.6vw,36px);line-height:1.05}
 dialog#info h2{font-size:26px}
 @media (max-width:720px){#brand .mark{font-size:14px;letter-spacing:.01em} #tourCard h2{font-size:24px}}
+#loader .mark{font-family:var(--serif);font-weight:300;font-size:24px;letter-spacing:.01em}
+#tourCard .kick{font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:#ff7a45;margin-bottom:12px}
+#tourCard .kick:empty{display:none}
+@media (max-width:720px){#modes{gap:12px} #modes button{letter-spacing:.12em}}
