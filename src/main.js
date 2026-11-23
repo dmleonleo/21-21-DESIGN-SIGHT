@@ -13,6 +13,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { buildExhibit } from './exhibit.js';
+import { buildRules } from './rules.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { MeshBVH } from 'three-mesh-bvh';
 
@@ -241,8 +242,8 @@ canvas.addEventListener('pointerup', (e) => {
   const hs = rc.intersectObject(exhibit.group, true);
   for (const x of hs) {
     if (h && x.distance > h.distance + 0.08) break;              // behind a wall
-    let o = x.object; while (o && !o.userData.info) o = o.parent;
-    if (o) { note(o.userData.info); return; }
+    let o = x.object; while (o && !o.userData.info && !o.userData.onTap) o = o.parent;
+    if (o) { note(o.userData.onTap ? o.userData.onTap() : o.userData.info); return; }
   }
 });
 
@@ -252,13 +253,30 @@ const fovFor = (m) => { const base = { orbit: 38, tour: 50, walk: 62, diagram: 3
 const realThings = [];
 let mode = 'orbit', fly = null, fovTarget = fovFor('orbit');
 camera.fov = fovTarget; camera.updateProjectionMatrix();
-const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), exhibit: await (await fetch('data/exhibit.json')).json() };
+const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), measure: await (await fetch('data/exhibit.json')).json(), rules: await (await fetch('data/rules.json')).json() };
+const SHOWS = { measure: 'Measure the Sight', rules: 'Read the Building' };
 let program = 'building', stations = PROGRAMS.building;
+let show = (() => { try { return SHOWS[localStorage.getItem('2121.show')] ? localStorage.getItem('2121.show') : 'measure'; } catch (e) { return 'measure'; } })();
+const shows = {}, bvhs = {};
+function setShow(name) {                      // one exhibition is installed at a time: its objects, its collisions
+  show = name; try { localStorage.setItem('2121.show', name); } catch (e) {}
+  exhibit = shows[name] || null;
+  if (bvhs[name]) bvh = bvhs[name];
+  showVis();
+  if (rulerOn) rulerClear();
+}
+function showVis() { for (const [k, v] of Object.entries(shows)) v.group.visible = k === show && mode !== 'diagram'; }
+function openChooser() { $('#chooser').hidden = false; $('#chooser').querySelectorAll('button[data-show]').forEach((b) => b.classList.toggle('on', b.dataset.show === show)); }
+$('#chooser').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-show]');
+  if (b) { $('#chooser').hidden = true; setMode('show:' + b.dataset.show); return; }
+  if (e.target.id === 'chooser' || e.target.closest('.x')) $('#chooser').hidden = true;
+});
 function setProgram(p) {
   if (p === program) return;
   program = p; stations = PROGRAMS[p]; J.reach = null; J.t = J.p = 0; J.chapter = -1;
   $('#rail').querySelectorAll('button').forEach((b) => b.remove());
-  $('#tKick').textContent = p === 'exhibit' ? 'Measure the Sight' : '';
+  $('#tKick').textContent = SHOWS[p] || '';
 }
 
 let tIdx = 0, tAuto = null;
@@ -383,11 +401,12 @@ function stepDay(dt) {
 
 function setMode(m) {
   const prev = mode;
-  if (m === 'exhibit') { setProgram('exhibit'); m = 'tour'; } else if (m === 'tour') setProgram('building');
+  if (m === 'exhibit') { openChooser(); return; }
+  if (m.startsWith('show:')) { const n = m.slice(5); setShow(n); setProgram(n); J.t = 0; m = 'tour'; } else if (m === 'tour') setProgram('building');
   mode = m; hideIntro();
-  document.body.className = m + (document.body.classList.contains('light') ? ' light' : '') + (m === 'tour' && program === 'exhibit' ? ' exhibit' : '');
+  document.body.className = m + (document.body.classList.contains('light') ? ' light' : '') + (m === 'tour' && program !== 'building' ? ' exhibit' : '');
   fovTarget = fovFor(m);
-  const shown = m === 'tour' && program === 'exhibit' ? 'exhibit' : m;
+  const shown = m === 'tour' && program !== 'building' ? 'exhibit' : m;
   if (rulerOn && m !== 'tour' && m !== 'walk') setRuler(false);
   note('');
   document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === shown));
@@ -396,10 +415,11 @@ function setMode(m) {
   diagCtl.enabled = D; diagRoot.visible = D; renderPass.camera = D ? diagCam : camera; bloom.enabled = !D;
   scene.background = D ? new THREE.Color(0x0e0f10) : null;
   for (const o of realThings) o.visible = !D;
+  showVis();
   if (m !== 'orbit' && cutKind !== 'none') setCut('none');
   J.on = false; xfadeK = 0; $('#tourCard').style.opacity = ''; $('#cut2').style.opacity = 0;
   scene.fog.far = D ? 1e5 : 420;
-  if (D) { explode = explodeTarget = 0; $('#explodeBtn').textContent = 'Explode'; }
+  if (D) { explode = explodeTarget = 0; $('#explodeRange').value = 0; }
   $('#tourCard').hidden = m !== 'tour';
   $('#walkHelp').hidden = m !== 'walk';
   $('#stick').hidden = !(m === 'walk' && matchMedia('(hover:none)').matches);
@@ -635,6 +655,37 @@ function retag(mesh, box, mat) {         // move the triangles inside a model-sp
   mesh.material = [Array.isArray(mesh.material) ? mesh.material[0] : mesh.material, mat];
   return move.length / 3;
 }
+// F1 walls were modelled to stop at GL 0, but the forecourt paving falls away from the building, so their feet hover.
+// Drop every wall-foot vertex that has open ground below it (within 1.2 m) down to that ground.
+function groundWalls(root) {
+  const ground = [], walls = [];
+  root.traverse((o) => { if (!o.isMesh) return; if (/__(stone|lawn|paving|ground)$/.test(o.name) || /lawn/.test(o.name)) ground.push(o); if (/^F1_walls_RC__concrete/.test(o.name)) walls.push(o); });
+  const rc = new THREE.Raycaster(); rc.far = 1.2; const v = new THREE.Vector3(), inv = new THREE.Matrix4();
+  let moved = 0;
+  for (const w of walls) {
+    const src = w.geometry.attributes.position, f = new Float32Array(src.count * 3);
+    for (let i = 0; i < src.count; i++) { f[i * 3] = src.getX(i); f[i * 3 + 1] = src.getY(i); f[i * 3 + 2] = src.getZ(i); }
+    const pos = new THREE.BufferAttribute(f, 3); inv.copy(w.matrixWorld).invert();
+    const cache = new Map();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(w.matrixWorld);
+      if (Math.abs(v.y) > 0.03) continue;                              // three y = model Z: only feet at GL 0
+      const key = `${v.x.toFixed(3)},${v.z.toFixed(3)}`;
+      let gy = cache.get(key);
+      if (gy === undefined) {
+        gy = null;
+        rc.set(new THREE.Vector3(v.x, v.y - 0.02, v.z), DOWN);
+        const h = rc.intersectObjects(ground, false)[0];
+        if (h && h.point.y < v.y - 0.04) gy = h.point.y - 0.03;
+        cache.set(key, gy);
+      }
+      if (gy === null) continue;
+      v.y = gy; v.applyMatrix4(inv); pos.setXYZ(i, v.x, v.y, v.z); moved++;
+    }
+    if (moved) { w.geometry.setAttribute('position', pos); w.geometry.computeBoundingBox(); w.geometry.computeBoundingSphere(); }
+  }
+  return moved;
+}
 function buildCover() {
   const d = coverTex.image.data, up = new THREE.Vector3(0, 1, 0);
   for (let j = 0; j < COVER.h; j++) for (let i = 0; i < COVER.w; i++) {
@@ -665,6 +716,7 @@ loader.load('model/2121.glb', async (gltf) => {
   const root = gltf.scene;
   const geos = [];
   root.updateMatrixWorld(true);
+  groundWalls(root);
   root.traverse((o) => {
     if (!o.isMesh) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -706,14 +758,19 @@ loader.load('model/2121.glb', async (gltf) => {
   }
   scene.add(root); realThings.push(...realList, root);
   buildDiagram(root); setSun(+$('#sunRange').value);
-  try {                                       // the exhibition lives in the building: walk collides with its plinths
-    exhibit = await buildExhibit(scene, root);
-    realThings.push(exhibit.group);
-    exhibit.group.traverse((o) => { if (o.isMesh && !o.userData.label) for (const m of [].concat(o.material)) if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); } });
-    for (const c of exhibit.colliders) { c.updateMatrixWorld(true); const g = c.geometry.clone(); for (const k of Object.keys(g.attributes)) if (k !== 'position') g.deleteAttribute(k); g.applyMatrix4(c.matrixWorld); geos.push(g.index ? g.toNonIndexed() : g); }
-  } catch (e) { console.error('exhibit', e); }
-  const merged = BufferGeometryUtils.mergeGeometries(geos, false);
-  bvh = new MeshBVH(merged);
+  // two exhibitions share the building; each gets its own collision tree with its own plinths
+  for (const [name, build] of [['measure', () => buildExhibit(scene, root)], ['rules', () => buildRules(scene)]]) {
+    try {
+      const ex = await build(); shows[name] = ex;
+      ex.group.traverse((o) => { if (o.isMesh && !o.userData.label) for (const m of [].concat(o.material)) if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); } });
+      const extra = [];
+      for (const c of ex.colliders) { c.updateMatrixWorld(true); const g = c.geometry.clone(); for (const k of Object.keys(g.attributes)) if (k !== 'position') g.deleteAttribute(k); g.applyMatrix4(c.matrixWorld); extra.push(g.index ? g.toNonIndexed() : g); }
+      bvhs[name] = new MeshBVH(BufferGeometryUtils.mergeGeometries([...geos, ...extra], false));
+    } catch (e) { console.error('exhibit', name, e); }
+  }
+  if (!bvhs.measure && !bvhs.rules) bvhs.base = new MeshBVH(BufferGeometryUtils.mergeGeometries(geos, false));
+  bvh = bvhs[show] || bvhs.measure || bvhs.rules || bvhs.base;
+  setShow(show);
   buildCover();
   $('#loader').classList.add('done');
   setTimeout(() => $('#loader').remove(), 1000);
@@ -777,12 +834,16 @@ function sizeDiag() {
   diagCam.left = -half * a; diagCam.right = half * a; diagCam.top = half; diagCam.bottom = -half; diagCam.updateProjectionMatrix();
 }
 sizeDiag();
-$('#explodeBtn').addEventListener('click', () => {
-  explodeTarget = explodeTarget ? 0 : 1;
-  $('#explodeBtn').textContent = explodeTarget ? 'Assemble' : 'Explode';
+$('#explodeRange').addEventListener('input', (e) => { explodeTarget = +e.target.value; });   // a lever: the drawing follows the hand
+addEventListener('keydown', (e) => {
+  if (mode !== 'diagram' || e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowUp' || e.key === 'ArrowRight') explodeTarget = Math.min(1, explodeTarget + 0.1);
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') explodeTarget = Math.max(0, explodeTarget - 0.1);
+  else return;
+  $('#explodeRange').value = explodeTarget;
 });
 function stepDiagram() {
-  explode += (explodeTarget - explode) * 0.06;
+  explode += (explodeTarget - explode) * 0.14;
   diagParts.roof.position.y = explode * 9;
   diagParts.b1.position.y = -explode * 8;
   diagCtl.update();
@@ -901,4 +962,4 @@ addEventListener('resize', () => {
   composer.setSize(innerWidth, innerHeight); xfRT.setSize(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()); sizeDiag();
 });
 // debug hook for automated checks
-window.__2121 = { get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };
+window.__2121 = { setShow, get show() { return show; }, view: (c, l) => { if (mode !== 'walk') setMode('walk'); fly = null; camera.position.copy(M(...c)); lookAtPoint(M(...l)); applyLook(); }, get exhibit() { return exhibit; }, get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };

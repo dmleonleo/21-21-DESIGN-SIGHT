@@ -122,7 +122,7 @@
       <li><i style="--c:#a196e0"></i>Basement</li>
     </ul>
   </div>
-  <button id="explodeBtn" class="link">Explode</button>
+  <div id="explode"><span>Assembled</span><input id="explodeRange" type="range" min="0" max="1" step="0.001" value="0" aria-label="Explode the drawing"><span>Exploded</span></div>
 </section>
 
 <section id="intro" aria-live="polite">
@@ -133,6 +133,15 @@
 
 <div id="toast" hidden></div>
 <div id="note" hidden></div>
+<section id="chooser" hidden aria-label="Choose an exhibition">
+  <div class="box">
+    <button class="x link" aria-label="Close">Close</button>
+    <p class="eyebrow">Now in the building</p>
+    <button data-show="measure"><span class="t">Measure the Sight</span><span class="d">After "Measuring", 2015. Metres and shaku, a litre and a kan, a tennis court in Gallery 2.</span><span class="n">8 stops</span></button>
+    <button data-show="rules"><span class="t">Read the Building</span><span class="d">After "Rules?", 2021. The building's own rules, a floor vote, and squares that obey.</span><span class="n">7 stops</span></button>
+    <p class="fine">Independent homages. Not affiliated with 21_21 DESIGN SIGHT.</p>
+  </div>
+</section>
 <div id="ruler"><button id="rulerBtn" class="link" aria-pressed="false">Ruler</button><output id="rulerOut" hidden></output></div>
 
 <script type="module" src="js/app.js"></script>

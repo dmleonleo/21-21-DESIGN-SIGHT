@@ -237,3 +237,31 @@ body.walk #ruler,body.tour.exhibit #ruler{display:flex}
 #note{position:fixed;left:50%;bottom:calc(var(--pad) + 110px);transform:translateX(-50%);z-index:12;max-width:min(440px,calc(100vw - 2*var(--pad)));font-size:12px;line-height:1.6;color:var(--ink);text-align:center;animation:rise .6s var(--ease) both}
 body.light #ruler,body.light #note{text-shadow:0 0 16px rgba(0,0,0,.42),0 0 2px rgba(0,0,0,.25)}
 @media (max-width:720px){#ruler{right:var(--pad);bottom:calc(var(--pad) + 96px)} #note{bottom:calc(var(--pad) + 150px)}}
+/* diagram lever */
+#explode{position:fixed;left:50%;bottom:var(--pad);transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:16px;font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--mute)}
+#explode input{-webkit-appearance:none;appearance:none;width:220px;height:28px;background:transparent;cursor:grab;touch-action:none}
+#explode input::-webkit-slider-runnable-track{height:1px;background:var(--faint)}
+#explode input::-moz-range-track{height:1px;background:var(--faint)}
+#explode input::-webkit-slider-thumb{-webkit-appearance:none;width:4px;height:22px;border-radius:2px;background:var(--ink);margin-top:-11px;border:0}
+#explode input::-moz-range-thumb{width:4px;height:22px;border-radius:2px;background:var(--ink);border:0}
+@media (max-width:720px){#explode{left:var(--pad);right:var(--pad);transform:none;bottom:calc(var(--pad) + 34px);justify-content:center;gap:10px} #explode input{width:auto;flex:1;max-width:240px}}
+/* exhibition chooser */
+#chooser{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(6,7,8,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:rise .5s var(--ease) both}
+#chooser[hidden]{display:none}
+#chooser .box{position:relative;width:min(560px,calc(100vw - 2*var(--pad)));padding:40px 0 28px}
+#chooser .x{position:absolute;right:0;top:0;font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--mute)}
+#chooser .eyebrow{font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--mute);margin:0 0 18px}
+#chooser button[data-show]{display:grid;grid-template-columns:1fr auto;gap:6px 24px;width:100%;text-align:left;padding:22px 0;border-top:1px solid var(--faint);color:var(--ink)}
+#chooser button[data-show]:last-of-type{border-bottom:1px solid var(--faint)}
+#chooser .t{font-family:"Bella Gothic",sans-serif;font-weight:1000;font-size:26px;letter-spacing:.01em;line-height:1.1}
+#chooser .d{grid-column:1;font-size:12px;line-height:1.6;color:var(--mute);max-width:40ch}
+#chooser .n{grid-column:2;grid-row:1;align-self:center;font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--mute)}
+#chooser button[data-show]:hover .t,#chooser button[data-show].on .t{color:#fff}
+#chooser button[data-show].on .n{color:#ff7a45}
+#chooser .fine{font-size:9px;letter-spacing:.16em;color:var(--mute);margin-top:18px}
+#tourCard .kick{color:#ff7a45}
+@media (max-width:720px){#chooser .t{font-size:21px}}
+#explode{bottom:calc(var(--pad) + 46px)}
+#chooser{animation:none;background:rgba(6,7,8,.82)}
+@media (max-width:720px){#explode{top:calc(var(--pad) + 64px);bottom:auto;left:var(--pad);right:calc(var(--pad) + 40px)}}
+#chooser{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(6,7,8,.88)}

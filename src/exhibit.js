@@ -4,6 +4,8 @@ import * as THREE from 'three';
 
 const M = (x, y, z) => new THREE.Vector3(x, z, -y);   // model (X east, Y north, Z up) -> three
 const B1 = -6.0;                                       // basement floor level
+// Gallery 1's east wall is not on a grid line: it leans 2.7° (probed: X 38.779 at Y 0.6, 38.989 at Y 5.0)
+const G1E = { x: (y) => 38.751 + 0.0477 * y, yaw: Math.PI - 0.0477, rot: -0.0477 };
 
 const ply = new THREE.MeshStandardMaterial({ color: 0xcdb48e, roughness: 0.78, metalness: 0 });
 const plyEdge = new THREE.MeshStandardMaterial({ color: 0xa88c62, roughness: 0.8 });
@@ -111,15 +113,15 @@ export async function buildExhibit(scene, root) {
     }
     g.add(onFloor(label([{ t: 'SUN CLOCK', size: 30, weight: 1000, track: 3 }, { t: 'Tokyo, 35.67° N. The shadow is the hour.', size: 20, color: '#bdb9b0' }], { w: 1.2 }), gx - 0.1, gy - 1.25, B1));
     // a tape up the court glass, in metres
-    const tx = 52.6, ty = 12.6, top = 4.6;
+    const tx = 52.6, ty = 11.97, top = 2.6;           // just inside the court glass (Y 12.03); the roof steel starts at about +2.7 here
     const t = new THREE.Mesh(new THREE.PlaneGeometry(0.03, top - B1), tape); t.position.copy(M(tx, ty, (top + B1) / 2)); g.add(t);
-    for (let m = 0; m <= 10; m++) {
+    for (let m = 0; m <= 8; m++) {
       const tick = new THREE.Mesh(new THREE.PlaneGeometry(m % 5 ? 0.12 : 0.24, 0.012), m === 0 ? signal : tape);
       tick.position.copy(M(tx + (m % 5 ? 0.06 : 0.12), ty, B1 + m)); g.add(tick);
       const l = label([{ t: `${m} m`, size: 36, weight: m % 5 ? 400 : 1000 }], { w: 0.34, px: 160, pad: 0.01 });
       l.position.copy(M(tx + 0.42, ty - 0.01, B1 + m + 0.02)); g.add(l);
     }
-    const l = label([{ t: '11.4 m PANE', size: 34, weight: 1000, track: 3 }, { t: 'its full length, part of it below the floor', size: 20, color: '#bdb9b0' }], { w: 1.0 });
+    const l = label([{ t: 'FLOOR TO ROOF', size: 34, weight: 1000, track: 3 }, { t: 'about 8.6 m of glass here', size: 20, color: '#bdb9b0' }], { w: 1.0 });
     l.position.copy(M(tx + 0.75, ty - 0.01, B1 + 2.2)); g.add(l);
   }
 
@@ -153,7 +155,7 @@ export async function buildExhibit(scene, root) {
     inst.userData.info = 'One thousand discs of 3.75 g each, one monme apiece: together they weigh one kan, 3.75 kg.';
     g.add(onFloor(label([{ t: '1,000 × 3.75 g = 1 KAN', size: 26, weight: 1000, track: 1 }], { w: 0.6, px: 600, pad: 0.01 }), 34.6, 0.82, top));
     // wall text on the east wall
-    g.add(onWall(wallText('Basic units', '1 litre, 1 kan, 1 second', 'Same size, different weight: units only mean something when we can feel them. One litre of water weighs one kilogram. One kan, the old Japanese weight, is 3.75 kilograms, a thousand monme.'), 38.86, 4.2, B1 + 1.75, Math.PI));
+    g.add(onWall(wallText('Basic units', '1 litre, 1 kan, 1 second', 'Same size, different weight: units only mean something when we can feel them. One litre of water weighs one kilogram. One kan, the old Japanese weight, is 3.75 kilograms, a thousand monme.'), G1E.x(4.2) - 0.012, 4.2, B1 + 1.75, G1E.yaw));
     // (d) from 1 to 100: ten plywood cubes, 10 cm to 1 m, along the west wall
     let y = -1.5;
     for (let i = 1; i <= 10; i++) {
@@ -237,3 +239,5 @@ export async function buildExhibit(scene, root) {
   scene.add(g);
   return { group: g, update: (t) => anim.forEach((f) => f(t)), colliders: g.userData.colliders };
 }
+
+export { G1E, M, B1, label, wallText, onWall, onFloor, box, strip, wrap, steel, white, ply };
