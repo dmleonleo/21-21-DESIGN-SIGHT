@@ -12,6 +12,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { MeshBVH } from 'three-mesh-bvh';
 
 const $ = (s) => document.querySelector(s);
@@ -228,24 +229,35 @@ function chapterText(i) {
   if (!tAuto) $('#tPlay').textContent = last ? 'Again' : 'Play';
 }
 const jA = new THREE.Vector3(), jB = new THREE.Vector3(), jTmp = new THREE.PerspectiveCamera();
+const camB = new THREE.PerspectiveCamera();          // the incoming shot during a dissolve
+const XF = 0.22;                                     // half-width of a dissolve, in chapters
+let xfadeK = 0;
+function shotPose(i, u, out) {                       // u: 0..1 within shot i, runs past both ends during dissolves
+  const st = stations[i];
+  jA.copy(M(...st.cam)); jB.copy(M(...st.look));
+  const dir = jB.clone().sub(jA).normalize();
+  out.position.copy(jA).addScaledVector(dir, THREE.MathUtils.clamp(u, -0.2, 1.22) * J.reach[i]);   // slow push-in that never stops at the cut
+  jTmp.position.copy(out.position); jTmp.lookAt(jB.clone().addScaledVector(dir, 4));
+  jTmp.rotateY(-(u - 0.5) * 0.07);                  // every shot drifts the same way, so the motion carries across
+  out.quaternion.copy(jTmp.quaternion);
+}
 function stepJourney(dt) {
   if (!J.on) return;
   const N = stations.length - 1;
   J.t = THREE.MathUtils.clamp(J.t, 0, N);
   J.p += (J.t - J.p) * Math.min(1, dt * (TEST ? 60 : 2.4));
-  const c = THREE.MathUtils.clamp(Math.round(J.p), 0, N), st = stations[c];
-  const f = THREE.MathUtils.clamp(J.p - c, -0.5, 0.5);              // -0.5 .. 0.5 within the shot
   if (!J.reach || (!J.bvhOK && bvh)) { J.bvhOK = !!bvh; buildJourney(); }
-  jA.copy(M(...st.cam)); jB.copy(M(...st.look));
-  const dir = jB.clone().sub(jA).normalize();
-  camera.position.copy(jA).addScaledVector(dir, (f + 0.5) * J.reach[c]);   // a slow push-in, one shot per chapter
-  jTmp.position.copy(camera.position); jTmp.lookAt(jB.clone().addScaledVector(dir, 4).add(new THREE.Vector3(0, 0, 0)));
-  jTmp.rotateY(-f * 0.06);
-  camera.quaternion.copy(jTmp.quaternion);
+  const c = THREE.MathUtils.clamp(Math.round(J.p), 0, N);
+  const f = THREE.MathUtils.clamp(J.p - c, -0.5, 0.5);
+  // the shot pair around the nearest boundary: a dissolves into a + 1
+  const a = THREE.MathUtils.clamp(Math.floor(J.p), 0, Math.max(0, N - 1));
+  const k = N > 0 ? THREE.MathUtils.smoothstep(J.p, a + 0.5 - XF, a + 0.5 + XF) : 0;
+  shotPose(a, J.p - a + 0.5, camera);
+  if (k > 0.001 && k < 0.999) { shotPose(a + 1, J.p - a - 0.5, camB); xfadeK = k; }
+  else { if (k >= 0.999) shotPose(a + 1, J.p - a - 0.5, camera); xfadeK = 0; }
   if (c !== J.chapter) { J.chapter = c; tIdx = c; chapterText(c); }
-  const edge = THREE.MathUtils.smoothstep(Math.abs(f), 0.3, 0.5);
-  $('#cut2').style.opacity = c === 0 && f < 0 || c === N && f > 0 ? 0 : edge;    // dip to black between shots
-  $('#tourCard').style.opacity = 1 - THREE.MathUtils.smoothstep(Math.abs(f), 0.1, 0.36);
+  $('#cut2').style.opacity = 0;
+  $('#tourCard').style.opacity = 1 - THREE.MathUtils.smoothstep(Math.abs(f), 0.08, 0.3);
   $('#railDot').style.top = `${(J.p / N) * 100}%`;
 }
 addEventListener('wheel', (e) => {
@@ -317,7 +329,7 @@ function setMode(m) {
   scene.background = D ? new THREE.Color(0x0e0f10) : null;
   for (const o of realThings) o.visible = !D;
   if (m !== 'orbit' && cutKind !== 'none') setCut('none');
-  J.on = false; $('#tourCard').style.opacity = ''; $('#cut2').style.opacity = 0;
+  J.on = false; xfadeK = 0; $('#tourCard').style.opacity = ''; $('#cut2').style.opacity = 0;
   scene.fog.far = D ? 1e5 : 420;
   if (D) { explode = explodeTarget = 0; $('#explodeBtn').textContent = 'Explode'; }
   $('#tourCard').hidden = m !== 'tour';
@@ -692,6 +704,30 @@ const grade = new ShaderPass({
     }`,
 });
 composer.addPass(grade);
+// cross-dissolve between Journey shots: the outgoing shot is rendered first into xfRT, then mixed under the incoming one
+const xfRT = new THREE.WebGLRenderTarget(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio(), { type: THREE.HalfFloatType });
+const xfade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, tPrev: { value: xfRT.texture }, k: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: 'uniform sampler2D tDiffuse; uniform sampler2D tPrev; uniform float k; varying vec2 vUv; void main(){ gl_FragColor = vec4(mix(texture2D(tPrev, vUv).rgb, texture2D(tDiffuse, vUv).rgb, k), 1.0); }',
+});
+xfade.enabled = false; composer.addPass(xfade);
+const xfCopy = new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }', fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ gl_FragColor = texture2D(tDiffuse, vUv); }' });
+const xfQuad = new FullScreenQuad(xfCopy.material);
+function renderFrame(dt) {
+  if (!(mode === 'tour' && xfadeK > 0)) { xfade.enabled = false; composer.render(dt); return; }
+  // pass 1: outgoing shot, kept off screen
+  xfade.enabled = false; composer.renderToScreen = false;
+  composer.render(dt);
+  xfCopy.uniforms.tDiffuse.value = composer.readBuffer.texture;
+  renderer.setRenderTarget(xfRT); xfQuad.render(renderer);
+  // pass 2: incoming shot, mixed over it
+  const keep = camera.position.clone(), keepQ = camera.quaternion.clone();
+  camera.position.copy(camB.position); camera.quaternion.copy(camB.quaternion); camera.updateMatrixWorld();
+  composer.renderToScreen = true; xfade.enabled = true; xfade.uniforms.k.value = xfadeK;
+  composer.render(dt);
+  camera.position.copy(keep); camera.quaternion.copy(keepQ);
+}
 
 // ---------- light / dark: morning 08:00 vs late night 23:00 ----------
 const THEME = { light: { h: 8.5, paper: 0.5 }, dark: { h: 23, paper: 0 } };
@@ -740,14 +776,14 @@ function frame() {
   if (Math.abs(camera.fov - fovTarget) > 0.05) { camera.fov += (fovTarget - camera.fov) * 0.05; camera.updateProjectionMatrix(); }
   grade.uniforms.time.value = (grade.uniforms.time.value + 0.37) % 100;
   updateMap();
-  composer.render(dt);
+  renderFrame(dt);
   requestAnimationFrame(frame);
 }
 frame();
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; fovTarget = fovFor(mode); camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-  composer.setSize(innerWidth, innerHeight); sizeDiag();
+  composer.setSize(innerWidth, innerHeight); xfRT.setSize(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()); sizeDiag();
 });
 // debug hook for automated checks
 window.__2121 = { get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };
