@@ -517,7 +517,9 @@ const lightMats = [], clipMats = [];
 const COVER = { w: 200, h: 80, x0: -14, x1: 86, y0: -16, y1: 24 };   // model metres, 0.5 m cells
 const coverTex = new THREE.DataTexture(new Float32Array(COVER.w * COVER.h * 4).fill(-20), COVER.w, COVER.h, THREE.RGBAFormat, THREE.FloatType);
 coverTex.magFilter = coverTex.minFilter = THREE.NearestFilter;   // linear blending of open(-20)/covered(+4.8) cells made dark wedges on walls coverTex.needsUpdate = true;
-const coverU = { coverTex: { value: coverTex }, coverBox: { value: new THREE.Vector4(COVER.x0, COVER.x1, COVER.y0, COVER.y1) }, coverK: { value: 0.22 }, cutOn: { value: 0 } };
+const openTex = new THREE.DataTexture(new Float32Array(COVER.w * COVER.h * 4).fill(1), COVER.w, COVER.h, THREE.RGBAFormat, THREE.FloatType);
+openTex.magFilter = openTex.minFilter = THREE.LinearFilter;   // how much sky a covered spot still sees sideways (open sides of the forecourt, eaves)
+const coverU = { openTex: { value: openTex }, coverTex: { value: coverTex }, coverBox: { value: new THREE.Vector4(COVER.x0, COVER.x1, COVER.y0, COVER.y1) }, coverK: { value: 0.22 }, cutOn: { value: 0 } };
 function addCover(m) {
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, coverU);
@@ -528,7 +530,7 @@ function addCover(m) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin
       .replace('float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;', '\n#ifdef FLAT_SHADED\nfloat faceDirection = 1.0;\n#else\nfloat faceDirection = dot(vNormal, vViewPosition) >= 0.0 ? 1.0 : -1.0;\n#endif\n'));
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-      varying vec3 vWPos; uniform sampler2D coverTex; uniform vec4 coverBox; uniform float coverK; uniform float cutOn;
+      varying vec3 vWPos; uniform sampler2D coverTex; uniform sampler2D openTex; uniform vec4 coverBox; uniform float coverK; uniform float cutOn;
       float skyOpen(){
         // sample a little off the surface, on the viewer's side, so a wall under the eave reads as outside from outside
         vec3 gn = normalize(cross(dFdx(vWPos), dFdy(vWPos)));
@@ -537,8 +539,11 @@ function addCover(m) {
         vec2 uv = vec2((sp.x - coverBox.x) / (coverBox.y - coverBox.x), (-sp.z - coverBox.z) / (coverBox.w - coverBox.z));
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 1.0;
         vec4 c = texture2D(coverTex, uv);
-        float roof = vWPos.y > -0.6 ? c.r : c.g;          // covering height above this level
-        return smoothstep(-0.25, 0.05, vWPos.y - roof);   // 0 under cover, 1 in the open
+        float up = vWPos.y > -0.6 ? 1.0 : 0.0;
+        float roof = mix(c.g, c.r, up);                   // covering height above this level
+        vec4 o = texture2D(openTex, uv);
+        float side = mix(o.g, o.r, up);                   // sky seen past the open sides, traced on load
+        return max(smoothstep(-0.25, 0.05, vWPos.y - roof), side);
       }`)
       .replace('#include <aomap_fragment>', `#include <aomap_fragment>
       { float k = mix(coverK, 1.0, skyOpen()); reflectedLight.indirectDiffuse *= k; reflectedLight.indirectSpecular *= k; }`)
@@ -546,6 +551,18 @@ function addCover(m) {
       if (cutOn > 0.5 && !gl_FrontFacing) gl_FragColor = vec4(0.56, 0.55, 0.52, 1.0);`);
   };
   m.needsUpdate = true;
+}
+function retag(mesh, box, mat) {         // move the triangles inside a model-space box to another material
+  const g = mesh.geometry, pos = g.attributes.position, v = new THREE.Vector3();
+  const idx = g.index ? Array.from(g.index.array) : [...Array(pos.count).keys()];
+  const inBox = (i) => { v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld); const m = toModel(v);
+    return m.x > box[0][0] && m.x < box[1][0] && m.y > box[0][1] && m.y < box[1][1] && m.z > box[0][2] && m.z < box[1][2]; };
+  const keep = [], move = [];
+  for (let t = 0; t < idx.length; t += 3) (inBox(idx[t]) && inBox(idx[t + 1]) && inBox(idx[t + 2]) ? move : keep).push(idx[t], idx[t + 1], idx[t + 2]);
+  if (!move.length) return 0;
+  g.setIndex([...keep, ...move]); g.clearGroups(); g.addGroup(0, keep.length, 0); g.addGroup(keep.length, move.length, 1);
+  mesh.material = [Array.isArray(mesh.material) ? mesh.material[0] : mesh.material, mat];
+  return move.length / 3;
 }
 function buildCover() {
   const d = coverTex.image.data, up = new THREE.Vector3(0, 1, 0);
@@ -556,6 +573,20 @@ function buildCover() {
     d[k] = a ? a.point.y : -20; d[k + 1] = b ? b.point.y : -20;
   }
   coverTex.needsUpdate = true;
+  // for each covered cell, the share of low and mid sky rays that escape: walls and glass block them
+  const o = openTex.image.data, dirs = [];
+  for (const el of [0.22, 0.6, 1.0]) for (let n = 0; n < 12; n++) { const az = n / 12 * Math.PI * 2; dirs.push(new THREE.Vector3(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el))); }
+  for (let j = 0; j < COVER.h; j++) for (let i = 0; i < COVER.w; i++) {
+    const k = (j * COVER.w + i) * 4;
+    const x = COVER.x0 + (i + 0.5) / COVER.w * (COVER.x1 - COVER.x0), y = COVER.y0 + (j + 0.5) / COVER.h * (COVER.y1 - COVER.y0);
+    for (const [ch, z, roofH] of [[0, 1.4, d[k]], [1, -4.4, d[k + 1]]]) {
+      if (roofH < -19) { o[k + ch] = 1; continue; }
+      const p0 = M(x, y, z); let free = 0;
+      for (const dv of dirs) if (!hit(p0, dv, 40)) free++;
+      o[k + ch] = Math.min(1, (free / dirs.length) * 1.6);
+    }
+  }
+  openTex.needsUpdate = true;
 }
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 loader.load('model/2121.glb', (gltf) => {
@@ -596,6 +627,11 @@ loader.load('model/2121.glb', (gltf) => {
       geos.push(g.index ? g.toNonIndexed() : g);
     }
   });
+  { // the transom panel over the entrance door came in on the steel layer; it is the concrete band (station 3 text, photos)
+    let steel = null, conc = null;
+    root.traverse((o) => { if (o.isMesh && o.name === 'F1_mullions_frames__steel') steel = o; if (o.isMesh && o.name === 'F1_walls_RC__concrete_v') conc = o; });
+    if (steel && conc) retag(steel, [[18.55, 10.3, 2.5], [19.3, 11.95, 3.45]], Array.isArray(conc.material) ? conc.material[0] : conc.material);
+  }
   scene.add(root); realThings.push(...realList, root);
   buildDiagram(root); setSun(+$('#sunRange').value);
   const merged = BufferGeometryUtils.mergeGeometries(geos, false);

@@ -202,3 +202,16 @@ body.light dialog#info,body.light #loader{--bg:#e8e6e1;--ink:#151513;--mute:rgba
 body.light dialog#info p,body.light dialog#info li{color:rgba(21,21,19,.74)}
 body.light #brand,body.light #theme,body.light #infoBtn,body.light #modes,body.light #sun,body.light #cut,body.light #map .lvl,body.light #rail,body.light #toast,body.light #walkHelp,body.light #intro{text-shadow:0 0 16px rgba(0,0,0,.42),0 0 2px rgba(0,0,0,.25)}
 body.light #tourCard{text-shadow:0 0 28px rgba(0,0,0,.6)}
+/* type r2 (Leon 2026-11-23): Bella Carvique Light for titles, everything a step smaller */
+#tourCard h2{font-weight:300;font-size:clamp(26px,2.9vw,40px);letter-spacing:-.005em;line-height:1.08;margin-top:14px}
+dialog#info h2{font-weight:300;font-size:30px}
+#brand .mark{font-size:13px} #brand .sub{font-size:9px;margin-top:8px}
+.link,#modes button,#theme button{font-size:10px}
+#tourCard .idx{font-size:10px} #tourCard p{font-size:12px;line-height:1.72;margin-top:14px}
+#tourCard .row{gap:24px;margin-top:18px}
+#sun output{font-size:10px} #cut,#cut .link,#dayBtn{font-size:9px}
+#map .lvl,#walkHelp,#toast,#loader .hint{font-size:9px}
+#intro p{font-size:12px} #intro .hint{font-size:9px}
+dialog#info{font-size:12px} dialog#info .lede{font-size:19px}
+#theme svg{width:16px;height:16px}
+@media (max-width:720px){#brand .mark{font-size:11px} #modes button{font-size:9px} #tourCard h2{font-size:26px} #tourCard p{font-size:11.5px}}
