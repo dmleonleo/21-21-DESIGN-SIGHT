@@ -12,6 +12,10 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { buildExhibit } from './exhibit.js';
+import { buildRules } from './rules.js';
+import { buildWater } from './water.js';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { MeshBVH } from 'three-mesh-bvh';
 
 const $ = (s) => document.querySelector(s);
@@ -24,7 +28,7 @@ const MAP = { x0: -12, x1: 78, y0: -14, y1: 22 };            // plan image exten
 const canvas = $('#view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 const TEST = location.search.includes('test');
-renderer.setPixelRatio(TEST ? 1 : Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(TEST ? 1 : Math.min(devicePixelRatio, matchMedia('(hover:none)').matches ? 1.5 : 2));   // phones: 1.5x keeps the frame rate
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -45,7 +49,9 @@ new RGBELoader().load('env/kloofendal_48d_partly_cloudy_puresky.hdr', (t) => {
 });
 
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 1500);
-camera.position.copy(M(30, -50, 24));
+const TOUCH = matchMedia('(hover:none)').matches;
+const HOME = () => (innerWidth < innerHeight ? M(29, -92, 52) : M(30, -50, 24));   // portrait phones need to stand further back
+camera.position.copy(HOME());
 
 // sky: a quiet gradient dome. dark zenith, a low glow toward the sun
 const sky = new THREE.Mesh(new THREE.SphereGeometry(1200, 32, 16), new THREE.ShaderMaterial({
@@ -75,7 +81,7 @@ const hemi = new THREE.HemisphereLight(0xc9d3dc, 0x2b2a24, 0.6);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 3.2);
 sun.castShadow = true;
-sun.shadow.mapSize.set(TEST ? 1024 : 4096, TEST ? 1024 : 4096);
+{ const sm = TEST ? 1024 : matchMedia('(hover:none)').matches ? 2048 : 4096; sun.shadow.mapSize.set(sm, sm); }
 const sc = sun.shadow.camera; sc.left = -70; sc.right = 70; sc.top = 50; sc.bottom = -50; sc.near = 1; sc.far = 400;
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.07; sun.shadow.radius = 2.5;
 scene.add(sun, sun.target);
@@ -193,19 +199,92 @@ function floorBelow(p, from = 0.6) {               // p = eye position (three)
   return h ? h.point.y : null;
 }
 
+// ---------- ruler and exhibit notes (Journey stops and Walk) ----------
+const rulerG = new THREE.Group(); scene.add(rulerG);
+const dotG = new THREE.SphereGeometry(0.035, 16, 12), dotM = new THREE.MeshBasicMaterial({ color: 0xff5a1f, depthTest: false, toneMapped: false });
+const lineM = new THREE.LineBasicMaterial({ color: 0xff5a1f, depthTest: false, toneMapped: false });
+let rulerOn = false, rulerPts = [];
+const SHAKU = 10 / 33;
+function rulerClear() { rulerPts = []; rulerG.clear(); }
+function rulerShow(t) { const o = $('#rulerOut'); o.textContent = t; o.hidden = !t; }
+function setRuler(on) {
+  rulerOn = on; $('#rulerBtn').classList.toggle('on', on); rulerClear();
+  rulerShow(on ? (matchMedia('(hover:none)').matches ? 'Tap two points' : 'Click two points') : '');
+}
+$('#rulerBtn').addEventListener('click', () => setRuler(!rulerOn));
+function note(t) { const el = $('#note'); el.textContent = t; el.hidden = !t; clearTimeout(note.t); if (t) note.t = setTimeout(() => (el.hidden = true), 7000); }
+const pickRay = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pick(e) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  pickRay.setFromCamera(ndc, camera);
+  return pickRay;
+}
+let tapStart = null;
+canvas.addEventListener('pointerdown', (e) => { tapStart = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+canvas.addEventListener('pointerup', (e) => {
+  if (!tapStart || (mode !== 'tour' && mode !== 'walk')) return;
+  const moved = Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y), dt = performance.now() - tapStart.t; tapStart = null;
+  if (moved > 6 || dt > 600) return;
+  const rc = pick(e), h = hit(rc.ray.origin, rc.ray.direction, 200);
+  if (rulerOn) {
+    if (!h) return;
+    if (rulerPts.length === 2) rulerClear();
+    const p = h.point.clone(); rulerPts.push(p);
+    const d = new THREE.Mesh(dotG, dotM); d.position.copy(p); d.renderOrder = 10; rulerG.add(d);
+    if (rulerPts.length === 2) {
+      const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rulerPts), lineM); ln.renderOrder = 10; rulerG.add(ln);
+      const m = rulerPts[0].distanceTo(rulerPts[1]);
+      rulerShow(`${m < 1 ? (m * 100).toFixed(1) + ' cm' : m.toFixed(2) + ' m'}   ·   ${(m / SHAKU).toFixed(m / SHAKU < 10 ? 2 : 1)} shaku`);
+    } else rulerShow('And the second point');
+    return;
+  }
+  if (!exhibit) return;
+  const hs = rc.intersectObject(exhibit.group, true);
+  for (const x of hs) {
+    if (h && x.distance > h.distance + 0.08) break;              // behind a wall
+    let o = x.object; while (o && !o.userData.info && !o.userData.onTap) o = o.parent;
+    if (o) { note(o.userData.onTap ? o.userData.onTap() : o.userData.info); return; }
+  }
+});
+
 // ---------- modes ----------
 const fovFor = (m) => { const base = { orbit: 38, tour: 50, walk: 62, diagram: 38 }[m]; const a = innerWidth / innerHeight;
   return a < 1 ? Math.min(base * THREE.MathUtils.clamp(0.8 / a, 1, 1.75), 88) : base; };
 const realThings = [];
 let mode = 'orbit', fly = null, fovTarget = fovFor('orbit');
 camera.fov = fovTarget; camera.updateProjectionMatrix();
-const stations = await (await fetch('data/stations.json')).json();
+const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), measure: await (await fetch('data/exhibit.json')).json(), rules: await (await fetch('data/rules.json')).json(), water: await (await fetch('data/water.json')).json() };
+const SHOWS = { measure: 'Measure the Sight', rules: 'Read the Building', water: 'Still Water' };
+let program = 'building', stations = PROGRAMS.building;
+let show = (() => { try { return SHOWS[localStorage.getItem('2121.show')] ? localStorage.getItem('2121.show') : 'measure'; } catch (e) { return 'measure'; } })();
+const shows = {}, bvhs = {};
+function setShow(name) {                      // one exhibition is installed at a time: its objects, its collisions
+  show = name; try { localStorage.setItem('2121.show', name); } catch (e) {}
+  exhibit = shows[name] || null;
+  if (bvhs[name]) bvh = bvhs[name];
+  showVis();
+  if (rulerOn) rulerClear();
+}
+function showVis() { for (const [k, v] of Object.entries(shows)) v.group.visible = k === show && mode !== 'diagram'; }
+function openChooser() { $('#chooser').hidden = false; $('#chooser').querySelectorAll('button[data-show]').forEach((b) => b.classList.toggle('on', b.dataset.show === show)); }
+$('#chooser').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-show]');
+  if (b) { $('#chooser').hidden = true; setMode('show:' + b.dataset.show); return; }
+  if (e.target.id === 'chooser' || e.target.closest('.x')) $('#chooser').hidden = true;
+});
+function setProgram(p) {
+  if (p === program) return;
+  program = p; stations = PROGRAMS[p]; J.reach = null; J.t = J.p = 0; J.chapter = -1;
+  $('#rail').querySelectorAll('button').forEach((b) => b.remove());
+  $('#tKick').textContent = SHOWS[p] || '';
+}
 
 let tIdx = 0, tAuto = null;
 
 
 // ---------- Journey: one continuous take, driven by scroll ----------
-const J = { p: 0, t: 0, pos: null, look: null, chapter: -1, on: false };
+const J = { p: 0, t: 0, pos: null, look: null, chapter: -1, on: false, input: 0 };
 function buildJourney() {
   J.reach = stations.map((st) => {                       // how far each shot may dolly forward before meeting a wall
     const c = M(...st.cam), d = M(...st.look).sub(c).normalize();
@@ -213,42 +292,64 @@ function buildJourney() {
     return h ? Math.max(0, Math.min(1.8, h.distance - 2.2)) : 1.8;
   });
   const rail = $('#rail');
-  if (!rail.children.length || rail.children.length < 2) stations.forEach((s, i) => { const b = document.createElement('button'); b.style.top = `${(i / (stations.length - 1)) * 100}%`; b.title = s.title; b.onclick = () => { stopAuto(); J.t = i; }; rail.appendChild(b); });
+  if (!rail.children.length || rail.children.length < 2) stations.forEach((s, i) => { const b = document.createElement('button'); b.style.top = `${(i / (stations.length - 1)) * 100}%`; b.title = s.title; b.dataset.t = s.title; b.onclick = () => { stopAuto(); J.t = i; }; rail.appendChild(b); });
 }
 function chapterText(i) {
   const s = stations[i];
   $('#tIdx').textContent = String(i + 1).padStart(2, '0');
   $('#tOf').textContent = `/ ${String(stations.length).padStart(2, '0')}`;
   $('#tTitle').textContent = s.title; $('#tText').textContent = s.text;
+  const last = i === stations.length - 1;
+  $('#tPrev').disabled = i === 0;
+  $('#tNext').textContent = last ? 'Walk on' : 'Next'; $('#tNext').classList.toggle('end', last);
+  if (!tAuto) $('#tPlay').textContent = last ? 'Again' : 'Play';
 }
 const jA = new THREE.Vector3(), jB = new THREE.Vector3(), jTmp = new THREE.PerspectiveCamera();
+const camB = new THREE.PerspectiveCamera();          // the incoming shot during a dissolve
+const XF = 0.22;                                     // half-width of a dissolve, in chapters
+let xfadeK = 0;
+function shotPose(i, u, out) {                       // u: 0..1 within shot i, runs past both ends during dissolves
+  const st = stations[i];
+  jA.copy(M(...st.cam)); jB.copy(M(...st.look));
+  const dir = jB.clone().sub(jA).normalize();
+  out.position.copy(jA).addScaledVector(dir, THREE.MathUtils.clamp(u, -0.2, 1.22) * J.reach[i]);   // slow push-in that never stops at the cut
+  jTmp.position.copy(out.position); jTmp.lookAt(jB.clone().addScaledVector(dir, 4));
+  jTmp.rotateY(-(u - 0.5) * 0.07);                  // every shot drifts the same way, so the motion carries across
+  out.quaternion.copy(jTmp.quaternion);
+}
 function stepJourney(dt) {
   if (!J.on) return;
   const N = stations.length - 1;
   J.t = THREE.MathUtils.clamp(J.t, 0, N);
+  if (!tAuto && performance.now() - J.input > 900) J.t += (Math.round(J.t) - J.t) * Math.min(1, dt * 2.2);   // come to rest on a shot, never mid-dissolve
   J.p += (J.t - J.p) * Math.min(1, dt * (TEST ? 60 : 2.4));
-  const c = THREE.MathUtils.clamp(Math.round(J.p), 0, N), st = stations[c];
-  const f = THREE.MathUtils.clamp(J.p - c, -0.5, 0.5);              // -0.5 .. 0.5 within the shot
+  document.querySelectorAll('#rail button').forEach((b, i) => b.classList.toggle('on', i === Math.round(J.p)));
   if (!J.reach || (!J.bvhOK && bvh)) { J.bvhOK = !!bvh; buildJourney(); }
-  jA.copy(M(...st.cam)); jB.copy(M(...st.look));
-  const dir = jB.clone().sub(jA).normalize();
-  camera.position.copy(jA).addScaledVector(dir, (f + 0.5) * J.reach[c]);   // a slow push-in, one shot per chapter
-  jTmp.position.copy(camera.position); jTmp.lookAt(jB.clone().addScaledVector(dir, 4).add(new THREE.Vector3(0, 0, 0)));
-  jTmp.rotateY(-f * 0.06);
-  camera.quaternion.copy(jTmp.quaternion);
+  const c = THREE.MathUtils.clamp(Math.round(J.p), 0, N);
+  const f = THREE.MathUtils.clamp(J.p - c, -0.5, 0.5);
+  // the shot pair around the nearest boundary: a dissolves into a + 1
+  const a = THREE.MathUtils.clamp(Math.floor(J.p), 0, Math.max(0, N - 1));
+  const k = N > 0 ? THREE.MathUtils.smoothstep(J.p, a + 0.5 - XF, a + 0.5 + XF) : 0;
+  shotPose(a, J.p - a + 0.5, camera);
+  if (k > 0.001 && k < 0.999) { shotPose(a + 1, J.p - a - 0.5, camB); xfadeK = k; }
+  else { if (k >= 0.999) shotPose(a + 1, J.p - a - 0.5, camera); xfadeK = 0; }
   if (c !== J.chapter) { J.chapter = c; tIdx = c; chapterText(c); }
-  const edge = THREE.MathUtils.smoothstep(Math.abs(f), 0.3, 0.5);
-  $('#cut2').style.opacity = c === 0 && f < 0 || c === N && f > 0 ? 0 : edge;    // dip to black between shots
-  $('#tourCard').style.opacity = 1 - THREE.MathUtils.smoothstep(Math.abs(f), 0.1, 0.36);
+  $('#cut2').style.opacity = 0;
+  $('#tourCard').style.opacity = 1 - THREE.MathUtils.smoothstep(Math.abs(f), 0.08, 0.3);
   $('#railDot').style.top = `${(J.p / N) * 100}%`;
 }
 addEventListener('wheel', (e) => {
   if (mode !== 'tour' || !J.on) return;
-  stopAuto(); J.t += e.deltaY * 0.0016;
+  stopAuto(); J.input = performance.now(); J.t += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * 0.0016;
 }, { passive: true });
 { let ty = null;
-  canvas.addEventListener('touchstart', (e) => { if (mode === 'tour') ty = e.touches[0].clientY; }, { passive: true });
-  canvas.addEventListener('touchmove', (e) => { if (mode !== 'tour' || ty === null) return; stopAuto(); J.t += (ty - e.touches[0].clientY) * 0.006; ty = e.touches[0].clientY; }, { passive: true });
+  let tx = null;
+  canvas.addEventListener('touchstart', (e) => { if (mode === 'tour') { ty = e.touches[0].clientY; tx = e.touches[0].clientX; } }, { passive: true });
+  canvas.addEventListener('touchmove', (e) => {                  // swipe up or left: forward
+    if (mode !== 'tour' || ty === null) return; stopAuto(); J.input = performance.now();
+    const dy = ty - e.touches[0].clientY, dx = tx - e.touches[0].clientX;
+    J.t += (Math.abs(dx) > Math.abs(dy) ? dx : dy) * 0.006; ty = e.touches[0].clientY; tx = e.touches[0].clientX;
+  }, { passive: true });
   canvas.addEventListener('touchend', () => (ty = null));
 }
 
@@ -300,38 +401,53 @@ function stepDay(dt) {
 }
 
 function setMode(m) {
-  mode = m;
-  document.body.className = m + (document.body.classList.contains('light') ? ' light' : '');
+  const prev = mode;
+  if (m === 'exhibit') { openChooser(); return; }
+  if (m.startsWith('show:')) { const n = m.slice(5); setShow(n); setProgram(n); J.t = 0; m = 'tour'; } else if (m === 'tour') setProgram('building');
+  mode = m; hideIntro();
+  document.body.className = m + (document.body.classList.contains('light') ? ' light' : '') + (m === 'tour' && program !== 'building' ? ' exhibit' : '');
   fovTarget = fovFor(m);
-  document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+  const shown = m === 'tour' && program !== 'building' ? 'exhibit' : m;
+  if (rulerOn && m !== 'tour' && m !== 'walk') setRuler(false);
+  note('');
+  document.querySelectorAll('#modes [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === shown));
   orbit.enabled = m === 'orbit';
   const D = m === 'diagram';
   diagCtl.enabled = D; diagRoot.visible = D; renderPass.camera = D ? diagCam : camera; bloom.enabled = !D;
   scene.background = D ? new THREE.Color(0x0e0f10) : null;
   for (const o of realThings) o.visible = !D;
+  showVis();
   if (m !== 'orbit' && cutKind !== 'none') setCut('none');
-  J.on = false; $('#tourCard').style.opacity = ''; $('#cut2').style.opacity = 0;
+  J.on = false; xfadeK = 0; $('#tourCard').style.opacity = ''; $('#cut2').style.opacity = 0;
   scene.fog.far = D ? 1e5 : 420;
-  if (D) { explode = explodeTarget = 0; $('#explodeBtn').textContent = 'Explode'; }
+  if (D) { explode = explodeTarget = 0; $('#explodeRange').value = 0; }
   $('#tourCard').hidden = m !== 'tour';
   $('#walkHelp').hidden = m !== 'walk';
   $('#stick').hidden = !(m === 'walk' && matchMedia('(hover:none)').matches);
-  stopAuto();
+  stopAuto(); AX.on = false; if (AX.ready) axisUI();
   if (m === 'orbit') {
     const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
     const tgt = M(28, 3, 0);
-    if (camera.position.y < 3) { flyTo(M(30, -50, 24), tgt, () => orbit.target.copy(tgt)); }
+    if (camera.position.y < 3) { flyTo(HOME(), tgt, () => orbit.target.copy(tgt)); }
     else orbit.target.copy(tgt);
   } else if (m === 'tour') {
     const i = THREE.MathUtils.clamp(Math.round(J.t), 0, stations.length - 1), s = stations[i];
     J.t = J.p = i; J.chapter = -1;
     flyTo(M(...s.cam), M(...s.look), () => { J.on = true; });
     chapterText(i);
-    if (!TEST) toast('Scroll to move through the building');
+    if (!TEST) toast(TOUCH ? 'Swipe up to move through the building' : 'Scroll to move through the building');
   } else if (m === 'walk') {
-    const s = stations.find((x) => x.id === 'plaza');
-    flyTo(M(...s.cam), M(...s.look));
-    toast('Walk from the plaza');
+    const fl = prev === 'tour' ? floorBelow(camera.position, 0.2) : null;
+    if (fl !== null && Math.abs(camera.position.y - EYE - fl) < 1.2) {     // the journey ends indoors: walk on from that spot
+      const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+      const pos = camera.position.clone(); pos.y = fl + EYE;
+      flyTo(pos, pos.clone().add(fwd.multiplyScalar(5)));
+      toast('Walk on from here');
+    } else {
+      const s = stations.find((x) => x.id === 'plaza');
+      flyTo(M(...s.cam), M(...s.look));
+      toast('Walk from the plaza');
+    }
   }
 }
 document.querySelectorAll('#modes [data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
@@ -365,11 +481,12 @@ function goStation(i) {
   for (const el of [$('#tTitle'), $('#tText')]) { el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade'); }
   flyTo(M(...s.cam), M(...s.look));
 }
-function stopAuto() { if (tAuto) { clearInterval(tAuto); tAuto = null; $('#tPlay').textContent = 'Play'; } }
+function stopAuto() { if (tAuto) { clearInterval(tAuto); tAuto = null; $('#tPlay').textContent = Math.round(J.t) >= stations.length - 1 ? 'Again' : 'Play'; } }
 $('#tPrev').onclick = () => { stopAuto(); goStation(Math.round(J.t) - 1); };
-$('#tNext').onclick = () => { stopAuto(); goStation(Math.round(J.t) + 1); };
+$('#tNext').onclick = () => { stopAuto(); if (Math.round(J.t) >= stations.length - 1) return setMode('walk'); goStation(Math.round(J.t) + 1); };
 $('#tPlay').onclick = () => {
   if (tAuto) return stopAuto();
+  if (Math.round(J.t) >= stations.length - 1) { J.t = J.p = 0; J.chapter = -1; }   // from the end: start over, no rewind blur
   $('#tPlay').textContent = 'Pause';
   tAuto = setInterval(() => { J.t += 0.0022; if (J.t >= stations.length - 1) stopAuto(); }, 16);
 };
@@ -381,6 +498,9 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (mode === 'tour' && /ArrowRight|ArrowDown|Space/.test(e.code)) { stopAuto(); goStation(Math.round(J.t) + 1); }
   if (mode === 'tour' && /ArrowLeft|ArrowUp/.test(e.code)) { stopAuto(); goStation(Math.round(J.t) - 1); }
+  const mk = { Digit1: 'tour', Digit2: 'orbit', Digit3: 'walk', Digit4: 'diagram' }[e.code];
+  if (mk && !e.metaKey && !e.ctrlKey && !$('#info').open) setMode(mk);
+  if (e.code === 'Escape') hideIntro();
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -407,6 +527,8 @@ function stepWalk(dt) {
   if (keys.has('KeyD') || keys.has('ArrowRight')) r += 1;
   if (keys.has('KeyA') || keys.has('ArrowLeft')) r -= 1;
   f -= stick.y; r += stick.x;
+  if (AX.on && (f || r)) { AX.on = false; axisUI(); }
+  if (AX.on) return stepAxis(dt);
   const speed = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 4.2 : 1.9);
   const fwd = new THREE.Vector3(-Math.sin(look.yaw), 0, -Math.cos(look.yaw));
   const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
@@ -434,6 +556,94 @@ function stepWalk(dt) {
     p.y += (target - p.y) * (target < p.y ? 1 - Math.exp(-dt * 9) : 1 - Math.exp(-dt * 14));
   }
 }
+
+
+// ---------- the axis: one continuous walk through the building, scrubbable, drawn on the plan ----------
+// model XY waypoints, checked against the collision mesh (a named point is a chapter on the axis)
+const AXIS_PTS = [[8, -3, 'Plaza'], [11.5, 0.5], [14.2, 4.6], [16.6, 7.3, 'Forecourt'], [18.4, 9.3], [19.0, 10.5], [20.6, 11.3], [24, 13, 'Lobby'], [32, 14.6], [38.5, 16.6], [42.6, 17.0, 'Stair'], [49.2, 17.0],
+  [51.4, 16.6], [51.6, 15.2], [48.5, 15.0], [45, 15.0], [43.2, 13.8], [42.4, 11.5], [40.3, 8.1], [37, 6.8, 'Gallery 1'], [33.8, 5.6], [32.6, 1.6], [35.4, -0.6], [37.6, 2.6], [38.6, 5.6],
+  [39.6, 5.9], [41.6, 3.2], [45.1, -3, 'Gallery 2'], [52, -3.2], [60, -3], [66, 2], [60, 3.6], [56, 6, 'Court']];
+const AX = { on: false, s: 0, len: 0, pts: [], fz: [], chapters: [], lookHold: 0, yaw: 0, pitch: 0, ready: false, pause: 0 };
+function buildAxis() {
+  const curve = new THREE.CatmullRomCurve3(AXIS_PTS.map(([x, y]) => new THREE.Vector3(x, y, 0)), false, 'centripetal', 0.5);
+  AX.len = curve.getLength();
+  const n = Math.ceil(AX.len / 0.2);
+  AX.pts = curve.getSpacedPoints(n);
+  let z = 0;
+  AX.fz = AX.pts.map((q) => { const h = hit(M(q.x, q.y, z + 0.6), DOWN, 12); if (h) z = toModel(h.point).z; return z; });
+  // chapters: arc position of each named waypoint
+  AX.chapters = AXIS_PTS.map((w, i) => w[2] ? { name: w[2], s: (() => { let best = 0, bd = 1e9; AX.pts.forEach((q, k) => { const d = (q.x - w[0]) ** 2 + (q.y - w[1]) ** 2; if (d < bd) { bd = d; best = k; } }); return best / n; })() } : null).filter(Boolean);
+  AX.ready = true;
+  // the route on the plan, split by level
+  const seg = (lv) => { const out = []; let cur = []; AX.pts.forEach((q, k) => { const on = (AX.fz[k] < -1.3) === (lv === 'B1'); if (on) cur.push(q); else if (cur.length) { out.push(cur); cur = []; } }); if (cur.length) out.push(cur); return out.map((c) => c.map((q) => `${(q.x - MAP.x0).toFixed(2)},${(MAP.y1 - q.y).toFixed(2)}`).join(' ')); };
+  const svg = $('#route');
+  svg.setAttribute('viewBox', `0 0 ${MAP.x1 - MAP.x0} ${MAP.y1 - MAP.y0}`);
+  svg.innerHTML = ['1F', 'B1'].map((lv) => seg(lv).map((d) => `<polyline class="l${lv}" points="${d}"/>`).join('')).join('') + '<polyline id="routeDone" points=""/>';
+  const ticks = $('#axTicks'); ticks.innerHTML = '';
+  for (const c of AX.chapters) { const b = document.createElement('button'); b.style.left = `${c.s * 100}%`; b.title = c.name; b.dataset.n = c.name; b.onclick = () => axisGo(c.s, true); ticks.appendChild(b); }
+}
+function axisAt(u) {                               // u 0..1 -> {p (three, eye), i}
+  const n = AX.pts.length - 1, f = THREE.MathUtils.clamp(u, 0, 1) * n, i = Math.min(n - 1, Math.floor(f)), t = f - i;
+  const a = AX.pts[i], b = AX.pts[i + 1];
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: AX.fz[i] + (AX.fz[i + 1] - AX.fz[i]) * t, i };
+}
+function axisChapter(u) { let c = AX.chapters[0]; for (const k of AX.chapters) if (u + 1e-4 >= k.s) c = k; return c; }
+function axisUI() {
+  $('#axRange').value = Math.round(AX.s * 1000);
+  $('#axPlay').textContent = AX.on ? 'Pause' : AX.s >= 0.999 ? 'Again' : AX.s > 0.001 ? 'Walk on' : 'Walk the axis';
+  $('#axOut').textContent = axisChapter(AX.s).name;
+  $('#axTicks').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.n === axisChapter(AX.s).name));
+  const n = Math.round(AX.s * (AX.pts.length - 1)), lvB1 = level === 'B1';
+  $('#routeDone').setAttribute('points', AX.pts.slice(0, n + 1).filter((q, k) => (AX.fz[k] < -1.3) === lvB1).map((q) => `${(q.x - MAP.x0).toFixed(2)},${(MAP.y1 - q.y).toFixed(2)}`).join(' '));
+}
+function axisPlace(snap) {
+  const a = axisAt(AX.s), ahead = (d) => axisAt(AX.s + d / AX.len);
+  const p = M(a.x, a.y, a.z + EYE);
+  if (snap) camera.position.copy(p); else { camera.position.x = p.x; camera.position.z = p.z; camera.position.y += (p.y - camera.position.y) * 0.18; }
+  // look along the axis: average a few points ahead, tilt with the floor (stairs look down)
+  let dx = 0, dy = 0, dz = 0;
+  for (const d of [2.5, 3.5, 4.5, 5.5]) { const q = ahead(d); dx += q.x - a.x; dy += q.y - a.y; dz += q.z - a.z; }
+  const yaw = Math.atan2(-dx, dy);                 // three: forward = (-sin yaw, 0, -cos yaw); model y = -three z
+  const pitch = THREE.MathUtils.clamp(Math.atan2(dz, Math.hypot(dx, dy)) * 0.8 - 0.03, -0.45, 0.3);
+  if (snap || performance.now() > AX.lookHold) {
+    const k = snap ? 1 : 0.035;
+    let dyaw = yaw - look.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
+    look.yaw += dyaw * k; look.pitch += (pitch - look.pitch) * k;
+  }
+}
+function axisGo(u, snap) {
+  if (!AX.ready) return;
+  if (mode !== 'walk') setMode('walk');
+  fly = null; AX.s = THREE.MathUtils.clamp(u, 0, 1); axisPlace(snap); applyLook(); axisUI();
+}
+function axisPlay(on) {
+  if (!AX.ready) return;
+  if (on && AX.s >= 0.999) AX.s = 0;
+  if (on) {
+    // join the axis at the nearest point; glide there first when far
+    const m = toModel(camera.position); let best = AX.s, bd = 1e9;
+    AX.pts.forEach((q, k) => { const d = (q.x - m.x) ** 2 + (q.y - m.y) ** 2 + ((AX.fz[k] + EYE - m.z) * 3) ** 2; if (d < bd) { bd = d; best = k / (AX.pts.length - 1); } });
+    if (AX.s < 0.001 && bd > 4) best = 0;
+    AX.s = best;
+    if (bd > 4 || best === 0) { const a = axisAt(AX.s), q = axisAt(AX.s + 4 / AX.len); fly = null; flyTo(M(a.x, a.y, a.z + EYE), M(q.x, q.y, q.z + EYE)); }
+  }
+  AX.on = on; AX.pause = 0; axisUI();
+}
+function stepAxis(dt) {
+  if (!AX.on || fly) return;
+  const a = axisAt(AX.s), q = axisAt(AX.s + 1 / AX.len);
+  const steep = Math.abs(q.z - a.z) > 0.25;
+  // linger a moment at each chapter
+  const c = AX.chapters.find((k) => k.s > 0 && Math.abs(k.s - AX.s) * AX.len < 0.05);
+  if (c && AX.pause === 0) AX.pause = 1.6;
+  if (AX.pause > 0) { AX.pause -= dt; if (AX.pause <= 0) { AX.pause = -1; AX.s += 0.1 / AX.len; } }
+  else { AX.s += (steep ? 0.75 : 1.2) * dt / AX.len; if (!c) AX.pause = 0; }
+  if (AX.s >= 1) { AX.s = 1; AX.on = false; }
+  axisPlace(false); axisUI();
+}
+$('#axPlay').onclick = () => axisPlay(!AX.on);
+$('#axRange').addEventListener('input', (e) => { AX.on = false; axisGo(e.target.value / 1000, true); });
+canvas.addEventListener('pointerdown', () => { AX.lookHold = performance.now() + 2600; });
 
 // ---------- minimap ----------
 const you = $('#you');
@@ -465,6 +675,21 @@ $('#map').addEventListener('click', (e) => {
 // ---------- info / toast ----------
 $('#infoBtn').onclick = () => $('#info').showModal();
 $('#infoClose').onclick = () => $('#info').close();
+// first visit: one quiet invitation, gone at the first touch
+const intro = $('#intro');
+let introOn = false;
+function hideIntro() { if (!introOn) return; introOn = false; intro.classList.remove('on'); try { localStorage.setItem('2121.seen', '1'); } catch (e) {} }
+function showIntro() {
+  let seen = null; try { seen = localStorage.getItem('2121.seen'); } catch (e) {}
+  if (TEST && !/intro/.test(location.search)) return;
+  if (seen && !/intro/.test(location.search)) return;
+  if (TOUCH) $('#introHint').textContent = 'Drag to turn. Pinch to zoom.';
+  introOn = true; setTimeout(() => introOn && intro.classList.add('on'), 900);
+  setTimeout(hideIntro, 16000);
+}
+$('#introGo').onclick = () => { J.t = 0; setMode('tour'); };
+$('#introSkip').onclick = hideIntro;
+canvas.addEventListener('pointerdown', () => setTimeout(hideIntro, 1200));
 let toastT;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), 2600); }
 
@@ -474,7 +699,9 @@ const lightMats = [], clipMats = [];
 const COVER = { w: 200, h: 80, x0: -14, x1: 86, y0: -16, y1: 24 };   // model metres, 0.5 m cells
 const coverTex = new THREE.DataTexture(new Float32Array(COVER.w * COVER.h * 4).fill(-20), COVER.w, COVER.h, THREE.RGBAFormat, THREE.FloatType);
 coverTex.magFilter = coverTex.minFilter = THREE.NearestFilter;   // linear blending of open(-20)/covered(+4.8) cells made dark wedges on walls coverTex.needsUpdate = true;
-const coverU = { coverTex: { value: coverTex }, coverBox: { value: new THREE.Vector4(COVER.x0, COVER.x1, COVER.y0, COVER.y1) }, coverK: { value: 0.22 }, cutOn: { value: 0 } };
+const openTex = new THREE.DataTexture(new Float32Array(COVER.w * COVER.h * 4).fill(1), COVER.w, COVER.h, THREE.RGBAFormat, THREE.FloatType);
+openTex.magFilter = openTex.minFilter = THREE.LinearFilter;   // how much sky a covered spot still sees sideways (open sides of the forecourt, eaves)
+const coverU = { openTex: { value: openTex }, coverTex: { value: coverTex }, coverBox: { value: new THREE.Vector4(COVER.x0, COVER.x1, COVER.y0, COVER.y1) }, coverK: { value: 0.22 }, cutOn: { value: 0 } };
 function addCover(m) {
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, coverU);
@@ -485,7 +712,7 @@ function addCover(m) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin
       .replace('float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;', '\n#ifdef FLAT_SHADED\nfloat faceDirection = 1.0;\n#else\nfloat faceDirection = dot(vNormal, vViewPosition) >= 0.0 ? 1.0 : -1.0;\n#endif\n'));
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-      varying vec3 vWPos; uniform sampler2D coverTex; uniform vec4 coverBox; uniform float coverK; uniform float cutOn;
+      varying vec3 vWPos; uniform sampler2D coverTex; uniform sampler2D openTex; uniform vec4 coverBox; uniform float coverK; uniform float cutOn;
       float skyOpen(){
         // sample a little off the surface, on the viewer's side, so a wall under the eave reads as outside from outside
         vec3 gn = normalize(cross(dFdx(vWPos), dFdy(vWPos)));
@@ -494,8 +721,11 @@ function addCover(m) {
         vec2 uv = vec2((sp.x - coverBox.x) / (coverBox.y - coverBox.x), (-sp.z - coverBox.z) / (coverBox.w - coverBox.z));
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 1.0;
         vec4 c = texture2D(coverTex, uv);
-        float roof = vWPos.y > -0.6 ? c.r : c.g;          // covering height above this level
-        return smoothstep(-0.25, 0.05, vWPos.y - roof);   // 0 under cover, 1 in the open
+        float up = vWPos.y > -0.6 ? 1.0 : 0.0;
+        float roof = mix(c.g, c.r, up);                   // covering height above this level
+        vec4 o = texture2D(openTex, uv);
+        float side = mix(o.g, o.r, up);                   // sky seen past the open sides, traced on load
+        return max(smoothstep(-0.25, 0.05, vWPos.y - roof), side);
       }`)
       .replace('#include <aomap_fragment>', `#include <aomap_fragment>
       { float k = mix(coverK, 1.0, skyOpen()); reflectedLight.indirectDiffuse *= k; reflectedLight.indirectSpecular *= k; }`)
@@ -503,6 +733,49 @@ function addCover(m) {
       if (cutOn > 0.5 && !gl_FrontFacing) gl_FragColor = vec4(0.56, 0.55, 0.52, 1.0);`);
   };
   m.needsUpdate = true;
+}
+function retag(mesh, box, mat) {         // move the triangles inside a model-space box to another material
+  const g = mesh.geometry, pos = g.attributes.position, v = new THREE.Vector3();
+  const idx = g.index ? Array.from(g.index.array) : [...Array(pos.count).keys()];
+  const inBox = (i) => { v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld); const m = toModel(v);
+    return m.x > box[0][0] && m.x < box[1][0] && m.y > box[0][1] && m.y < box[1][1] && m.z > box[0][2] && m.z < box[1][2]; };
+  const keep = [], move = [];
+  for (let t = 0; t < idx.length; t += 3) (inBox(idx[t]) && inBox(idx[t + 1]) && inBox(idx[t + 2]) ? move : keep).push(idx[t], idx[t + 1], idx[t + 2]);
+  if (!move.length) return 0;
+  g.setIndex([...keep, ...move]); g.clearGroups(); g.addGroup(0, keep.length, 0); g.addGroup(keep.length, move.length, 1);
+  mesh.material = [Array.isArray(mesh.material) ? mesh.material[0] : mesh.material, mat];
+  return move.length / 3;
+}
+// F1 walls were modelled to stop at GL 0, but the forecourt paving falls away from the building, so their feet hover.
+// Drop every wall-foot vertex that has open ground below it (within 1.2 m) down to that ground.
+function groundWalls(root) {
+  const ground = [], walls = [];
+  root.traverse((o) => { if (!o.isMesh) return; if (/__(stone|lawn|paving|ground)$/.test(o.name) || /lawn/.test(o.name)) ground.push(o); if (/^F1_walls_RC__concrete/.test(o.name)) walls.push(o); });
+  const rc = new THREE.Raycaster(); rc.far = 1.2; const v = new THREE.Vector3(), inv = new THREE.Matrix4();
+  let moved = 0;
+  for (const w of walls) {
+    const src = w.geometry.attributes.position, f = new Float32Array(src.count * 3);
+    for (let i = 0; i < src.count; i++) { f[i * 3] = src.getX(i); f[i * 3 + 1] = src.getY(i); f[i * 3 + 2] = src.getZ(i); }
+    const pos = new THREE.BufferAttribute(f, 3); inv.copy(w.matrixWorld).invert();
+    const cache = new Map();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(w.matrixWorld);
+      if (Math.abs(v.y) > 0.03) continue;                              // three y = model Z: only feet at GL 0
+      const key = `${v.x.toFixed(3)},${v.z.toFixed(3)}`;
+      let gy = cache.get(key);
+      if (gy === undefined) {
+        gy = null;
+        rc.set(new THREE.Vector3(v.x, v.y - 0.02, v.z), DOWN);
+        const h = rc.intersectObjects(ground, false)[0];
+        if (h && h.point.y < v.y - 0.04) gy = h.point.y - 0.03;
+        cache.set(key, gy);
+      }
+      if (gy === null) continue;
+      v.y = gy; v.applyMatrix4(inv); pos.setXYZ(i, v.x, v.y, v.z); moved++;
+    }
+    if (moved) { w.geometry.setAttribute('position', pos); w.geometry.computeBoundingBox(); w.geometry.computeBoundingSphere(); }
+  }
+  return moved;
 }
 function buildCover() {
   const d = coverTex.image.data, up = new THREE.Vector3(0, 1, 0);
@@ -513,12 +786,28 @@ function buildCover() {
     d[k] = a ? a.point.y : -20; d[k + 1] = b ? b.point.y : -20;
   }
   coverTex.needsUpdate = true;
+  // for each covered cell, the share of low and mid sky rays that escape: walls and glass block them
+  const o = openTex.image.data, dirs = [];
+  for (const el of [0.22, 0.6, 1.0]) for (let n = 0; n < 12; n++) { const az = n / 12 * Math.PI * 2; dirs.push(new THREE.Vector3(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el))); }
+  for (let j = 0; j < COVER.h; j++) for (let i = 0; i < COVER.w; i++) {
+    const k = (j * COVER.w + i) * 4;
+    const x = COVER.x0 + (i + 0.5) / COVER.w * (COVER.x1 - COVER.x0), y = COVER.y0 + (j + 0.5) / COVER.h * (COVER.y1 - COVER.y0);
+    for (const [ch, z, roofH] of [[0, 1.4, d[k]], [1, -4.4, d[k + 1]]]) {
+      if (roofH < -19) { o[k + ch] = 1; continue; }
+      const p0 = M(x, y, z); let free = 0;
+      for (const dv of dirs) if (!hit(p0, dv, 40)) free++;
+      o[k + ch] = Math.min(1, (free / dirs.length) * 1.6);
+    }
+  }
+  openTex.needsUpdate = true;
 }
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-loader.load('model/2121.glb', (gltf) => {
+let exhibit = null;
+loader.load('model/2121.glb', async (gltf) => {
   const root = gltf.scene;
   const geos = [];
   root.updateMatrixWorld(true);
+  groundWalls(root);
   root.traverse((o) => {
     if (!o.isMesh) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -553,13 +842,31 @@ loader.load('model/2121.glb', (gltf) => {
       geos.push(g.index ? g.toNonIndexed() : g);
     }
   });
+  { // the transom panel over the entrance door came in on the steel layer; it is the concrete band (station 3 text, photos)
+    let steel = null, conc = null;
+    root.traverse((o) => { if (o.isMesh && o.name === 'F1_mullions_frames__steel') steel = o; if (o.isMesh && o.name === 'F1_walls_RC__concrete_v') conc = o; });
+    if (steel && conc) retag(steel, [[18.55, 10.3, 2.5], [19.3, 11.95, 3.45]], Array.isArray(conc.material) ? conc.material[0] : conc.material);
+  }
   scene.add(root); realThings.push(...realList, root);
   buildDiagram(root); setSun(+$('#sunRange').value);
-  const merged = BufferGeometryUtils.mergeGeometries(geos, false);
-  bvh = new MeshBVH(merged);
+  // two exhibitions share the building; each gets its own collision tree with its own plinths
+  bvhs.base = new MeshBVH(BufferGeometryUtils.mergeGeometries(geos, false)); bvh = bvhs.base;   // the bare building, so exhibitions can find its floors
+  for (const [name, build] of [['measure', () => buildExhibit(scene, root)], ['rules', () => buildRules(scene)], ['water', () => buildWater(scene, { ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })]]) {
+    try {
+      const ex = await build(); shows[name] = ex;
+      ex.group.traverse((o) => { if (o.isMesh && !o.userData.label) for (const m of [].concat(o.material)) if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); } });
+      const extra = [];
+      for (const c of ex.colliders) { c.updateMatrixWorld(true); const g = c.geometry.clone(); for (const k of Object.keys(g.attributes)) if (k !== 'position') g.deleteAttribute(k); g.applyMatrix4(c.matrixWorld); extra.push(g.index ? g.toNonIndexed() : g); }
+      bvhs[name] = new MeshBVH(BufferGeometryUtils.mergeGeometries([...geos, ...extra], false));
+    } catch (e) { console.error('exhibit', name, e); }
+  }
+  bvh = bvhs[show] || bvhs.measure || bvhs.rules || bvhs.water || bvhs.base;
+  setShow(show);
+  buildAxis(); axisUI();
   buildCover();
   $('#loader').classList.add('done');
   setTimeout(() => $('#loader').remove(), 1000);
+  showIntro();
   orbit.update();
 }, (e) => {
   if (e.total) { const k = e.loaded / e.total; $('#loadbar').style.width = `${k * 100}%`; $('#loadpct').textContent = Math.round(k * 100); }
@@ -619,12 +926,16 @@ function sizeDiag() {
   diagCam.left = -half * a; diagCam.right = half * a; diagCam.top = half; diagCam.bottom = -half; diagCam.updateProjectionMatrix();
 }
 sizeDiag();
-$('#explodeBtn').addEventListener('click', () => {
-  explodeTarget = explodeTarget ? 0 : 1;
-  $('#explodeBtn').textContent = explodeTarget ? 'Assemble' : 'Explode';
+$('#explodeRange').addEventListener('input', (e) => { explodeTarget = +e.target.value; });   // a lever: the drawing follows the hand
+addEventListener('keydown', (e) => {
+  if (mode !== 'diagram' || e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowUp' || e.key === 'ArrowRight') explodeTarget = Math.min(1, explodeTarget + 0.1);
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') explodeTarget = Math.max(0, explodeTarget - 0.1);
+  else return;
+  $('#explodeRange').value = explodeTarget;
 });
 function stepDiagram() {
-  explode += (explodeTarget - explode) * 0.06;
+  explode += (explodeTarget - explode) * 0.14;
   diagParts.roof.position.y = explode * 9;
   diagParts.b1.position.y = -explode * 8;
   diagCtl.update();
@@ -660,6 +971,30 @@ const grade = new ShaderPass({
     }`,
 });
 composer.addPass(grade);
+// cross-dissolve between Journey shots: the outgoing shot is rendered first into xfRT, then mixed under the incoming one
+const xfRT = new THREE.WebGLRenderTarget(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio(), { type: THREE.HalfFloatType });
+const xfade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, tPrev: { value: xfRT.texture }, k: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: 'uniform sampler2D tDiffuse; uniform sampler2D tPrev; uniform float k; varying vec2 vUv; void main(){ gl_FragColor = vec4(mix(texture2D(tPrev, vUv).rgb, texture2D(tDiffuse, vUv).rgb, k), 1.0); }',
+});
+xfade.enabled = false; composer.addPass(xfade);
+const xfCopy = new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }', fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ gl_FragColor = texture2D(tDiffuse, vUv); }' });
+const xfQuad = new FullScreenQuad(xfCopy.material);
+function renderFrame(dt) {
+  if (!(mode === 'tour' && xfadeK > 0)) { xfade.enabled = false; composer.render(dt); return; }
+  // pass 1: outgoing shot, kept off screen
+  xfade.enabled = false; composer.renderToScreen = false;
+  composer.render(dt);
+  xfCopy.uniforms.tDiffuse.value = composer.readBuffer.texture;
+  renderer.setRenderTarget(xfRT); xfQuad.render(renderer);
+  // pass 2: incoming shot, mixed over it
+  const keep = camera.position.clone(), keepQ = camera.quaternion.clone();
+  camera.position.copy(camB.position); camera.quaternion.copy(camB.quaternion); camera.updateMatrixWorld();
+  composer.renderToScreen = true; xfade.enabled = true; xfade.uniforms.k.value = xfadeK;
+  composer.render(dt);
+  camera.position.copy(keep); camera.quaternion.copy(keepQ);
+}
 
 // ---------- light / dark: morning 08:00 vs late night 23:00 ----------
 const THEME = { light: { h: 8.5, paper: 0.5 }, dark: { h: 23, paper: 0 } };
@@ -692,6 +1027,7 @@ function stepTheme(dt) {
 const clock = new THREE.Timer();
 function frame() {
   clock.update(); const dt = Math.min(clock.getDelta(), 0.05);
+  if (exhibit && mode !== 'diagram') exhibit.update(clock.getElapsed());
   if (fly) stepFly(dt);
   stepDay(dt); stepTheme(dt); grade.uniforms.paper.value = paperK;
   if (mode === 'diagram') stepDiagram();
@@ -708,14 +1044,14 @@ function frame() {
   if (Math.abs(camera.fov - fovTarget) > 0.05) { camera.fov += (fovTarget - camera.fov) * 0.05; camera.updateProjectionMatrix(); }
   grade.uniforms.time.value = (grade.uniforms.time.value + 0.37) % 100;
   updateMap();
-  composer.render(dt);
+  renderFrame(dt);
   requestAnimationFrame(frame);
 }
 frame();
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; fovTarget = fovFor(mode); camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-  composer.setSize(innerWidth, innerHeight); sizeDiag();
+  composer.setSize(innerWidth, innerHeight); xfRT.setSize(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()); sizeDiag();
 });
 // debug hook for automated checks
-window.__2121 = { get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => !!bvh, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };
+window.__2121 = { AX, axisGo, axisPlay, axisAt, setShow, get show() { return show; }, view: (c, l) => { if (mode !== 'walk') setMode('walk'); fly = null; camera.position.copy(M(...c)); lookAtPoint(M(...l)); applyLook(); }, get exhibit() { return exhibit; }, get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => AX.ready, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };

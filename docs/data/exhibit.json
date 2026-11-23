@@ -1,0 +1,122 @@
+[
+ {
+  "id": "x-metre",
+  "title": "Your Metre",
+  "cam": [
+   26.8,
+   11.4,
+   1.7
+  ],
+  "look": [
+   31.0,
+   13.6,
+   0.0
+  ],
+  "text": "Measure the Sight, an homage to the 2015 exhibition on units. Start with your own body: a metre on the lobby floor, and beside it a shaku, 10/33 of a metre, once taken from the forearm."
+ },
+ {
+  "id": "x-court",
+  "title": "The Tall Pane",
+  "cam": [
+   53.0,
+   3.2,
+   -4.3
+  ],
+  "look": [
+   54.6,
+   11.0,
+   -4.2
+  ],
+  "text": "Glass runs from this floor to the roof, carried by solid steel mullions up to about 11.7 m tall. On the floor, a sun clock for Tokyo, 35.67° north: before clocks, the shadow was the unit of the day."
+ },
+ {
+  "id": "x-units",
+  "title": "Basic Units",
+  "cam": [
+   37.6,
+   9.4,
+   -4.4
+  ],
+  "look": [
+   35.8,
+   2.2,
+   -5.3
+  ],
+  "text": "Same size, different weight. One litre of water weighs one kilogram. Six identical bags hold six different units, and a thousand 3.75 g discs make one kan."
+ },
+ {
+  "id": "x-hundred",
+  "title": "From 10 to 100",
+  "cam": [
+   34.2,
+   -1.6,
+   -4.5
+  ],
+  "look": [
+   29.8,
+   4.6,
+   -5.5
+  ],
+  "text": "Ten plywood cubes, ten centimetres to one metre. Walk past them and your sense of length starts to tune itself."
+ },
+ {
+  "id": "x-court2",
+  "title": "How Big Is This Building?",
+  "cam": [
+   42.2,
+   -5.4,
+   -2.9
+  ],
+  "look": [
+   60.0,
+   0.2,
+   -6.0
+  ],
+  "text": "Gallery 2 is 443 m², about 134 tsubo or 273 tatami. A full doubles tennis court, 23.77 by 10.97 m, fits inside with room to spare."
+ },
+ {
+  "id": "x-model",
+  "title": "At 1:100",
+  "cam": [
+   66.7,
+   -1.95,
+   -4.72
+  ],
+  "look": [
+   67.55,
+   -1.15,
+   -5.08
+  ],
+  "text": "The same building on a table. From the garden it is a low folded roof; at this scale you see that four-fifths of it lies underground."
+ },
+ {
+  "id": "x-pendulum",
+  "title": "Bodies and Tools",
+  "cam": [
+   43.0,
+   -2.4,
+   -4.5
+  ],
+  "look": [
+   40.5,
+   -3.6,
+   -4.7
+  ],
+  "text": "A pendulum 0.994 m long beats once a second. In the 1790s it nearly became the definition of the metre."
+ },
+ {
+  "id": "x-steel",
+  "title": "54 Metres of Steel",
+  "cam": [
+   -1.6,
+   0.2,
+   1.5
+  ],
+  "look": [
+   1.0,
+   -3.0,
+   0.3
+  ],
+  "text": "The roof plate at 1:10 in length and true to its 16 mm thickness: one folded sheet, 54 m long, welded on site. It moves about 30 mm between winter and summer."
+ }
+]

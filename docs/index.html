@@ -7,10 +7,9 @@
 <title>21_21 DESIGN SIGHT — A Digital Walkthrough</title>
 <meta name="description" content="A digital walkthrough of 21_21 DESIGN SIGHT by Tadao Ando, Tokyo Midtown. Journey, section, walk and diagram.">
 <link rel="preload" href="fonts/BellaGothicSansSerifVF.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="fonts/BellaCarviqueSerifVF.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/app.css">
 </head>
-<body>
+<body class="orbit">
 <canvas id="view"></canvas>
 <div id="veil" aria-hidden="true"></div>
 <div id="bars" aria-hidden="true"><i></i><i></i></div>
@@ -32,10 +31,11 @@
 
 <aside id="map" title="Plan">
   <div class="lvl" id="lvlname">Ground floor</div>
-  <div class="frame"><img id="planimg" src="plan_f1.png" alt="Plan"><i id="you"></i></div>
+  <div class="frame"><img id="planimg" src="plan_f1.png" alt="Plan"><svg id="route" preserveAspectRatio="none" aria-hidden="true"></svg><i id="you"></i></div>
 </aside>
 
 <section id="tourCard" hidden>
+  <div class="kick" id="tKick"></div>
   <div class="idx"><span id="tIdx">01</span><span class="of" id="tOf">/ 10</span></div>
   <h2 id="tTitle"></h2>
   <p id="tText"></p>
@@ -62,9 +62,15 @@
   <span class="touch">Stick to move. Drag to look. Tap the plan to jump.</span>
 </section>
 <div id="stick" hidden><i></i></div>
+<div id="axis" aria-label="Walk the axis">
+  <button id="axPlay" class="link">Walk the axis</button>
+  <div class="track"><input id="axRange" type="range" min="0" max="1000" value="0" aria-label="Position on the axis"><div id="axTicks"></div></div>
+  <output id="axOut">Plaza</output>
+</div>
 
 <nav id="modes" aria-label="View">
   <button data-mode="tour">Journey</button>
+  <button data-mode="exhibit">Exhibition</button>
   <button data-mode="orbit" class="on">Section</button>
   <button data-mode="walk">Walk</button>
   <button data-mode="diagram">Diagram</button>
@@ -91,6 +97,8 @@
   </table>
   <h3>The model</h3>
   <p>Built from a SketchUp model of unknown authorship, registered to the PLATEAU Minato City 3D model (CC BY 4.0), then corrected against official material and public photographs: entrance, roof plate, low wall, ground slope, frosted guard and interior finishes. Dimensions marked as inferred are not measured. The basement and interior partitions are simplified.</p>
+  <h3>Now showing</h3>
+  <p>Measure the Sight. Eight stops on units and the building's own numbers: a metre and a shaku, a sun clock, a litre and a kan, a tennis court in Gallery 2, the building at 1:100, a seconds pendulum and the roof plate at 1:10. An independent homage to "Measuring" (21_21 DESIGN SIGHT, 2015). Not affiliated; all objects and texts are original.</p>
   <h3>Sources</h3>
   <ul>
     <li><a href="https://www.2121designsight.jp/designsight/architecture.html" target="_blank" rel="noopener">21_21 DESIGN SIGHT, Architecture</a></li>
@@ -118,10 +126,28 @@
       <li><i style="--c:#a196e0"></i>Basement</li>
     </ul>
   </div>
-  <button id="explodeBtn" class="link">Explode</button>
+  <div id="explode"><span>Assembled</span><input id="explodeRange" type="range" min="0" max="1" step="0.001" value="0" aria-label="Explode the drawing"><span>Exploded</span></div>
+</section>
+
+<section id="intro" aria-live="polite">
+  <p>Two folded steel plates on a garden lawn, with most of the building below.</p>
+  <div class="go"><button id="introGo" class="link first">Begin the journey</button><button id="introSkip" class="link">Explore</button></div>
+  <div class="hint" id="introHint">Drag to turn. Scroll to zoom.</div>
 </section>
 
 <div id="toast" hidden></div>
+<div id="note" hidden></div>
+<section id="chooser" hidden aria-label="Choose an exhibition">
+  <div class="box">
+    <button class="x link" aria-label="Close">Close</button>
+    <p class="eyebrow">Now in the building</p>
+    <button data-show="measure"><span class="t">Measure the Sight</span><span class="d">After "Measuring", 2015. Metres and shaku, a litre and a kan, a tennis court in Gallery 2.</span><span class="n">8 stops</span></button>
+    <button data-show="rules"><span class="t">Read the Building</span><span class="d">After "Rules?", 2021. The building's own rules, a floor vote, and squares that obey.</span><span class="n">7 stops</span></button>
+    <button data-show="water"><span class="t">Still Water</span><span class="d">After "water", 2007. A line, one drop, falling threads, rain indoors, a still plane, the sky at your feet.</span><span class="n">6 stops</span></button>
+    <p class="fine">Independent homages. Not affiliated with 21_21 DESIGN SIGHT.</p>
+  </div>
+</section>
+<div id="ruler"><button id="rulerBtn" class="link" aria-pressed="false">Ruler</button><output id="rulerOut" hidden></output></div>
 
 <script type="module" src="js/app.js"></script>
 </body>

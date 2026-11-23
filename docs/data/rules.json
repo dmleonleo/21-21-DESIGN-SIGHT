@@ -1,0 +1,107 @@
+[
+ {
+  "id": "r-door",
+  "title": "The Ando Handle",
+  "cam": [
+   15.6,
+   6.8,
+   1.6
+  ],
+  "look": [
+   18.9,
+   11.0,
+   1.2
+  ],
+  "text": "Read the Building, an homage to the 2021 exhibition on rules. A building is a stack of rules, and some are hiding in plain sight. Start at the door: a stock lever, used so often by Ando that its maker named it after him."
+ },
+ {
+  "id": "r-formwork",
+  "title": "Six Holes a Panel",
+  "cam": [
+   34.2,
+   1.5,
+   -4.4
+  ],
+  "look": [
+   38.85,
+   1.9,
+   -4.75
+  ],
+  "text": "Concrete remembers its moulds. Each plywood panel is 900 by 1800 mm, and the ties that held it leave six holes on a 450 by 600 mm grid. The blue outline shows two panels; count the rest yourself."
+ },
+ {
+  "id": "r-stair",
+  "title": "Tread 300, Rise 150",
+  "cam": [
+   52.6,
+   16.2,
+   -1.4
+  ],
+  "look": [
+   43.5,
+   15.0,
+   -4.6
+  ],
+  "text": "The stair follows the same grid: 300 mm treads to match the tie holes, 150 mm rises, a sixth of a panel. Our model misses this by about 2 cm a step, and we would rather tell you than hide it."
+ },
+ {
+  "id": "r-mullion",
+  "title": "Solid Steel",
+  "cam": [
+   54.6,
+   6.8,
+   -4.6
+  ],
+  "look": [
+   52.3,
+   12.0,
+   -2.6
+  ],
+  "text": "The court glass is held by solid steel mullions, only 235 by 69 mm, because hollow ones would have to be fatter. The tallest reach about 11.7 m."
+ },
+ {
+  "id": "r-vote",
+  "title": "Should Every Rule Be Written?",
+  "cam": [
+   33.9,
+   2.2,
+   -3.9
+  ],
+  "look": [
+   33.9,
+   7.2,
+   -6.0
+  ],
+  "text": "A question for you. Step on a square to vote. The tally lives only on this device, which is a rule too."
+ },
+ {
+  "id": "r-squares",
+  "title": "Square Goes",
+  "cam": [
+   43.4,
+   -5.2,
+   -3.0
+  ],
+  "look": [
+   58.0,
+   0.0,
+   -6.0
+  ],
+  "text": "Forty-two squares and one rule. Keep left and lanes appear; follow the one ahead and a queue forms; take the rule away and they bump. Tap a square to change the rule."
+ },
+ {
+  "id": "r-roof",
+  "title": "16 mm, 54 m, 30 mm",
+  "cam": [
+   47.0,
+   -4.0,
+   1.6
+  ],
+  "look": [
+   38.5,
+   8.0,
+   1.2
+  ],
+  "text": "The roof: 16 mm steel plate, welded on site because 54 m could not travel by road, and built to move by up to 30 mm with the heat. Rules of transport and weather, folded into one shape."
+ }
+]
