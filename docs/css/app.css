@@ -26,8 +26,13 @@ body.tour #veil{background:radial-gradient(120% 90% at 50% 46%,transparent 55%,r
 #loader{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px;transition:opacity 1.6s var(--ease)}
 #loader.done{opacity:0;pointer-events:none}
 #loader .mark{font-size:13px;letter-spacing:.5em;padding-left:.5em}
-#loader .bar{width:160px;height:1px;background:var(--faint);position:relative;overflow:hidden}
-#loader .bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--ink);transition:width .3s}
+#loader svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+#loader path{fill:var(--ink);fill-opacity:0;stroke:var(--ink);stroke-width:1;stroke-linejoin:round;stroke-dasharray:1 1;stroke-dashoffset:1;vector-effect:non-scaling-stroke;transition:stroke-dashoffset .6s linear,fill-opacity 1s var(--ease)}
+#loader.full path{fill-opacity:.14}
+#loader:not(.drawn) .hint{animation:ldBreath 2.4s var(--ease) infinite alternate}
+@keyframes ldBreath{to{opacity:.35}}
+#loader .ldtxt{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:28px;text-align:center;transition:top 1.4s var(--ease),transform 1.4s var(--ease),gap 1.4s var(--ease)}
+#loader.drawn .ldtxt{top:calc(100% - var(--pad));transform:translateY(-100%);gap:18px}
 #loader .hint{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--mute);font-variant-numeric:tabular-nums}
 
 /* brand */
