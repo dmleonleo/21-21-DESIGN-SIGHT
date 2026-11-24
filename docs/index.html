@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="css/app.css?v=11775d39">
 </head>
 <body class="orbit">
+<script>/* day or night by the visitor's own clock, set before the first paint (Leon 2026-11-25) */(function(){var d=new Date(),h=d.getHours()+d.getMinutes()/60;if(h>=6&&h<18.5)document.body.classList.add('light');})();</script>
 <canvas id="view"></canvas>
 <div id="veil" aria-hidden="true"></div>
 <div id="bars" aria-hidden="true"><i></i><i></i></div>
@@ -156,6 +157,6 @@
 </section>
 <div id="ruler"><button id="rulerBtn" class="link" aria-pressed="false">Ruler</button><output id="rulerOut" hidden></output></div>
 
-<script type="module" src="js/app.js?v=d7b67a7c"></script>
+<script type="module" src="js/app.js?v=1f29759b"></script>
 </body>
 </html>

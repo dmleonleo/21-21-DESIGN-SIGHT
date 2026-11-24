@@ -7,7 +7,8 @@ import { M, B1, label, onWall, onFloor } from './exhibit.js';
 
 const SERIF = '"Bella Gothic",Arial,sans-serif';
 const FPS = 12;                                          // the show's own frame rate: everything steps, never glides
-const OPEN = 10, CLOSE = 19, ARRIVE = 8.5, STEP = 5 / 60, FRAME = 5;   // a frame is five site minutes, shown for five seconds: one site hour a minute
+const NIGHT = (() => { const d = new Date(), h = d.getHours() + d.getMinutes() / 60; return !(h >= 6 && h < 18.5); })();   // the visitor's own clock (Leon 2026-11-25)
+const OPEN = 10, CLOSE = 19, ARRIVE = NIGHT ? 20 : 8.5, STEP = 5 / 60, FRAME = 5;   // a frame is five site minutes, shown for five seconds: one site hour a minute
 const ink = new THREE.MeshBasicMaterial({ color: 0xece9e2, toneMapped: false, transparent: true, depthWrite: false, side: THREE.DoubleSide });
 const inkS = () => { const m = ink.clone(); m.userData.st = 1; return m; };   // fixed lines, merged into a few meshes once built
 function mergeStatic(g) {
@@ -94,7 +95,7 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
   });
 
   // ======================= the site clock: one day, 10:00 to 19:00 =======================
-  const C = { h: ARRIVE, next: 0, hold: 0, rew: -1, prevH: null, wait: 0 };
+  const C = { h: ARRIVE, next: 0, hold: 0, rew: -1, prevH: null, wait: 0, night: NIGHT };   // by night the doors stay shut until the visitor skips ahead
   function strike(h, at = 0) {                           // the hour, counted on a low bell at the gnomon
     const n = h % 12 || 12, X = DIAL.x, Y = DIAL.y, Z = DIAL.z + 2.4;
     for (let i = 0; i < n; i++) fx('bell', X, Y, Z, { f: 196, a: 0.55, d: 6, delay: at + i * 1.7, wet: 1.2 });
@@ -106,6 +107,7 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
   }
   function setH(h) { C.h = h; if (day) day.set(h); }
   function skipHour() {
+    if (C.night) { C.night = false; setH(OPEN); C.next = now + FRAME; chime(true); return `The doors open: ${hhmm(OPEN)}.`; }
     if (C.rew >= 0 || C.hold) return 'The doors are closed. The day starts again in a moment.';
     const h = Math.min(CLOSE, Math.floor(C.h + 1e-6) + 1); setH(h); C.next = now + FRAME; frameTick(true);
     if (h >= CLOSE) { chime(false); C.hold = now + 12; } else strike(h);
@@ -113,6 +115,7 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
   }
   function frameTick(loud) { fx('tick', DIAL.x, DIAL.y, DIAL.z + 0.3, { a: loud ? 0.6 : 0.22, f: 2400 }); }
   anim.push(() => {
+    if (C.night) return;                                 // night visit: closed, the clock rests at 20:00
     if (day && day.busy()) { C.next = now + FRAME; return; }       // someone is running the sun by hand: the clock waits
     if (C.rew >= 0) {                                    // after closing: the day runs back, twelve frames a second
       if (newFrame) { C.rew++; setH(CLOSE - (CLOSE - OPEN) * Math.min(1, C.rew / 24)); frameTick(false); if (C.rew >= 24) { C.rew = -1; setH(OPEN); C.next = now + FRAME; chime(true); } }

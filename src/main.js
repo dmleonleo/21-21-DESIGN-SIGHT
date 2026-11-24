@@ -1227,7 +1227,9 @@ function stepTheme(dt) {
   $('#sunRange').value = hs; setSun(hs);
   if (themeRun.k >= 1) themeRun = null;
 }
-{ let t0 = null; try { t0 = localStorage.getItem('2121.theme'); } catch (e) {} setTheme(t0 || 'light', true); }   // a first visit arrives at 08:30 in the light theme (Leon 2026-11-24)
+// every visit follows the visitor's own clock: by day arrive at 08:30 light, by night at 20:00 dark (Leon 2026-11-25)
+const NIGHT = (() => { const d = new Date(), h = d.getHours() + d.getMinutes() / 60; return !(h >= 6 && h < 18.5); })();
+setTheme(NIGHT ? 'dark' : 'light', true); if (NIGHT) { setSun(20); $('#sunRange').value = 20; }
 // the theme follows the site clock: day hours read light, night hours read dark (Leon 2026-11-24)
 let themeNow = document.body.classList.contains('light') ? 'light' : 'dark';
 function syncTheme(dt) {
