@@ -7,7 +7,7 @@ import { M, B1, label, onWall, onFloor } from './exhibit.js';
 
 const SERIF = '"Bella Gothic",Arial,sans-serif';
 const FPS = 12;                                          // the show's own frame rate: everything steps, never glides
-const OPEN = 10, CLOSE = 19, STEP = 5 / 60, FRAME = 5;   // a frame is five site minutes, shown for five seconds: one site hour a minute
+const OPEN = 10, CLOSE = 19, ARRIVE = 8.5, STEP = 5 / 60, FRAME = 5;   // a frame is five site minutes, shown for five seconds: one site hour a minute
 const ink = new THREE.MeshBasicMaterial({ color: 0xece9e2, toneMapped: false, transparent: true, depthWrite: false, side: THREE.DoubleSide });
 const inkS = () => { const m = ink.clone(); m.userData.st = 1; return m; };   // fixed lines, merged into a few meshes once built
 function mergeStatic(g) {
@@ -94,7 +94,7 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
   });
 
   // ======================= the site clock: one day, 10:00 to 19:00 =======================
-  const C = { h: OPEN, next: 0, hold: 0, rew: -1, prevH: null, wait: 0 };
+  const C = { h: ARRIVE, next: 0, hold: 0, rew: -1, prevH: null, wait: 0 };
   function strike(h, at = 0) {                           // the hour, counted on a low bell at the gnomon
     const n = h % 12 || 12, X = DIAL.x, Y = DIAL.y, Z = DIAL.z + 2.4;
     for (let i = 0; i < n; i++) fx('bell', X, Y, Z, { f: 196, a: 0.55, d: 6, delay: at + i * 1.7, wet: 1.2 });
@@ -125,6 +125,7 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
     if (h >= CLOSE) { h = CLOSE; C.hold = now + 12; chime(false); }
     setH(h); frameTick(false);
     if (Math.floor(h + 1e-6) > Math.floor(before + 1e-6) && h < CLOSE) strike(Math.floor(h + 1e-6));
+    if (before < OPEN - 1e-6 && h >= OPEN - 1e-6) chime(true);      // the doors open on the first morning
   });
 
   // ======================= 01 plaza: the building is a clock =======================
