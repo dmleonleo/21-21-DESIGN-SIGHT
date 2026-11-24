@@ -17,6 +17,7 @@ import { buildRules } from './rules.js';
 import { buildWater } from './water.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { MeshBVH } from 'three-mesh-bvh';
+import { createSound, createVoice } from './sound.js';
 
 const $ = (s) => document.querySelector(s);
 const M = (x, y, z) => new THREE.Vector3(x, z, -y);          // model -> three
@@ -231,6 +232,21 @@ function stir(e, amp) {
   rippleP.copy(p); hs[0].object.material.drop(p.x, -p.z, amp); return true;
 }
 canvas.addEventListener('pointermove', (e) => { const now = performance.now(); if (now - rippleT < 45) return; if (stir(e, look.drag ? 0.4 : 0.8)) rippleT = now; });
+let hoverT = 0;                                       // desktop: the pointer says what can be touched
+canvas.addEventListener('pointermove', (e) => {
+  if (TOUCH || e.pointerType !== 'mouse') return;
+  const now = performance.now(); if (now - hoverT < 90) return; hoverT = now;
+  let can = false;
+  if ((mode === 'tour' || mode === 'walk') && exhibit && !look.drag) {
+    const rc = pick(e), h = hit(rc.ray.origin, rc.ray.direction, 200);
+    for (const x of rc.intersectObject(exhibit.group, true)) {
+      if (h && x.distance > h.distance + 0.08) break;
+      let o = x.object; while (o && !o.userData.info && !o.userData.onTap) o = o.parent;
+      if (o) { can = true; break; }
+    }
+  }
+  canvas.style.cursor = rulerOn ? 'crosshair' : can ? 'pointer' : '';
+});
 let tapStart = null;
 canvas.addEventListener('pointerdown', (e) => { tapStart = { x: e.clientX, y: e.clientY, t: performance.now() }; });
 canvas.addEventListener('pointerup', (e) => {
@@ -262,7 +278,7 @@ canvas.addEventListener('pointerup', (e) => {
 
 // ---------- modes ----------
 const fovFor = (m) => { const base = { orbit: 38, tour: 50, walk: 62, diagram: 38 }[m]; const a = innerWidth / innerHeight;
-  return a < 1 ? Math.min(base * THREE.MathUtils.clamp(0.8 / a, 1, 1.75), 88) : base; };
+  return a < 1 ? Math.min(base * THREE.MathUtils.clamp(0.8 / a, 1, 1.75), m === 'tour' ? 82 : 88) : base; };
 const realThings = [];
 let mode = 'orbit', fly = null, fovTarget = fovFor('orbit');
 camera.fov = fovTarget; camera.updateProjectionMatrix();
@@ -304,10 +320,17 @@ function buildJourney() {
     return h ? Math.max(0, Math.min(1.8, h.distance - 2.2)) : 1.8;
   });
   const rail = $('#rail');
-  if (!rail.children.length || rail.children.length < 2) stations.forEach((s, i) => { const b = document.createElement('button'); b.style.top = `${(i / (stations.length - 1)) * 100}%`; b.title = s.title; b.dataset.t = s.title; b.onclick = () => { stopAuto(); J.t = i; }; rail.appendChild(b); });
+  if (!rail.children.length || rail.children.length < 2) stations.forEach((s, i) => { const b = document.createElement('button'); b.style.top = `${(i / (stations.length - 1)) * 100}%`; b.title = s.title; b.dataset.t = s.title; b.onclick = () => jumpTo(i); rail.appendChild(b); });
+}
+function jumpTo(i) {                                // a far chapter cuts straight there through black, instead of playing every shot between
+  stopAuto(); J.input = performance.now();
+  if (!J.on || Math.abs(i - J.p) <= 1.2) { J.t = i; return; }
+  const c = $('#cut2'); c.style.transition = 'opacity .32s linear'; c.style.opacity = 1;
+  setTimeout(() => { J.t = J.p = i; J.chapter = -1; requestAnimationFrame(() => { c.style.transition = 'opacity .7s linear'; c.style.opacity = 0; }); }, 340);
 }
 function chapterText(i) {
   const s = stations[i];
+  if (J.on) voice.say(program, i);
   $('#tIdx').textContent = String(i + 1).padStart(2, '0');
   $('#tOf').textContent = `/ ${String(stations.length).padStart(2, '0')}`;
   $('#tTitle').textContent = s.title; $('#tText').textContent = s.text;
@@ -346,7 +369,6 @@ function stepJourney(dt) {
   if (k > 0.001 && k < 0.999) { shotPose(a + 1, J.p - a - 0.5, camB); xfadeK = k; }
   else { if (k >= 0.999) shotPose(a + 1, J.p - a - 0.5, camera); xfadeK = 0; }
   if (c !== J.chapter) { J.chapter = c; tIdx = c; chapterText(c); }
-  $('#cut2').style.opacity = 0;
   $('#tourCard').style.opacity = 1 - THREE.MathUtils.smoothstep(Math.abs(f), 0.08, 0.3);
   $('#railDot').style.top = `${(J.p / N) * 100}%`;
 }
@@ -430,7 +452,7 @@ function setMode(m) {
   for (const o of realThings) o.visible = !D;
   showVis();
   if (m !== 'orbit' && cutKind !== 'none') setCut('none');
-  J.on = false; xfadeK = 0; $('#tourCard').style.opacity = ''; $('#cut2').style.opacity = 0;
+  J.on = false; xfadeK = 0; $('#tourCard').style.opacity = ''; $('#cut2').style.transition = 'none'; $('#cut2').style.opacity = 0; voice.stop();
   scene.fog.far = D ? 1e5 : 420;
   if (D) { explode = explodeTarget = 0; $('#explodeRange').value = 0; }
   $('#tourCard').hidden = m !== 'tour';
@@ -445,7 +467,7 @@ function setMode(m) {
   } else if (m === 'tour') {
     const i = THREE.MathUtils.clamp(Math.round(J.t), 0, stations.length - 1), s = stations[i];
     J.t = J.p = i; J.chapter = -1;
-    flyTo(M(...s.cam), M(...s.look), () => { J.on = true; });
+    flyTo(M(...s.cam), M(...s.look), () => { J.on = true; if (mode === 'tour') voice.say(program, i, 200); });
     chapterText(i);
     if (!TEST) toast(TOUCH ? 'Swipe up to move through the building' : 'Scroll to move through the building');
   } else if (m === 'walk') {
@@ -456,14 +478,14 @@ function setMode(m) {
       flyTo(pos, pos.clone().add(fwd.multiplyScalar(5)));
       toast('Walk on from here');
     } else {
-      const s = stations.find((x) => x.id === 'plaza');
-      flyTo(M(...s.cam), M(...s.look));
+      flyTo(M(...WALK0[0]), M(...WALK0[1]));                // from the plaza, facing the glass door under the fold
       toast('Walk from the plaza');
     }
   }
 }
 document.querySelectorAll('#modes [data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
+const WALK0 = [[12.6, 2.6, 1.6], [19.6, 10.6, 1.9]];
 function flyTo(pos, target, done) {
   const from = camera.position.clone();
   const q0 = camera.quaternion.clone();
@@ -500,7 +522,7 @@ $('#tPlay').onclick = () => {
   if (tAuto) return stopAuto();
   if (Math.round(J.t) >= stations.length - 1) { J.t = J.p = 0; J.chapter = -1; }   // from the end: start over, no rewind blur
   $('#tPlay').textContent = 'Pause';
-  tAuto = setInterval(() => { J.t += 0.0022; if (J.t >= stations.length - 1) stopAuto(); }, 16);
+  tAuto = setInterval(() => { if (voice.on && voice.busy && J.t >= voice.index + 0.18) return; J.t += 0.0022; if (J.t >= stations.length - 1) stopAuto(); }, 16);
 };
 
 // walk input
@@ -508,11 +530,14 @@ const keys = new Set();
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   keys.add(e.code);
-  if (mode === 'tour' && /ArrowRight|ArrowDown|Space/.test(e.code)) { stopAuto(); goStation(Math.round(J.t) + 1); }
+  if (mode === 'tour' && e.code === 'Space') { e.preventDefault(); $('#tPlay').click(); }
+  if (mode === 'tour' && /ArrowRight|ArrowDown/.test(e.code)) { stopAuto(); goStation(Math.round(J.t) + 1); }
+  if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey) { const d = document; if (d.fullscreenElement) d.exitFullscreen(); else if (d.documentElement.requestFullscreen) d.documentElement.requestFullscreen().catch(() => {}); }
+  if (e.code === 'KeyM' && !e.metaKey && !e.ctrlKey) setSound(!sound.on);
   if (mode === 'tour' && /ArrowLeft|ArrowUp/.test(e.code)) { stopAuto(); goStation(Math.round(J.t) - 1); }
   const mk = { Digit1: 'tour', Digit2: 'orbit', Digit3: 'walk', Digit4: 'diagram' }[e.code];
   if (mk && !e.metaKey && !e.ctrlKey && !$('#info').open) setMode(mk);
-  if (e.code === 'Escape') hideIntro();
+  if (e.code === 'Escape') { hideIntro(); $('#chooser').hidden = true; note(''); if (rulerOn) setRuler(false); }
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -973,7 +998,7 @@ diagCtl.enabled = false; diagCtl.enableDamping = true; diagCtl.target.copy(M(44,
 diagCtl.minZoom = 0.6; diagCtl.maxZoom = 8; diagCtl.maxPolarAngle = Math.PI * 0.49;
 diagCam.position.copy(M(44 + 60, -6 - 60, 58)); diagCam.zoom = 1;
 function sizeDiag() {
-  const a = innerWidth / innerHeight, half = a < 1 ? 40 / a : 54;
+  const a = innerWidth / innerHeight, half = a < 1 ? 62 / a : 54;
   diagCam.left = -half * a; diagCam.right = half * a; diagCam.top = half; diagCam.bottom = -half; diagCam.updateProjectionMatrix();
 }
 sizeDiag();
@@ -1072,7 +1097,38 @@ function stepTheme(dt) {
   $('#sunRange').value = hs; setSun(hs);
   if (themeRun.k >= 1) themeRun = null;
 }
-{ let t0 = 'dark'; try { t0 = localStorage.getItem('2121.theme') || 'dark'; } catch (e) {} setTheme(t0, true); }
+{ let t0 = null; try { t0 = localStorage.getItem('2121.theme'); } catch (e) {} setTheme(t0 || 'dark', true);
+  if (!t0 && TOUCH && innerWidth < 760) { $('#sunRange').value = 19.25; setSun(19.25); } }   // a phone screen reads dusk better than deep night
+
+// ---------- Journey framing: the subject sits clear of the text ----------
+// portrait: the card fills the lower half, so the picture is lifted; landscape: nudged up and right, away from the card
+let offK = 0;
+function frameJourney() {
+  offK += ((mode === 'tour' && !fly ? 1 : 0) - offK) * (TEST ? 1 : 0.06);
+  if (offK < 0.002) { if (camera.view && camera.view.enabled) camera.clearViewOffset(); return; }
+  const W = innerWidth, H = innerHeight, por = W < H;
+  const ox = por ? 0 : -0.06 * W * offK, oy = (por ? 0.17 : 0.05) * H * offK;
+  camera.setViewOffset(W, H, ox, oy, W, H);
+}
+
+// ---------- sound and voice ----------
+const sound = createSound(), voice = createVoice();
+const pref = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === '1'; } catch (e) { return d; } };
+const keep = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch (e) {} };
+let soundWant = pref('2121.sound', true);
+function setSound(on) { soundWant = on; keep('2121.sound', on); sound.set(on); $('#snd').classList.toggle('on', on); $('#snd').setAttribute('aria-pressed', on); }
+function setVoice(on) { keep('2121.voice', on); voice.set(on); $('#tVoice').classList.toggle('on', voice.on); $('#tVoice').textContent = voice.on ? 'Voice on' : 'Voice off';
+  if (voice.on && mode === 'tour' && J.on) { const i = Math.round(J.p); voice.say(program, i, 150); } }
+$('#snd').classList.toggle('on', soundWant);
+$('#snd').onclick = () => setSound(!sound.on);
+if (!voice.supported) $('#tVoice').hidden = true;
+voice.set(pref('2121.voice', true)); $('#tVoice').classList.toggle('on', voice.on); $('#tVoice').textContent = voice.on ? 'Voice on' : 'Voice off';
+$('#tVoice').onclick = () => { voice.unlock(); setVoice(!voice.on); };
+{ const first = () => { voice.unlock(); if (soundWant && !sound.on) sound.set(true);
+    let fresh = true; try { fresh = !sessionStorage.getItem('2121.hello'); sessionStorage.setItem('2121.hello', '1'); } catch (e) {}
+    if (fresh && sound.on) { sound.welcome(); if (voice.on) setTimeout(() => { if (!voice.busy && mode !== 'tour') voice.say('intro', 0, 0); }, 1400); }
+    removeEventListener('pointerdown', first, true); removeEventListener('keydown', first, true); };
+  addEventListener('pointerdown', first, true); addEventListener('keydown', first, true); }
 
 // ---------- loop ----------
 const clock = new THREE.Timer();
@@ -1094,6 +1150,9 @@ function frame() {
   for (const m of lightMats) m.emissiveIntensity = 1.6 + 2.4 * lampLevel;
   if (Math.abs(camera.fov - fovTarget) > 0.05) { camera.fov += (fovTarget - camera.fov) * 0.05; camera.updateProjectionMatrix(); }
   grade.uniforms.time.value = (grade.uniforms.time.value + 0.37) % 100;
+  sound.scene({ under: underK, day: 1 - lampLevel, water: show === 'water' && (mode === 'walk' || (mode === 'tour' && program === 'water')) });
+  sound.duck(voice.busy);
+  frameJourney();
   updateMap();
   renderFrame(dt);
   requestAnimationFrame(frame);
