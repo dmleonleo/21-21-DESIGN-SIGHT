@@ -2,12 +2,24 @@
 // The whole building keeps one day, 10:00 to 19:00, a frame every five minutes. Eleven places, eleven ways of looking
 // at ordinary time. Everything moves in steps, like stop-motion, and every object here is our own.
 import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { M, B1, label, onWall, onFloor } from './exhibit.js';
 
 const SERIF = '"Bella Gothic",Arial,sans-serif';
 const FPS = 12;                                          // the show's own frame rate: everything steps, never glides
 const OPEN = 10, CLOSE = 19, STEP = 5 / 60, FRAME = 5;   // a frame is five site minutes, shown for five seconds: one site hour a minute
 const ink = new THREE.MeshBasicMaterial({ color: 0xece9e2, toneMapped: false, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+const inkS = () => { const m = ink.clone(); m.userData.st = 1; return m; };   // fixed lines, merged into a few meshes once built
+function mergeStatic(g) {
+  const buckets = new Map();
+  for (const o of [...g.children]) {
+    if (!o.isMesh || !o.material.userData || !o.material.userData.st || !o.visible) continue;
+    o.updateMatrix(); const geo = o.geometry.clone().applyMatrix4(o.matrix); const k = o.material.opacity.toFixed(3) + '|' + o.renderOrder;
+    if (!buckets.has(k)) buckets.set(k, { m: o.material, r: o.renderOrder, gs: [] });
+    buckets.get(k).gs.push(geo.index ? geo.toNonIndexed() : geo); g.remove(o); o.geometry.dispose();
+  }
+  for (const { m, r, gs } of buckets.values()) { const mm = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(gs, false), m); mm.renderOrder = r; g.add(mm); }
+}
 const glow = new THREE.MeshBasicMaterial({ color: 0xfff3e0, toneMapped: false, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
 const shade = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
 const black = new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.55, metalness: 0.35 });
@@ -126,7 +138,7 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
     for (let h = OPEN; h <= CLOSE; h++) {
       const s = sunDir(h); if (s.z < 0.06) continue;
       const len = Math.min(4.2, 2.4 / Math.tan(s.alt)), ang = Math.atan2(-s.y, -s.x);
-      const ln = new THREE.Mesh(new THREE.PlaneGeometry(len, h === OPEN || h === CLOSE ? 0.018 : 0.01), ink.clone()); ln.material.opacity = 0.55;
+      const ln = new THREE.Mesh(new THREE.PlaneGeometry(len, h === OPEN || h === CLOSE ? 0.018 : 0.01), inkS()); ln.material.opacity = 0.55;
       ln.geometry.translate(len / 2, 0, 0); onFloor(ln, DIAL.x, DIAL.y, DIAL.z, ang); g.add(ln);
       const n = label([{ t: String(h), size: 44, weight: 280, font: SERIF }], { w: 0.5, px: 240, align: 'center' });
       onFloor(n, DIAL.x + Math.cos(ang) * (len + 0.28), DIAL.y + Math.sin(ang) * (len + 0.28), DIAL.z, ang - Math.PI / 2); g.add(n);
@@ -248,9 +260,9 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
   {
     const CX = 33.8, CY = 3.8, Z = B1 + 0.008;
     const add = (m) => { g.add(m); return m; };
-    const tick = (r0, r1, a, w = 0.012, op = 0.6) => { const t = new THREE.Mesh(new THREE.PlaneGeometry(r1 - r0, w).translate((r0 + r1) / 2, 0, 0), ink.clone()); t.material.opacity = op; onFloor(t, CX, CY, Z, a); return add(t); };
+    const tick = (r0, r1, a, w = 0.012, op = 0.6) => { const t = new THREE.Mesh(new THREE.PlaneGeometry(r1 - r0, w).translate((r0 + r1) / 2, 0, 0), inkS()); t.material.opacity = op; onFloor(t, CX, CY, Z, a); return add(t); };
     const RING = { year: 4.35, day: 3.2, week: 2.2 };
-    for (const r of Object.values(RING)) { const c = new THREE.Mesh(new THREE.RingGeometry(r - 0.006, r + 0.006, 192), ink.clone()); c.material.opacity = 0.4; onFloor(c, CX, CY, Z); add(c); }
+    for (const r of Object.values(RING)) { const c = new THREE.Mesh(new THREE.RingGeometry(r - 0.006, r + 0.006, 192), inkS()); c.material.opacity = 0.4; onFloor(c, CX, CY, Z); add(c); }
     const ang = (u) => Math.PI / 2 - u * Math.PI * 2;      // clockwise from north
     for (let i = 0; i < 24; i++) tick(RING.day - (i % 6 ? 0.12 : 0.3), RING.day, ang(i / 24), i % 6 ? 0.01 : 0.02);
     for (let i = 0; i < 7; i++) tick(RING.week - 0.25, RING.week, ang(i / 7), 0.02);
@@ -310,12 +322,12 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
   {
     const X0 = 40.8, X1 = 67.8, DEC = 11, LY = -2.2, Z = B1 + 0.008;
     const xAt = (lg) => X0 + (X1 - X0) * lg / DEC;
-    const line = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0, 0.012).translate((X1 - X0) / 2, 0, 0), ink.clone()); line.material.opacity = 0.5; onFloor(line, X0, LY, Z, 0); g.add(line);
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0, 0.012).translate((X1 - X0) / 2, 0, 0), inkS()); line.material.opacity = 0.5; onFloor(line, X0, LY, Z, 0); g.add(line);
     const lit = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.03).translate(0.5, 0, 0), glow.clone()); lit.material.opacity = 0.8; onFloor(lit, X0, LY, Z + 0.001, 0); lit.renderOrder = 18; g.add(lit);
     const DL = ['1 SECOND', '10 SECONDS', '1.7 MINUTES', '17 MINUTES', '2.8 HOURS', '1.2 DAYS', '12 DAYS', '4 MONTHS', '3.2 YEARS', '32 YEARS', '317 YEARS', '3,170 YEARS'];
     for (let n = 0; n <= DEC; n++) {
-      const x = xAt(n), t = new THREE.Mesh(new THREE.PlaneGeometry(0.012, 0.5), ink.clone()); t.material.opacity = 0.7; onFloor(t, x, LY + 0.25, Z, 0); g.add(t);
-      for (let k = 2; k < 10 && n < DEC; k++) { const xs = xAt(n + Math.log10(k)), s = new THREE.Mesh(new THREE.PlaneGeometry(0.008, 0.16), ink.clone()); s.material.opacity = 0.4; onFloor(s, xs, LY + 0.08, Z, 0); g.add(s); }
+      const x = xAt(n), t = new THREE.Mesh(new THREE.PlaneGeometry(0.012, 0.5), inkS()); t.material.opacity = 0.7; onFloor(t, x, LY + 0.25, Z, 0); g.add(t);
+      for (let k = 2; k < 10 && n < DEC; k++) { const xs = xAt(n + Math.log10(k)), s = new THREE.Mesh(new THREE.PlaneGeometry(0.008, 0.16), inkS()); s.material.opacity = 0.4; onFloor(s, xs, LY + 0.08, Z, 0); g.add(s); }
       const l = label([{ t: n === 0 ? '1 s' : `10^${n} s`.replace('10^1 s', '10 s'), size: 30, weight: 600, font: SERIF, track: 2 }, { t: DL[n], size: 22, color: '#a9a59d' }], { w: 1.0, px: 360 });
       onFloor(l, x + 0.52, LY + 0.85, Z, 0); g.add(l);
     }
@@ -388,7 +400,7 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
     const segs = [...Array(8)].map((_, i) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.05), glow.clone()); const side = { x: -Math.sin(face) * 0.24, y: Math.cos(face) * 0.24 };
       onWall(m, SX + fwd.x + side.x, SY + fwd.y + side.y, Z + 2.25 + i * 0.075, face); g.add(m); return m; });
     // a crossing on the gallery floor
-    for (let i = 0; i < 6; i++) { const b = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 2.4), ink.clone()); b.material.opacity = 0.5; onFloor(b, 51.4 + i * 0.84, 8.6, Z + 0.006, 0); g.add(b); }
+    for (let i = 0; i < 6; i++) { const b = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 2.4), inkS()); b.material.opacity = 0.5; onFloor(b, 51.4 + i * 0.84, 8.6, Z + 0.006, 0); g.add(b); }
     const prints = [...Array(12)].map(() => { const m = new THREE.Mesh(new THREE.CircleGeometry(0.06, 16).scale(1, 1.9, 1), ink.clone()); m.visible = false; m.renderOrder = 17; g.add(m); return { m, t0: -1 }; });
     let pi = 0, phase = 'stop', until = 0, secT = 0, stepT = 0, sx = 0, foot = 0, chirpT = 0, pressed = false;
     const WAIT = 20, WALK = 9, BLINK = 3;
@@ -684,6 +696,7 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
   ], { w: 1.6, px: 1060 });
   g.add(onFloor(credit, 25.2, 15.6, 0));
 
+  mergeStatic(g);
   scene.add(g);
   return {
     group: g, colliders: g.userData.colliders,

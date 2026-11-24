@@ -54,7 +54,7 @@ new RGBELoader().load('env/kloofendal_48d_partly_cloudy_puresky.hdr', (t) => {
 
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 1500);
 const TOUCH = matchMedia('(hover:none)').matches;
-const HOME = () => (innerWidth < innerHeight ? M(29, -92, 52) : M(30, -50, 24));   // portrait phones need to stand further back
+const HOME = () => (innerWidth < innerHeight ? M(-8, -59, 83) : M(30, -50, 24));   // portrait: high and from the south-west, so the whole folded plan fits the tall screen
 camera.position.copy(HOME());
 
 // sky: a quiet gradient dome. dark zenith, a low glow toward the sun
@@ -83,13 +83,18 @@ const HOLE = { X0: -12, X1: 80, Y0: -20, Y1: 30, S: 0.2 };
 HOLE.nx = Math.round((HOLE.X1 - HOLE.X0) / HOLE.S); HOLE.ny = Math.round((HOLE.Y1 - HOLE.Y0) / HOLE.S);
 HOLE.tex = new THREE.DataTexture(new Uint8Array(HOLE.nx * HOLE.ny), HOLE.nx, HOLE.ny, THREE.RedFormat, THREE.UnsignedByteType);
 HOLE.tex.magFilter = HOLE.tex.minFilter = THREE.LinearFilter; HOLE.tex.needsUpdate = true;
-function holeMask(tree) {      // a cell is the model's own wherever a ray from high above finds any of it
+function holeMask(tree) {      // a cell is the model's own wherever a ray from high above finds any of it; a few rows per frame, so loading never stalls
   const d = HOLE.tex.image.data, ray = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
-  for (let j = 0; j < HOLE.ny; j++) for (let i = 0; i < HOLE.nx; i++) {
-    ray.origin.copy(M(HOLE.X0 + (i + 0.5) * HOLE.S, HOLE.Y0 + (j + 0.5) * HOLE.S, 30));
-    d[j * HOLE.nx + i] = tree.raycastFirst(ray, THREE.DoubleSide) ? 255 : 0;
-  }
-  HOLE.tex.needsUpdate = true;
+  let j = 0;
+  const step = () => {
+    const t = performance.now();
+    for (; j < HOLE.ny && performance.now() - t < 6; j++) for (let i = 0; i < HOLE.nx; i++) {
+      ray.origin.copy(M(HOLE.X0 + (i + 0.5) * HOLE.S, HOLE.Y0 + (j + 0.5) * HOLE.S, 30));
+      d[j * HOLE.nx + i] = tree.raycastFirst(ray, THREE.DoubleSide) ? 255 : 0;
+    }
+    if (j < HOLE.ny) setTimeout(step, 0); else HOLE.tex.needsUpdate = true;
+  };
+  step();
 }
 let groundMat = null, outerGround = null, farGround = null, context = null; const trees = []; const treePts = [];
 
@@ -190,7 +195,7 @@ setSun(23);
 // ---------- controls ----------
 const orbit = new OrbitControls(camera, canvas);
 orbit.enableDamping = true;
-orbit.target.copy(M(28, 3, 0));
+orbit.target.copy(innerWidth < innerHeight ? M(25, 1, -2) : M(28, 3, 0));
 orbit.maxPolarAngle = Math.PI * 0.495;
 orbit.minDistance = 6; orbit.maxDistance = 260;
 
