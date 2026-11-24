@@ -60,10 +60,10 @@ export function createSound() {
     bellBus = ctx.createGain(); bellBus.gain.value = 0.05;
     bellBus.connect(verb); const dry = ctx.createGain(); dry.gain.value = 0.35; bellBus.connect(dry).connect(master);
   }
-  function bell() {
-    const t = ctx.currentTime, f = BELLS[Math.floor(Math.random() * BELLS.length)] * (S.under > 0.5 ? 0.5 : 1);
-    const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(rnd(0.35, 0.7), t + 0.02); g.gain.exponentialRampToValueAtTime(0.0008, t + rnd(4, 7));
-    const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null; if (p) p.pan.value = rnd(-0.8, 0.8);
+  function bell(fx, amp, pan, at = 0) {
+    const t = ctx.currentTime + at, f = fx || BELLS[Math.floor(Math.random() * BELLS.length)] * (S.under > 0.5 ? 0.5 : 1);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(amp || rnd(0.35, 0.7), t + 0.02); g.gain.exponentialRampToValueAtTime(0.0008, t + rnd(5, 8));
+    const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null; if (p) p.pan.value = pan ?? rnd(-0.8, 0.8);
     for (const [m, a] of [[1, 1], [2.76, 0.18], [5.4, 0.05]]) {
       const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = f * m; og.gain.value = a;
       o.connect(og).connect(g); o.start(t); o.stop(t + 8);
@@ -107,6 +107,11 @@ export function createSound() {
       apply();
     },
     scene(o) { Object.assign(S, o); },
+    welcome() {                             // the arrival: three bells rising (D, A, E) over the pad as it swells in
+      if (!ctx || !S.on) return;
+      [[587.33, 1.0, -0.35, 0.25], [880, 0.85, 0.3, 0.95], [1318.5, 0.7, 0, 1.75]].forEach(([f, a, p, at]) => bell(f, a, p, at));
+      bellT = ctx.currentTime + 9;
+    },
     duck(on) { if (S.ducked !== on) { S.ducked = on; apply(); } },
   };
 }
@@ -138,7 +143,7 @@ export function createVoice() {
         V.t = null; if (my !== tok) return;
         el.muted = false; el.src = src(program, i); el.currentTime = 0; V.busy = true;
         const p = el.play(); if (p) p.catch(() => { if (my === tok) V.busy = false; });
-        const nx = new Audio(); nx.preload = 'auto'; nx.src = src(program, i + 1);   // warm the next chapter
+        if (program !== 'intro') { const nx = new Audio(); nx.preload = 'auto'; nx.src = src(program, i + 1); }   // warm the next chapter
       }, delay);
     },
     stop() { tok++; clearTimeout(V.t); V.t = null; V.busy = false; V.i = -1; try { el.pause(); } catch (e) {} },

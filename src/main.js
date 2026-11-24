@@ -1124,7 +1124,10 @@ $('#snd').onclick = () => setSound(!sound.on);
 if (!voice.supported) $('#tVoice').hidden = true;
 voice.set(pref('2121.voice', true)); $('#tVoice').classList.toggle('on', voice.on); $('#tVoice').textContent = voice.on ? 'Voice on' : 'Voice off';
 $('#tVoice').onclick = () => { voice.unlock(); setVoice(!voice.on); };
-{ const first = () => { voice.unlock(); if (soundWant && !sound.on) sound.set(true); removeEventListener('pointerdown', first, true); removeEventListener('keydown', first, true); };
+{ const first = () => { voice.unlock(); if (soundWant && !sound.on) sound.set(true);
+    let fresh = true; try { fresh = !sessionStorage.getItem('2121.hello'); sessionStorage.setItem('2121.hello', '1'); } catch (e) {}
+    if (fresh && sound.on) { sound.welcome(); if (voice.on) setTimeout(() => { if (!voice.busy && mode !== 'tour') voice.say('intro', 0, 0); }, 1400); }
+    removeEventListener('pointerdown', first, true); removeEventListener('keydown', first, true); };
   addEventListener('pointerdown', first, true); addEventListener('keydown', first, true); }
 
 // ---------- loop ----------
