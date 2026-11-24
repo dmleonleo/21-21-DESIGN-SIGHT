@@ -74,5 +74,10 @@ export function groundShader(s) {
       float lawnK = 1.0 - smoothstep(0.75, 1.15, length(q) + (n - 0.5) * 0.35);
       vec3 lawn = vec3(0.105, 0.135, 0.085) * (0.9 + 0.2 * vn(vGP * 0.3));
       vec3 pave = vec3(0.085, 0.088, 0.092) * (0.88 + 0.24 * n);
-      vec4 diffuseColor = vec4(mix(pave, lawn, lawnK) * diffuse, opacity);`);
+      vec4 diffuseColor = vec4(mix(pave, lawn, lawnK) * diffuse, opacity);
+      float gShFade = 1.0 - smoothstep(30.0, 46.0, length(vGP - vec2(30.0, 4.0)));`)
+    // the sun's shadow map covers only the site; fade its effect out well inside its edge, so no square shows on the ground
+    .replace('#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin.replace(
+      '? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;',
+      '? mix(1.0, getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ), gShFade) : 1.0;'));
 }
