@@ -1158,8 +1158,18 @@ function stepTheme(dt) {
   $('#sunRange').value = hs; setSun(hs);
   if (themeRun.k >= 1) themeRun = null;
 }
-{ let t0 = null; try { t0 = localStorage.getItem('2121.theme'); } catch (e) {} setTheme(t0 || 'dark', true);
-  if (!t0) { $('#sunRange').value = 8.5; setSun(8.5); } }   // a first visit arrives at 08:30, morning light (Leon 2026-11-24)
+{ let t0 = null; try { t0 = localStorage.getItem('2121.theme'); } catch (e) {} setTheme(t0 || 'light', true); }   // a first visit arrives at 08:30 in the light theme (Leon 2026-11-24)
+// the theme follows the site clock: day hours read light, night hours read dark (Leon 2026-11-24)
+let themeNow = document.body.classList.contains('light') ? 'light' : 'dark';
+function syncTheme(dt) {
+  if (themeRun) { themeNow = document.body.classList.contains('light') ? 'light' : 'dark'; return; }
+  const h = +$('#sunRange').value, want = h >= 6 && h < 18.5 ? 'light' : 'dark';
+  if (want !== themeNow) {
+    themeNow = want; document.body.classList.toggle('light', want === 'light');
+    document.querySelectorAll('#theme button').forEach((b) => b.classList.toggle('on', b.dataset.theme === want));
+  }
+  const p1 = THEME[themeNow].paper; paperK += (p1 - paperK) * Math.min(1, dt / 1.2);
+}
 
 // ---------- Journey framing: the subject sits clear of the text ----------
 // portrait: the card fills the lower half, so the picture is lifted; landscape: nudged up and right, away from the card
@@ -1233,7 +1243,7 @@ function frame() {
   clock.update(); const dt = Math.min(clock.getDelta(), 0.05);
   if (exhibit && mode !== 'diagram') exhibit.update(clock.getElapsed());
   if (fly) stepFly(dt);
-  stepDay(dt); stepTheme(dt); grade.uniforms.paper.value = paperK;
+  stepDay(dt); stepTheme(dt); syncTheme(dt); grade.uniforms.paper.value = paperK;
   if (mode === 'diagram') stepDiagram();
   else if (mode === 'tour' && J.on && !fly) stepJourney(dt);
   else if (mode === 'orbit' && !fly) orbit.update();
