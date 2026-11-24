@@ -17,6 +17,7 @@ import { buildExhibit } from './exhibit.js';
 import { buildRules } from './rules.js';
 import { buildWater } from './water.js';
 import { buildListen } from './listen.js';
+import { buildTime } from './time.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { MeshBVH } from 'three-mesh-bvh';
 import { createSound, createVoice } from './sound.js';
@@ -158,7 +159,9 @@ function setSun(hour) {
   const hh = Math.floor(hour), mm = Math.round((hour - hh) * 60);
   $('#sunOut').value = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
-$('#sunRange').addEventListener('input', (e) => setSun(+e.target.value));
+$('#sunRange').addEventListener('input', (e) => { dayCtl.manual = performance.now(); setSun(+e.target.value); });
+// One Big Clock drives the sun; it waits while someone runs the day by hand
+const dayCtl = { manual: -1e9, get: () => +$('#sunRange').value, set: (h) => { $('#sunRange').value = h; setSun(h); }, busy: () => !!dayRun || !!themeRun || performance.now() - dayCtl.manual < 20000 };
 setSun(23);
 
 // ---------- controls ----------
@@ -293,15 +296,16 @@ const fovFor = (m) => { const base = { orbit: 38, tour: 50, walk: 62, diagram: 3
 const realThings = [];
 let mode = 'orbit', fly = null, fovTarget = fovFor('orbit');
 camera.fov = fovTarget; camera.updateProjectionMatrix();
-const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), measure: await (await fetch('data/exhibit.json')).json(), rules: await (await fetch('data/rules.json')).json(), water: await (await fetch('data/water.json')).json(), listen: await (await fetch('data/sound.json')).json() };
-const SHOWS = { measure: 'Measure the Sight', rules: 'Read the Building', water: 'Still Water', listen: 'Room Tone' };
+const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), measure: await (await fetch('data/exhibit.json')).json(), rules: await (await fetch('data/rules.json')).json(), water: await (await fetch('data/water.json')).json(), listen: await (await fetch('data/sound.json')).json(), time: await (await fetch('data/time.json')).json() };
+const SHOWS = { measure: 'Measure the Sight', rules: 'Read the Building', water: 'Still Water', listen: 'Room Tone', time: 'One Big Clock' };
 let program = 'building', stations = PROGRAMS.building;
 let show = (() => { try { return SHOWS[localStorage.getItem('2121.show')] ? localStorage.getItem('2121.show') : 'measure'; } catch (e) { return 'measure'; } })();
 const shows = {}, bvhs = {};
 function setShow(name) {                      // one exhibition is installed at a time: its objects, its collisions
   if (exhibit && exhibit.leave && show !== name) exhibit.leave();
   show = name; try { localStorage.setItem('2121.show', name); } catch (e) {}
-  exhibit = shows[name] || null;
+  const was = exhibit; exhibit = shows[name] || null;
+  if (exhibit && exhibit.enter && exhibit !== was) exhibit.enter();
   if (bvhs[name]) bvh = bvhs[name];
   showVis();
   if (rulerOn) rulerClear();
@@ -949,9 +953,10 @@ loader.load('model/2121.glb', async (gltf) => {
   // exhibits play their sounds at model points; the engine is created further down, so look it up lazily
   const fx = (k, X, Y, Z, o) => { try { return sound.play(k, M(X, Y, Z), o || {}); } catch (e) { return false; } };
   for (const [name, build] of [['measure', () => buildExhibit(scene, root, fx)], ['rules', () => buildRules(scene, fx)], ['water', () => buildWater(scene, { sound: fx, ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })],
-    ['listen', () => buildListen(scene, { fx, hit, sound: () => { try { return sound; } catch (e) { return null; } }, listener: () => (mode === 'tour' || mode === 'walk' ? camera.position : null), ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })]]) {
+    ['listen', () => buildListen(scene, { fx, hit, sound: () => { try { return sound; } catch (e) { return null; } }, listener: () => (mode === 'tour' || mode === 'walk' ? camera.position : null), ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })],
+    ['time', () => buildTime(scene, { fx, hit, day: dayCtl, sound: () => { try { return sound; } catch (e) { return null; } }, listener: () => (mode === 'tour' || mode === 'walk' ? camera.position : null), ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })]]) {
     try {
-      const ex = await build(); shows[name] = ex;
+      const ex = await build(); shows[name] = ex; ex.group.visible = false;
       ex.group.traverse((o) => { if (o.isMesh && !o.userData.label) for (const m of [].concat(o.material)) if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); } });
       const extra = [];
       for (const c of ex.colliders) { c.updateMatrixWorld(true); const g = c.geometry.clone(); for (const k of Object.keys(g.attributes)) if (k !== 'position') g.deleteAttribute(k); g.applyMatrix4(c.matrixWorld); extra.push(g.index ? g.toNonIndexed() : g); }
