@@ -122,7 +122,7 @@ export function createSound() {
     if (p.positionX) { p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; } else p.setPosition(pos.x, pos.y, pos.z);
     g.connect(p); p.connect(fxBus);
     const send = ctx.createGain(); send.gain.value = 0.55 * wet; p.connect(send).connect(roomSend);
-    voices++; setTimeout(() => { voices--; try { g.disconnect(); p.disconnect(); send.disconnect(); } catch (e) {} }, 9000);
+    voices++; setTimeout(() => { voices--; try { g.disconnect(); p.disconnect(); send.disconnect(); } catch (e) {} }, 12000);
     return g;
   }
   function env(g, t, a, peak, dec) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec); }
@@ -173,6 +173,36 @@ export function createSound() {
       const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = rnd(1000, 1500); bp.Q.value = 0.9; const g = ctx.createGain(); bp.connect(g).connect(o);
       env(g, t, 0.0015, 0.9 * a, 0.06); noise(t, 0.09, bp);
     },
+    // a struck bell: minor-third partials (hum, prime, tierce, quint, nominal...), long, slowly beating
+    bell(o, t, { f = 440, a = 1, d = 9 }) {
+      for (const [m, k, dd] of [[0.5, 0.35, 1.2], [1, 1, 1], [1.183, 0.45, 0.7], [1.506, 0.25, 0.5], [2, 0.32, 0.45], [2.51, 0.12, 0.3], [3.01, 0.08, 0.22], [4.1, 0.05, 0.14]]) {
+        const g = ctx.createGain(); g.connect(o); env(g, t, 0.002, 0.22 * a * k, d * dd); const x = osc('sine', f * m, t, d * dd + 0.1, g); x.detune.value = rnd(-3, 3);
+      }
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500; const gn = ctx.createGain(); hp.connect(gn).connect(o); env(gn, t, 0.0005, 0.2 * a, 0.02); noise(t, 0.03, hp);
+    },
+    // a marimba bar: fundamental, the tuned 4th partial, a soft mallet
+    marimba(o, t, { f = 440, a = 1 }) {
+      for (const [m, k, dd] of [[1, 1, 1], [3.99, 0.28, 0.25], [10.6, 0.06, 0.08]]) { const g = ctx.createGain(); g.connect(o); env(g, t, 0.0015, 0.45 * a * k, (0.35 + 180 / f) * dd); osc('sine', f * m, t, 1.6, g); }
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 2; bp.Q.value = 3; const gn = ctx.createGain(); bp.connect(gn).connect(o); env(gn, t, 0.0008, 0.18 * a, 0.015); noise(t, 0.02, bp);
+    },
+    // a plucked string (Karplus-Strong: a noise burst circulating in a tuned delay that loses its highs)
+    pluck(o, t, { f = 220, a = 1, d = 3, bright = 0.5 }) {
+      const dl = ctx.createDelay(0.05); dl.delayTime.value = 1 / f; const fb = ctx.createGain(); fb.gain.value = Math.pow(0.001, 1 / (f * d)); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200 + 5000 * bright + f * 2;
+      const ex = ctx.createGain(); env(ex, t, 0.0005, 0.6 * a, 1 / f * 2.2); const bp = ctx.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = 2000 + 6000 * bright; noise(t, 0.04, bp); bp.connect(ex);
+      ex.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); const g = ctx.createGain(); g.gain.value = 0.9; lp.connect(g).connect(o);
+      g.gain.setValueAtTime(0.9, t + d); g.gain.linearRampToValueAtTime(0, t + d + 0.3);
+      setTimeout(() => { try { fb.disconnect(); dl.disconnect(); } catch (e) {} }, (t - ctx.currentTime + d + 0.6) * 1000);
+    },
+    // a footstep on concrete: heel, then the sole
+    step(o, t, { a = 1 }) {
+      for (const [dt, f, k] of [[0, rnd(300, 420), 1], [rnd(0.05, 0.08), rnd(900, 1400), 0.5]]) { const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 1.1; const g = ctx.createGain(); bp.connect(g).connect(o); env(g, t + dt, 0.002, 0.5 * a * k, 0.07); noise(t + dt, 0.1, bp); }
+      KINDS.thud(o, t, { f: 70, a: 0.25 * a });
+    },
+    // wood blocks (hyoshigi-like clappers), dry and high
+    block(o, t, { f = 1700, a = 1 }) {
+      for (const [m, k] of [[1, 1], [2.7, 0.35], [5.1, 0.12]]) { const g = ctx.createGain(); g.connect(o); env(g, t, 0.0006, 0.5 * a * k, 0.05 + 30 / f); osc('sine', f * m, t, 0.3, g); }
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 1.5; bp.Q.value = 4; const gn = ctx.createGain(); bp.connect(gn).connect(o); env(gn, t, 0.0005, 0.35 * a, 0.012); noise(t, 0.02, bp);
+    },
     // a soft click for UI-like objects: vote pads, squares
     click(o, t, { a = 1, f = 1400 }) { const g = ctx.createGain(); g.connect(o); env(g, t, 0.001, 0.25 * a, 0.06); osc('sine', f, t, 0.1, g); KINDS.tick(o, t, { a: a * 0.4, f: f * 2 }); },
   };
@@ -187,12 +217,27 @@ export function createSound() {
     const g = ctx.createGain(); g.gain.value = 0;
     const p = ctx.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = 1.2; p.rolloffFactor = 1.6; p.maxDistance = 50;
     if (p.positionX) { p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; } else p.setPosition(pos.x, pos.y, pos.z);
-    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = o2.type = type; o1.frequency.value = f; o2.frequency.value = f * 1.0035;
+    const srcs = [];
     const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = rnd(0.08, 0.2); lg.gain.value = 0.25;
-    const vg = ctx.createGain(); vg.gain.value = 0.75; lfo.connect(lg).connect(vg.gain);
-    o1.connect(vg); o2.connect(vg); vg.connect(g).connect(p); p.connect(fxBus); const send = ctx.createGain(); send.gain.value = 0.4; p.connect(send).connect(roomSend);
-    o1.start(); o2.start(); lfo.start();
-    return { set(v, tc = 0.4) { g.gain.setTargetAtTime(v, ctx.currentTime, tc); }, stop() { g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); setTimeout(() => { try { o1.stop(); o2.stop(); lfo.stop(); p.disconnect(); } catch (e) {} }, 2000); } };
+    const vg = ctx.createGain(); vg.gain.value = 0.75; lfo.connect(lg).connect(vg.gain); srcs.push(lfo);
+    let tone = null;
+    if (type === 'voice') {
+      // a sung vowel: two detuned saws with vibrato through three formant bands; the vowel can morph (ah -> oo)
+      const vib = ctx.createOscillator(), vibG = ctx.createGain(); vib.frequency.value = rnd(4.6, 5.6); vibG.gain.value = f * 0.006; vib.connect(vibG); srcs.push(vib);
+      const mix = ctx.createGain(); mix.gain.value = 0.22;
+      for (const dt of [1, 1.004, 0.997]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f * dt; vibG.connect(o.frequency); o.connect(mix); srcs.push(o); }
+      const F = [[730, 1, 9], [1090, 0.5, 11], [2440, 0.18, 14]], bands = [];
+      for (const [ff, k, q] of F) { const b = ctx.createBiquadFilter(); b.type = 'bandpass'; b.frequency.value = ff; b.Q.value = q; const bg = ctx.createGain(); bg.gain.value = k * 3.2; mix.connect(b).connect(bg).connect(vg); bands.push(b); }
+      tone = (k, tc = 2) => { const A = [730, 1090, 2440], O = [300, 870, 2240]; bands.forEach((b, i) => b.frequency.setTargetAtTime(A[i] + (O[i] - A[i]) * k, ctx.currentTime, tc)); };
+    } else if (type === 'wind' || type === 'city') {
+      const n = ctx.createBufferSource(); n.buffer = noiseBuf; n.loop = true; const b = ctx.createBiquadFilter(); b.type = type === 'wind' ? 'bandpass' : 'lowpass'; b.frequency.value = f; b.Q.value = type === 'wind' ? 0.7 : 0.5;
+      n.connect(b).connect(vg); srcs.push(n); lg.gain.value = 0.6; lfo.frequency.value = rnd(0.05, 0.12);
+    } else {
+      const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = o2.type = type; o1.frequency.value = f; o2.frequency.value = f * 1.0035; o1.connect(vg); o2.connect(vg); srcs.push(o1, o2);
+    }
+    vg.connect(g).connect(p); p.connect(fxBus); const send = ctx.createGain(); send.gain.value = 0.4; p.connect(send).connect(roomSend);
+    srcs.forEach((x) => x.start());
+    return { set(v, tc = 0.4) { g.gain.setTargetAtTime(v, ctx.currentTime, tc); }, vowel(k, tc) { if (tone) tone(k, tc); }, stop() { g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); setTimeout(() => { try { srcs.forEach((x) => x.stop()); p.disconnect(); } catch (e) {} }, 2000); } };
   }
   function tick() {                         // ~4 times a second: scene follows the camera, events are scheduled
     if (!ctx || !S.on) return;

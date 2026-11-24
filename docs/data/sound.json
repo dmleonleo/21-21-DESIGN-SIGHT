@@ -1,22 +1,22 @@
 [
  {
   "id": "l-clap",
-  "title": "Clap",
+  "title": "Call and Answer",
   "cam": [
+   16.0,
    2.0,
-   0.5,
    1.6
   ],
   "look": [
-   10,
-   -3,
-   -0.4
+   8.0,
+   -2.5,
+   -0.2
   ],
-  "text": "Room Tone is a show you hear, so turn the sound on. Tap anywhere and it claps there. Every surface answers, and the ring on the ground is the same sound slowed a hundred times. Out here, the garden barely answers at all."
+  "text": "Room Tone is a show you hear, so turn the sound on. Wooden clappers you cannot see walk the plaza, a slow call and then a roll. Every line that flashes is an echo, drawn from the clap to the wall that sent it back. Tap anywhere to clap back."
  },
  {
   "id": "l-lobby",
-  "title": "Again, Inside",
+  "title": "Footsteps",
   "cam": [
    25.6,
    14.6,
@@ -27,11 +27,11 @@
    11.7,
    0.0
   ],
-  "text": "Clap again inside. Concrete, glass and a low ceiling send the sound back sooner and hold it longer. Each white dot marks a wall that answered."
+  "text": "Inside, someone is walking. Concrete, glass and a low ceiling hand every step back to you, sooner and longer than the garden did. Follow the footprints, or tap to clap."
  },
  {
   "id": "l-stair",
-  "title": "A Scale of Steps",
+  "title": "A Tuned Stair",
   "cam": [
    52.6,
    16.2,
@@ -42,7 +42,7 @@
    15.0,
    -4.6
   ],
-  "text": "The stair is tuned. In Walk, every step down plays the next note lower, and climbing back runs the scale upward. Here the building is an instrument you play with your feet."
+  "text": "The stair is an instrument. Every tread is a note, and someone is playing it on the way down, wooden bars above the landing and strings below. Tap a step to play it, or walk it yourself in Walk."
  },
  {
   "id": "l-field",
@@ -57,11 +57,11 @@
    3.5,
    -4.6
   ],
-  "text": "Twelve small speakers hang in Gallery 1, each holding one note. Walk between them and the chord shifts with every step. Tap one to silence it, and tap again to bring it back. Headphones help."
+  "text": "Twelve speakers hang in Gallery 1, each holding one sung note. A slow choir moves through six chords, and the light under each speaker is its voice. Tap a speaker to hold its note through every chord."
  },
  {
   "id": "l-echo",
-  "title": "The Long Room",
+  "title": "The Long Room Plays Back",
   "cam": [
    42.2,
    -5.4,
@@ -72,11 +72,11 @@
    0.2,
    -6.0
   ],
-  "text": "Gallery 2 is about thirty metres long. Clap here, and the far wall answers less than two tenths of a second later. Watch the ring cross the floor, a hundred times slower than you hear it."
+  "text": "Gallery 2 is a long room. The sheet of light is the far wall's echo, slowed about twenty four times, and it plays every mark it crosses. Tap the floor to add a note, and tap a mark to take it away. The room keeps time for you."
  },
  {
   "id": "l-glass",
-  "title": "Tall Glass",
+  "title": "Rain on Glass",
   "cam": [
    53.0,
    3.2,
@@ -87,7 +87,7 @@
    11.0,
    -4.2
   ],
-  "text": "Tap the court glass. It rings instead of answering, higher towards the roof. Beyond it, the open sky sends almost nothing back."
+  "text": "Rain on the court glass. Every drop rings it, higher towards the roof, and draws a ring where it lands. Tap the glass to strike it yourself."
  },
  {
   "id": "l-silence",
@@ -102,6 +102,6 @@
    -3.0,
    0.3
   ],
-  "text": "The last room is kept quiet. The music steps back, and only a slow pulse stays, about sixty beats a minute. Stay as long as you like. When you leave, the building's sound returns."
+  "text": "The last room is kept almost quiet. A slow pulse, the city faintly through the walls, and a ring that fills once a minute, closed by a single bell. Stay as long as you like."
  }
 ]
