@@ -18,14 +18,14 @@
   "id": "plaza",
   "title": "Plaza and Low Wall",
   "cam": [
-   20,
-   3.5,
-   1.6
+   23.5,
+   -11.5,
+   0.95
   ],
   "look": [
-   6,
-   -2.5,
-   1.0
+   33,
+   8,
+   4.6
   ],
   "text": "The west roof folds down from 4.8 m to a knife edge. A concrete wall carries the line on, dividing the paved plaza from the lawn, its steel rail level with the tip."
  },
@@ -35,12 +35,12 @@
   "cam": [
    14,
    4.2,
-   1.6
+   1.2
   ],
   "look": [
-   19.6,
-   10.6,
-   2.4
+   22,
+   12,
+   3.2
   ],
   "text": "Two concrete walls frame a covered outdoor room. Above the glass door, a band of concrete and a strip of glass rise to meet the steel."
  },
@@ -50,12 +50,12 @@
   "cam": [
    22.5,
    13,
-   1.6
+   1.25
   ],
   "look": [
    40,
    10.5,
-   0.9
+   1.1
   ],
   "text": "The lobby runs along the south glass. The ceiling follows the fold of the roof, from the high back wall down to the glazing."
  },
@@ -63,14 +63,14 @@
   "id": "stair",
   "title": "Descent",
   "cam": [
-   52.6,
-   16.2,
-   -1.4
+   38.5,
+   15.6,
+   1.4
   ],
   "look": [
-   43.5,
-   15.0,
-   -4.6
+   48,
+   15.4,
+   -1.0
   ],
   "text": "The stair drops beside the sunken court behind 1.1 m glass guards. Daylight follows you down from the side."
  },
@@ -80,12 +80,12 @@
   "cam": [
    30.5,
    9,
-   -4.4
+   -4.65
   ],
   "look": [
    38.5,
    -3,
-   -4.8
+   -4.6
   ],
   "text": "133 m², 5 m to the ceiling. Formwork panels of 1800 × 900 mm, and their tie holes, set the scale of every wall."
  },
@@ -95,12 +95,12 @@
   "cam": [
    44,
    -4,
-   -4.4
+   -4.65
   ],
   "look": [
    66,
    3,
-   -4.0
+   -4.3
   ],
   "text": "443 m², roughly 15 by 31 m, with a single row of six columns. This is where the large exhibitions are held."
  },
@@ -110,12 +110,12 @@
   "cam": [
    52,
    2.5,
-   -4.4
+   -4.7
   ],
   "look": [
    55,
    13,
-   -1.5
+   1.2
   ],
   "text": "Under the east fold, a full-height glass wall opens onto the sunken court, bringing daylight down to the basement between solid steel mullions about 70 mm wide."
  },

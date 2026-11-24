@@ -236,6 +236,7 @@ body.walk #ruler,body.tour.exhibit #ruler{display:flex}
 #note{position:fixed;left:50%;bottom:calc(var(--pad) + 110px);transform:translateX(-50%);z-index:12;max-width:min(440px,calc(100vw - 2*var(--pad)));font-size:12px;line-height:1.6;color:var(--ink);text-align:center;animation:rise .6s var(--ease) both}
 body.light #ruler,body.light #note{text-shadow:0 0 16px rgba(0,0,0,.42),0 0 2px rgba(0,0,0,.25)}
 @media (max-width:720px){#ruler{right:var(--pad);bottom:calc(var(--pad) + 96px)} #note{bottom:calc(var(--pad) + 150px)}}
+@media (max-width:720px){body.tour.exhibit #ruler{display:none}}   /* the stop card owns the lower screen on a phone */
 /* diagram lever */
 #explode{position:fixed;left:50%;bottom:var(--pad);transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:16px;font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--mute)}
 #explode input{-webkit-appearance:none;appearance:none;width:220px;height:28px;background:transparent;cursor:grab;touch-action:none}

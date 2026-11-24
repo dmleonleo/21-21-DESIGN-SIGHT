@@ -203,6 +203,19 @@ export function createSound() {
       for (const [m, k] of [[1, 1], [2.7, 0.35], [5.1, 0.12]]) { const g = ctx.createGain(); g.connect(o); env(g, t, 0.0006, 0.5 * a * k, 0.05 + 30 / f); osc('sine', f * m, t, 0.3, g); }
       const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 1.5; bp.Q.value = 4; const gn = ctx.createGain(); bp.connect(gn).connect(o); env(gn, t, 0.0005, 0.35 * a, 0.012); noise(t, 0.02, bp);
     },
+    // one split-flap leaf falling: a plastic tick with a little hollow body
+    flap(o, t, { a = 1, f = rnd(2200, 3400) }) {
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 2.2; const g = ctx.createGain(); bp.connect(g).connect(o); env(g, t, 0.0006, 0.45 * a, 0.018); noise(t, 0.03, bp, 1.3);
+      const g2 = ctx.createGain(); g2.connect(o); env(g2, t, 0.001, 0.1 * a, 0.03); osc('triangle', rnd(480, 620), t, 0.06, g2);
+    },
+    // a crossing signal's bird call: two quick rising sweeps
+    chirp(o, t, { a = 1, f = 2100 }) {
+      for (const [dt, k] of [[0, 1], [0.11, 0.8]]) { const g = ctx.createGain(); g.connect(o); env(g, t + dt, 0.004, 0.3 * a * k, 0.07); const x = osc('sine', f * 0.78, t + dt, 0.12, g); x.frequency.exponentialRampToValueAtTime(f * 1.18, t + dt + 0.07); }
+    },
+    // a camera shutter: open and close
+    shutter(o, t, { a = 1 }) {
+      for (const [dt, f, k] of [[0, 3200, 1], [0.045, 2400, 0.7]]) { const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 1.4; const g = ctx.createGain(); bp.connect(g).connect(o); env(g, t + dt, 0.0005, 0.35 * a * k, 0.022); noise(t + dt, 0.04, bp, 1.2); }
+    },
     // a soft click for UI-like objects: vote pads, squares
     click(o, t, { a = 1, f = 1400 }) { const g = ctx.createGain(); g.connect(o); env(g, t, 0.001, 0.25 * a, 0.06); osc('sine', f, t, 0.1, g); KINDS.tick(o, t, { a: a * 0.4, f: f * 2 }); },
   };
