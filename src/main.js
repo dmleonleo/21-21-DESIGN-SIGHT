@@ -6,6 +6,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { buildContext, buildFarGround, groundShader } from './context.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -15,6 +16,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { buildExhibit } from './exhibit.js';
 import { buildRules } from './rules.js';
 import { buildWater } from './water.js';
+import { buildListen } from './listen.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { MeshBVH } from 'three-mesh-bvh';
 import { createSound, createVoice } from './sound.js';
@@ -38,7 +40,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x2a2c2e, 90, 420);
+scene.fog = new THREE.Fog(0x2a2c2e, 80, 1000);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.22;
@@ -68,7 +70,7 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(1200, 32, 16), new THREE.Sha
       float s = max(dot(d, normalize(sunPosition)), 0.0);
       vec3 warm = vec3(1.0,0.62,0.34) * (1.0 - day * 0.6);
       c += warm * (pow(s, 6.0) * 0.35 + pow(s, 64.0) * 0.5) * (1.0 - h * 0.6);
-      c = mix(c, hor * 0.6, smoothstep(0.0, -0.15, d.y));
+      c = mix(c, hor, smoothstep(0.0, -0.04, d.y));   // below the horizon: exactly the haze the ground fades into
       gl_FragColor = vec4(c, 1.0);
     }`,
 }));
@@ -76,7 +78,7 @@ sky.material.uniforms.rayleigh = { value: 0 };
 scene.add(sky);
 const nightMats = [];
 const realList = [sky];
-let groundMat = null, outerGround = null; const trees = []; const treePts = [];
+let groundMat = null, outerGround = null, farGround = null, context = null; const trees = []; const treePts = [];
 
 const hemi = new THREE.HemisphereLight(0xc9d3dc, 0x2b2a24, 0.6);
 scene.add(hemi);
@@ -98,8 +100,15 @@ let lampLevel = 0, baseExposure = 0.8, underK = 0;
 {
   // the outer ground: a 5 m grid that takes the lawn's own heights at its edges (fitGround), so the garden reads level with it
   const g = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200, 240, 240).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x30352a, roughness: 1 }));
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }));
+  g.material.onBeforeCompile = groundShader;
   g.position.y = -0.45; g.receiveShadow = true; scene.add(g); realList.push(g); groundMat = g.material; outerGround = g;
+  farGround = buildFarGround(scene); realList.push(farGround);
+  for (const m of [g.material, farGround.material]) { m.userData.night = m.color.clone(); nightMats.push(m); }
+  fetch('data/context.json').then((r) => r.json()).then((rows) => {
+    context = buildContext(scene, rows); realList.push(context);
+    try { context.visible = mode !== 'diagram' && cutKind === 'none'; if (realThings.length) realThings.push(context); } catch (e) { /* module still loading: realThings picks it up from realList */ }
+  }).catch((e) => console.error('context', e));
   let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const trunk = new THREE.CylinderGeometry(0.18, 0.28, 1, 6).translate(0, 0.5, 0);
   // crown: a loose cluster of low-poly blobs, read as silhouette at dusk
@@ -140,7 +149,7 @@ function setSun(hour) {
   sun.color.setHSL(0.075, 0.75 * (1 - day) + 0.08, 0.55 + 0.3 * day);
   hemi.intensity = 0.16 + 0.14 * day;   // night floor: Roppongi city glow
   hemi.color.setHSL(0.6, 0.25, 0.35 + 0.4 * day);
-  scene.fog.color.setHSL(0.6, 0.08, 0.04 + 0.14 * day);
+  scene.fog.color.setRGB(0.05 + 0.37 * day, 0.045 + 0.385 * day, 0.05 + 0.38 * day);   // = the sky shader's horizon colour
   scene.environmentIntensity = (0.22 + 0.3 * day) * envK;
   sky.material.uniforms.day.value = day;
   baseExposure = 0.62 + 0.9 * (1 - day) * (1 - day);   // eye adapts at night
@@ -229,7 +238,7 @@ function stir(e, amp) {
   const rc = pick(e), hs = rc.intersectObjects(exhibit.surfaces, false); if (!hs.length) return false;
   const h = hit(rc.ray.origin, rc.ray.direction, 200); if (h && hs[0].distance > h.distance + 0.06) return false;
   const p = hs[0].point; if (amp < 1 && rippleP.distanceTo(p) < 0.12) return false;
-  rippleP.copy(p); hs[0].object.material.drop(p.x, -p.z, amp); return true;
+  rippleP.copy(p); hs[0].object.material.drop(p.x, -p.z, amp, amp < 1 ? 'stir' : 'tap'); return true;
 }
 canvas.addEventListener('pointermove', (e) => { const now = performance.now(); if (now - rippleT < 45) return; if (stir(e, look.drag ? 0.4 : 0.8)) rippleT = now; });
 let hoverT = 0;                                       // desktop: the pointer says what can be touched
@@ -269,12 +278,14 @@ canvas.addEventListener('pointerup', (e) => {
   if (!exhibit) return;
   stir(e, 1.3);
   const hs = rc.intersectObject(exhibit.group, true);
+  if (exhibit.clap && h && !hs.some((x) => x.object.userData.noClap && x.distance <= h.distance + 0.08)) exhibit.clap(h.point);   // Room Tone: every tap is a clap
   for (const x of hs) {
     if (h && x.distance > h.distance + 0.08) break;              // behind a wall
     let o = x.object; while (o && !o.userData.info && !o.userData.onTap) o = o.parent;
-    if (o) { note(o.userData.onTap ? o.userData.onTap() : o.userData.info); return; }
+    if (o) { if (!o.userData.onTap) { const q = toModel(x.point); fx0('click', q.x, q.y, q.z, { a: 0.35, f: 1568 }); } note(o.userData.onTap ? o.userData.onTap() : o.userData.info); return; }
   }
 });
+const fx0 = (k, X, Y, Z, o) => { try { return sound.play(k, M(X, Y, Z), o || {}); } catch (e) { return false; } };
 
 // ---------- modes ----------
 const fovFor = (m) => { const base = { orbit: 38, tour: 50, walk: 62, diagram: 38 }[m]; const a = innerWidth / innerHeight;
@@ -282,12 +293,13 @@ const fovFor = (m) => { const base = { orbit: 38, tour: 50, walk: 62, diagram: 3
 const realThings = [];
 let mode = 'orbit', fly = null, fovTarget = fovFor('orbit');
 camera.fov = fovTarget; camera.updateProjectionMatrix();
-const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), measure: await (await fetch('data/exhibit.json')).json(), rules: await (await fetch('data/rules.json')).json(), water: await (await fetch('data/water.json')).json() };
-const SHOWS = { measure: 'Measure the Sight', rules: 'Read the Building', water: 'Still Water' };
+const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), measure: await (await fetch('data/exhibit.json')).json(), rules: await (await fetch('data/rules.json')).json(), water: await (await fetch('data/water.json')).json(), listen: await (await fetch('data/sound.json')).json() };
+const SHOWS = { measure: 'Measure the Sight', rules: 'Read the Building', water: 'Still Water', listen: 'Room Tone' };
 let program = 'building', stations = PROGRAMS.building;
 let show = (() => { try { return SHOWS[localStorage.getItem('2121.show')] ? localStorage.getItem('2121.show') : 'measure'; } catch (e) { return 'measure'; } })();
 const shows = {}, bvhs = {};
 function setShow(name) {                      // one exhibition is installed at a time: its objects, its collisions
+  if (exhibit && exhibit.leave && show !== name) exhibit.leave();
   show = name; try { localStorage.setItem('2121.show', name); } catch (e) {}
   exhibit = shows[name] || null;
   if (bvhs[name]) bvh = bvhs[name];
@@ -406,6 +418,8 @@ function setCut(kind, v) {
   const planes = on ? [cutPlane] : null;
   for (const m of clipMats) { m.clippingPlanes = planes; m.needsUpdate = true; }
   if (groundMat) { groundMat.clippingPlanes = planes; groundMat.needsUpdate = true; }
+  if (farGround) { farGround.material.clippingPlanes = planes; farGround.material.needsUpdate = true; }
+  if (context) context.visible = !on && mode !== 'diagram';
   coverU.cutOn.value = on ? 1 : 0;
   earthMat.clippingPlanes = planes; earthMat.needsUpdate = true; earth.visible = on;
   trees.forEach((t) => (t.visible = !on && mode !== 'diagram'));
@@ -453,7 +467,7 @@ function setMode(m) {
   showVis();
   if (m !== 'orbit' && cutKind !== 'none') setCut('none');
   J.on = false; xfadeK = 0; $('#tourCard').style.opacity = ''; $('#cut2').style.transition = 'none'; $('#cut2').style.opacity = 0; voice.stop();
-  scene.fog.far = D ? 1e5 : 420;
+  scene.fog.far = D ? 1e5 : 1000;
   if (D) { explode = explodeTarget = 0; $('#explodeRange').value = 0; }
   $('#tourCard').hidden = m !== 'tour';
   $('#walkHelp').hidden = m !== 'walk';
@@ -890,7 +904,7 @@ loader.load('model/2121.glb', async (gltf) => {
     const name = (mats[0].name || '') + ' ' + o.name + ' ' + (o.parent ? o.parent.name : '');
     const isGlass = /glass|frosted/.test(name) || mats[0].transparent;
     const isLight = /light/.test(name) || (mats[0].emissive && mats[0].emissive.r > 0.5);
-    if (/lawn/.test(mats[0].name)) mats.forEach((m) => m.color.setRGB(0.17, 0.18, 0.15));   // quiet the grass
+    const swapLawn = /lawn/.test(mats[0].name) && groundMat;   // the lawn shares the garden ground, so the site has no edge
     if (/__roof$/.test(o.name)) mats.forEach((m) => { if (!m.userData.roofed) { m.userData.roofed = true; m.color.multiplyScalar(0.28); m.metalness = 0.7; m.roughness = 0.38; } });
     if (/concrete/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.multiplyScalar(0.5); m.roughness = 0.92; } });
     if (/__stone$/.test(o.name)) mats.forEach((m) => { if (!m.userData.dark) { m.userData.dark = true; m.color.multiplyScalar(0.42); m.roughness = 0.9; } });
@@ -906,6 +920,11 @@ loader.load('model/2121.glb', async (gltf) => {
       if (!isGlass && !isLight && !m.userData.cover) { m.userData.cover = true; addCover(m); }
       if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); if (!isGlass && !isLight) { m.side = THREE.DoubleSide; m.flatShading = true; } }   // planar architecture: geometric normals, ignores broken exported vertex normals
     });
+    if (swapLawn) {   // same ground colour as the garden, flat-shaded like the rest of the model (its exported normals are unreliable)
+      const lm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true, side: THREE.DoubleSide });
+      lm.onBeforeCompile = groundShader; lm.customProgramCacheKey = () => 'ground-flat'; lm.userData.night = lm.color.clone(); nightMats.push(lm); clipMats.push(lm); lm.userData.clip = true;
+      o.material = lm;
+    }
     if (!isLight) {
       const g = o.geometry.clone();
       for (const k of Object.keys(g.attributes)) if (k !== 'position') g.deleteAttribute(k);
@@ -927,7 +946,10 @@ loader.load('model/2121.glb', async (gltf) => {
   buildDiagram(root); setSun(+$('#sunRange').value);
   // two exhibitions share the building; each gets its own collision tree with its own plinths
   bvhs.base = new MeshBVH(BufferGeometryUtils.mergeGeometries(geos, false)); bvh = bvhs.base;   // the bare building, so exhibitions can find its floors
-  for (const [name, build] of [['measure', () => buildExhibit(scene, root)], ['rules', () => buildRules(scene)], ['water', () => buildWater(scene, { ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })]]) {
+  // exhibits play their sounds at model points; the engine is created further down, so look it up lazily
+  const fx = (k, X, Y, Z, o) => { try { return sound.play(k, M(X, Y, Z), o || {}); } catch (e) { return false; } };
+  for (const [name, build] of [['measure', () => buildExhibit(scene, root, fx)], ['rules', () => buildRules(scene, fx)], ['water', () => buildWater(scene, { sound: fx, ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })],
+    ['listen', () => buildListen(scene, { fx, hit, sound: () => { try { return sound; } catch (e) { return null; } }, listener: () => (mode === 'tour' || mode === 'walk' ? camera.position : null), ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })]]) {
     try {
       const ex = await build(); shows[name] = ex;
       ex.group.traverse((o) => { if (o.isMesh && !o.userData.label) for (const m of [].concat(o.material)) if (!m.userData.clip) { m.userData.clip = true; clipMats.push(m); } });
@@ -1113,6 +1135,20 @@ function frameJourney() {
 
 // ---------- sound and voice ----------
 const sound = createSound(), voice = createVoice();
+const camFwd = new THREE.Vector3();
+// which room the listener stands in (model X, Y, Z): sets the reverb; rough boxes, judged from the plans
+function roomAt(X, Y, Z, m) {
+  if (m === 'orbit' || m === 'diagram') return 'outside';
+  if (Z < -1.2) {
+    if (X > 45 && Y > 8.3 && Y < 8.6 + (X - 45) * 0.47) return 'court';
+    if (X > 43.5 && X < 51 && Y > 8.5 && Y < 15) return 'stair';
+    if (X < 39) return 'g1';
+    return 'g2';
+  }
+  if (X > 17 && X < 46 && Y > 4 && Y < 17 && Z < 5) return 'lobby';
+  if (X > -7 && X < 12 && Y > -7 && Y < 9 && Z < 5) return 'g3';
+  return 'outside';
+}
 const pref = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === '1'; } catch (e) { return d; } };
 const keep = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch (e) {} };
 let soundWant = pref('2121.sound', true);
@@ -1150,7 +1186,11 @@ function frame() {
   for (const m of lightMats) m.emissiveIntensity = 1.6 + 2.4 * lampLevel;
   if (Math.abs(camera.fov - fovTarget) > 0.05) { camera.fov += (fovTarget - camera.fov) * 0.05; camera.updateProjectionMatrix(); }
   grade.uniforms.time.value = (grade.uniforms.time.value + 0.37) % 100;
-  sound.scene({ under: underK, day: 1 - lampLevel, water: show === 'water' && (mode === 'walk' || (mode === 'tour' && program === 'water')) });
+  sound.scene({ under: underK, day: 1 - lampLevel, water: false });   // Still Water now sounds from its own drops, in place
+  if (sound.ready) {
+    camera.getWorldDirection(camFwd); sound.listen(camera.position.x, camera.position.y, camera.position.z, camFwd.x, camFwd.y, camFwd.z);
+    sound.room(roomAt(camera.position.x, -camera.position.z, camera.position.y, mode));
+  }
   sound.duck(voice.busy);
   frameJourney();
   updateMap();
@@ -1164,4 +1204,4 @@ addEventListener('resize', () => {
   composer.setSize(innerWidth, innerHeight); xfRT.setSize(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()); sizeDiag();
 });
 // debug hook for automated checks
-window.__2121 = { AX, axisGo, axisPlay, axisAt, setShow, get show() { return show; }, view: (c, l) => { if (mode !== 'walk') setMode('walk'); fly = null; camera.position.copy(M(...c)); lookAtPoint(M(...l)); applyLook(); }, get exhibit() { return exhibit; }, get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => AX.ready, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };
+window.__2121 = { orbitView: (c, l) => { setMode('orbit'); fly = null; orbit.target.copy(M(...l)); camera.position.copy(M(...c)); orbit.update(); }, AX, axisGo, axisPlay, axisAt, setShow, get show() { return show; }, view: (c, l) => { if (mode !== 'walk') setMode('walk'); fly = null; camera.position.copy(M(...c)); lookAtPoint(M(...l)); applyLook(); }, get exhibit() { return exhibit; }, get bvh() { return bvh; }, THREE, scene, setMode, goStation, setCut, J, camera, setSun, ready: () => AX.ready, probe: (x, y, z) => { const h = hit(M(x, y, z), DOWN, 30); return h && toModel(h.point); } };

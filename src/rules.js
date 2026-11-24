@@ -31,7 +31,7 @@ function tag(g, n, title, anchor, at, info) {
   return sp;
 }
 
-export async function buildRules(scene) {
+export async function buildRules(scene, fx = () => {}) {
   try { await Promise.all(['280 30px "Bella Gothic"', '560 19px "Bella Gothic"'].map((f) => document.fonts.load(f))); } catch (e) {}
   const g = new THREE.Group(); g.name = 'rules'; g.userData.colliders = [];
   const anim = [];
@@ -90,7 +90,7 @@ export async function buildRules(scene) {
       const t = label([{ t: k.toUpperCase(), size: 80, weight: 560, track: 8, color: '#f2f0ea' }], { w: 0.8, px: 320, align: 'center', pad: 0.01 });
       onFloor(t, x, 6.95, B1 + 0.005); g.add(t);
       pads[k] = { x, y: 6.6, mesh: pad };
-      pad.userData.onTap = () => { v = load(); v[k]++; localStorage.setItem(KEY, JSON.stringify(v)); draw(); return `Counted: ${k.toUpperCase()}. ${v.yes} yes, ${v.no} no on this device.`; };
+      pad.userData.onTap = () => { fx('note', x, 6.6, B1 + 0.05, { f: k === 'yes' ? 880 : 587.33, a: 0.45, d: 1.8 }); fx('click', x, 6.6, B1 + 0.05, { f: k === 'yes' ? 1760 : 1175, a: 0.6 }); v = load(); v[k]++; localStorage.setItem(KEY, JSON.stringify(v)); draw(); return `Counted: ${k.toUpperCase()}. ${v.yes} yes, ${v.no} no on this device.`; };
       pad.userData.info = 'Tap to vote.';
     }
     draw();
@@ -115,10 +115,12 @@ export async function buildRules(scene) {
     const signs = rules.map((r, i) => { const l = label([{ t: `RULE: ${r.name.toUpperCase()}`, size: 40, weight: 560, track: 4, color: '#ece9e2' }, { t: 'tap a square to change it', size: 22, color: '#bdb9b0' }], { w: 2.6, px: 1024 }); onFloor(l, 54.2, -6.6, B1); l.visible = i === rule; g.add(l); return l; });
     const cx = (AREA.x0 + AREA.x1) / 2, cy = (AREA.y0 + AREA.y1) / 2, rx = (AREA.x1 - AREA.x0) / 2 - 1, ry = (AREA.y1 - AREA.y0) / 2 - 1;
     const loopPt = (s) => { const t = s % (Math.PI * 2); return [cx + rx * Math.cos(t), cy + ry * Math.sin(t)]; };
-    inst.userData.onTap = () => { rule = (rule + 1) % rules.length; signs.forEach((l, i) => (l.visible = i === rule)); A.forEach((a, i) => (a.s = (i / N) * Math.PI * 2)); return `Rule: ${rules[rule].name}. ${rules[rule].text}`; };
+    inst.userData.onTap = () => { fx('glass', cx, cy, B1 + 1, { f: [392, 587.33, 880][(rule + 1) % 3], a: 0.5, d: 3 }); rule = (rule + 1) % rules.length; signs.forEach((l, i) => (l.visible = i === rule)); A.forEach((a, i) => (a.s = (i / N) * Math.PI * 2)); return `Rule: ${rules[rule].name}. ${rules[rule].text}`; };
     inst.userData.info = 'Tap to change the rule.';
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), sc = new THREE.Vector3(1, 1, 1);
-    let last = 0;
+    // sound: order becomes rhythm. Under a rule, each square ticks as it crosses the middle of the hall (its lane sets the pitch);
+    // with no rule, you hear the bumps instead.
+    let last = 0, bumpT = 0;
     anim.push((t) => {
       const dt = Math.min(0.05, t - last || 0.016); last = t;
       for (const a of A) {
@@ -130,10 +132,11 @@ export async function buildRules(scene) {
       }
       for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {          // nobody walks through anybody
         const a = A[i], b = A[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
-        if (d < S * 1.5 && d > 1e-4) { const k = (S * 1.5 - d) * 0.5 / d; a.x -= dx * k; a.y -= dy * k; b.x += dx * k; b.y += dy * k; }
+        if (d < S * 1.5 && d > 1e-4) { if (rule === 0 && d < S * 1.2 && t - bumpT > 0.09) { bumpT = t; fx('wood', (a.x + b.x) / 2, (a.y + b.y) / 2, B1 + S / 2, { f: 520 + Math.random() * 160, a: 0.22 }); } const k = (S * 1.5 - d) * 0.5 / d; a.x -= dx * k; a.y -= dy * k; b.x += dx * k; b.y += dy * k; }
       }
       A.forEach((a, i) => {
-        a.x += a.vx * dt; a.y += a.vy * dt;
+        const px0 = a.x; a.x += a.vx * dt; a.y += a.vy * dt;
+        if (rule && (px0 - cx) * (a.x - cx) < 0 && Math.abs(a.x - px0) < 1) fx('click', a.x, a.y, B1 + S / 2, { f: rule === 1 ? (a.y > cy ? 1318.5 : 987.77) : 1174.7 + (i % 5) * 73, a: 0.3 });
         if (rule === 1) { if (a.x > AREA.x1) a.x = AREA.x0; if (a.x < AREA.x0) a.x = AREA.x1; }
         if (a.x < AREA.x0) { a.x = AREA.x0; a.h = 0; } if (a.x > AREA.x1) { a.x = AREA.x1; a.h = Math.PI; }
         if (a.y < AREA.y0) { a.y = AREA.y0; a.h = Math.PI / 2; } if (a.y > AREA.y1) { a.y = AREA.y1; a.h = -Math.PI / 2; }

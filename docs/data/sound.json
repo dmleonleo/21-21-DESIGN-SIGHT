@@ -1,0 +1,107 @@
+[
+ {
+  "id": "l-clap",
+  "title": "Call and Answer",
+  "cam": [
+   16.0,
+   2.0,
+   1.6
+  ],
+  "look": [
+   8.0,
+   -2.5,
+   -0.2
+  ],
+  "text": "Room Tone is a show you hear, so turn the sound on. Wooden clappers you cannot see walk the plaza, a slow call and then a roll. Every line that flashes is an echo, drawn from the clap to the wall that sent it back. Tap anywhere to clap back."
+ },
+ {
+  "id": "l-lobby",
+  "title": "Footsteps",
+  "cam": [
+   25.6,
+   14.6,
+   1.5
+  ],
+  "look": [
+   29.0,
+   11.7,
+   0.0
+  ],
+  "text": "Inside, someone is walking. Concrete, glass and a low ceiling hand every step back to you, sooner and longer than the garden did. Follow the footprints, or tap to clap."
+ },
+ {
+  "id": "l-stair",
+  "title": "A Tuned Stair",
+  "cam": [
+   52.6,
+   16.2,
+   -1.4
+  ],
+  "look": [
+   43.5,
+   15.0,
+   -4.6
+  ],
+  "text": "The stair is an instrument. Every tread is a note, and someone is playing it on the way down, wooden bars above the landing and strings below. Tap a step to play it, or walk it yourself in Walk."
+ },
+ {
+  "id": "l-field",
+  "title": "Twelve Voices",
+  "cam": [
+   37.4,
+   6.4,
+   -4.5
+  ],
+  "look": [
+   33.5,
+   3.5,
+   -4.6
+  ],
+  "text": "Twelve speakers hang in Gallery 1, each holding one sung note. A slow choir moves through six chords, and the light under each speaker is its voice. Tap a speaker to hold its note through every chord."
+ },
+ {
+  "id": "l-echo",
+  "title": "The Long Room Plays Back",
+  "cam": [
+   42.2,
+   -5.4,
+   -2.9
+  ],
+  "look": [
+   60.0,
+   0.2,
+   -6.0
+  ],
+  "text": "Gallery 2 is a long room. The sheet of light is the far wall's echo, slowed about twenty four times, and it plays every mark it crosses. Tap the floor to add a note, and tap a mark to take it away. The room keeps time for you."
+ },
+ {
+  "id": "l-glass",
+  "title": "Rain on Glass",
+  "cam": [
+   53.0,
+   3.2,
+   -4.3
+  ],
+  "look": [
+   54.6,
+   11.0,
+   -4.2
+  ],
+  "text": "Rain on the court glass. Every drop rings it, higher towards the roof, and draws a ring where it lands. Tap the glass to strike it yourself."
+ },
+ {
+  "id": "l-silence",
+  "title": "One Minute",
+  "cam": [
+   -1.6,
+   0.2,
+   1.5
+  ],
+  "look": [
+   1.0,
+   -3.0,
+   0.3
+  ],
+  "text": "The last room is kept almost quiet. A slow pulse, the city faintly through the walls, and a ring that fills once a minute, closed by a single bell. Stay as long as you like."
+ }
+]
