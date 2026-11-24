@@ -78,7 +78,8 @@ function strip(g, x0, y0, x1, y1, z, wdt = 0.05, mat = tape) {   // floor line
   m.receiveShadow = true; g.add(m); return m;
 }
 
-export async function buildExhibit(scene, root) {
+export async function buildExhibit(scene, root, fx = () => {}) {
+  // every object here has a sound of its own when touched: fx(kind, x, y, z, options) plays it at that point
   try { await Promise.all([document.fonts.load(`380 40px ${FONT}`), document.fonts.load(`560 40px ${FONT}`)]); } catch (e) {}
   const g = new THREE.Group(); g.name = 'exhibit'; g.userData.colliders = [];
   const anim = [];
@@ -130,6 +131,7 @@ export async function buildExhibit(scene, root) {
     // (a) one litre
     let top = plinth(g, 0.5, 0.5, 0.95, 34.6, 7.0);
     const c = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), glassM); c.position.copy(M(34.6, 7.0, top + 0.05)); g.add(c);
+    c.userData.onTap = () => { fx('drop', 34.6, 7.0, top + 0.1, { f: 1180, a: 0.8 }); fx('glass', 34.6, 7.0, top + 0.1, { f: 1760, a: 0.35, d: 2.5 }); return c.userData.info; };
     c.userData.info = 'One litre: a 10 cm cube. Filled with water it weighs one kilogram, which is how the kilogram was first defined in 1795.';
     const wv = new THREE.Mesh(new THREE.BoxGeometry(0.096, 0.094, 0.096), waterM); wv.position.copy(M(34.6, 7.0, top + 0.049)); g.add(wv);
     g.add(onFloor(label([{ t: '1 L = 1 kg', size: 30, weight: 560 }, { t: 'a 10 cm cube of water', size: 18, color: '#bdb9b0' }], { w: 0.4, px: 400 }), 34.6, 6.84, top));
@@ -140,6 +142,7 @@ export async function buildExhibit(scene, root) {
     bags.forEach(([u, v], i) => {
       const x = 34.6 - 1.0 + i * 0.4;
       const b = new THREE.Mesh(bagG, bagM); b.position.copy(M(x, 4.25, top + 0.065)); b.castShadow = true; g.add(b);
+      { const kg = [3.75, 1.875, 0.454, 0.227, 1, 0.5][i], bx = x, bt = top; b.userData.onTap = () => { fx('thud', bx, 4.25, bt + 0.05, { f: 170 - 26 * Math.log2(kg * 4.4), a: 0.35 + 0.18 * Math.min(3.75, kg) }); return b.userData.info; }; }
       b.userData.info = `${u}: ${v}. Same bag, same size. ` + ['Lift it and your arm drops: the heaviest of the six.', 'Half a kan, and still the second heaviest.', 'The pound, from the Roman libra.', 'Eight ounces, half a pound.', 'The kilogram, a litre of water.', 'Half a kilogram.'][i];
       g.add(onFloor(label([{ t: u.toUpperCase(), size: 30, weight: 560, track: 2 }, { t: v, size: 24, color: '#bdb9b0' }], { w: 0.3, px: 300, align: 'center', pad: 0.01 }), x, 4.04, top));
     });
@@ -152,6 +155,7 @@ export async function buildExhibit(scene, root) {
       mtx.makeTranslation(...M(x, y, top + 0.0006 + k * 0.00125).toArray()); inst.setMatrixAt(s * 100 + k, mtx);
     }
     inst.castShadow = true; g.add(inst);
+    { const dt = top; inst.userData.onTap = () => { fx('clink', 34.6, 1.0, dt + 0.1, { n: 9, a: 0.9 }); return inst.userData.info; }; }
     inst.userData.info = 'One thousand discs of 3.75 g each, one monme apiece: together they weigh one kan, 3.75 kg.';
     g.add(onFloor(label([{ t: '1,000 × 3.75 g = 1 KAN', size: 26, weight: 560, track: 1 }], { w: 0.6, px: 600, pad: 0.01 }), 34.6, 0.82, top));
     // wall text on the east wall
@@ -161,6 +165,7 @@ export async function buildExhibit(scene, root) {
     for (let i = 1; i <= 10; i++) {
       const s = i / 10;
       const cb = box(s, s, s, i === 10 ? white : ply, 29.25 + s / 2, y + s / 2, B1); g.add(cb); g.userData.colliders.push(cb);
+      { const ii = i, cy = y + s / 2; cb.userData.onTap = () => { fx('wood', 29.25 + ii / 20, cy, B1 + ii / 10, { f: 1400 / ii, a: 0.5 + ii * 0.05 }); return cb.userData.info; }; }   // a knock: ten times bigger, ten times lower
       cb.userData.info = `${i * 10} cm cube. ` + (i === 10 ? 'One cubic metre: a thousand litres, a tonne of water.' : `${(Math.pow(i / 10, 3) * 1000).toFixed(i < 3 ? 0 : 0)} litres inside.`);
       g.add(onFloor(label([{ t: `${i * 10}`, size: 44, weight: 560 }, { t: 'cm', size: 22, color: '#bdb9b0' }], { w: 0.22, px: 160, pad: 0.01 }), 29.25 + s + 0.16, y + s / 2, B1, Math.PI / 2));
       y += s + 0.42;
@@ -185,6 +190,8 @@ export async function buildExhibit(scene, root) {
     const net = new THREE.Mesh(new THREE.PlaneGeometry(W, 0.914), new THREE.MeshBasicMaterial({ color: 0x0c0c0c, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
     net.position.copy(M(cx, y0 + W / 2, z + 0.46)); net.rotation.y = Math.PI / 2; g.add(net);
     net.userData.info = 'A doubles court, 23.77 × 10.97 m. Use the ruler on the baseline to check it.';
+    // a rally: the ball's bounces, baseline to baseline, so the hall's size can be heard
+    net.userData.onTap = () => { [[x0 + 1.5, y0 + 3], [x0 + L - 4, y0 + 7], [x0 + 3, y0 + 4.5], [x0 + L - 2, y0 + 3.5], [x0 + 5.5, y0 + 6]].forEach(([bx, by], k) => fx('thud', bx, by, z + 0.05, { f: 210, a: 0.55, delay: k * 0.95 })); return 'A rally across the hall. Listen to it come back off the walls.'; };
     const band = new THREE.Mesh(new THREE.PlaneGeometry(W, 0.05), new THREE.MeshBasicMaterial({ color: 0xf4f2ec, side: THREE.DoubleSide }));
     band.position.copy(M(cx, y0 + W / 2, z + 0.9)); band.rotation.y = Math.PI / 2; g.add(band);
     g.add(onFloor(label([{ t: '23.77 × 10.97 m', size: 56, weight: 560 }, { t: 'a doubles court, 260.8 m², inside a 443 m² hall', size: 26, color: '#bdb9b0' }], { w: 2.4, px: 1024 }), cx - 3.8, y0 + 2.6, z));
@@ -213,7 +220,8 @@ export async function buildExhibit(scene, root) {
     const bob = new THREE.Mesh(new THREE.SphereGeometry(0.045, 24, 16), brass); bob.position.y = -0.994; bob.castShadow = true; arm.add(bob);
     bob.userData.info = arm.userData.info = 'A seconds pendulum: 0.994 m from pivot to bob, one swing per second. Compare it with the one-metre bar beside it.';
     g.add(arm);
-    anim.push((t) => { arm.rotation.x = 0.22 * Math.cos(Math.PI * t); });   // T = 2 s: one beat each second
+    let beat = -1;
+    anim.push((t) => { arm.rotation.x = 0.22 * Math.cos(Math.PI * t); const b = Math.floor(t + 0.5); if (b !== beat) { if (beat >= 0) fx('tick', px, py, z + H - 1.05, { a: 0.5 }); beat = b; } });   // T = 2 s: one beat each second, heard as it passes the bottom
     // a 1 m bar beside it, from the pivot down
     const bar = box(0.012, 0.012, 1.0, white, px, py + 0.55, z + H - 1.06); g.add(bar);
     const bl = label([{ t: '0.994 m', size: 30, weight: 560 }, { t: 'beats once a second', size: 18, color: '#bdb9b0' }], { w: 0.42, px: 420 });
@@ -226,6 +234,7 @@ export async function buildExhibit(scene, root) {
     const z = 0, x = -2.6, y = -3.0;
     const top = plinth(g, 5.6, 0.32, 0.45, x + 2.7, y, z);
     const plate = box(5.4, 0.26, 0.016, steel, x + 2.7, y, top);   // 1:10 in length, 1:1 in thickness
+    plate.userData.onTap = () => { fx('glass', x + 2.7, y, top, { f: 98, a: 0.9, d: 9 }); fx('glass', x + 0.5, y, top, { f: 412, a: 0.3, d: 5 }); return 'Struck: 5.4 metres of steel ring for a long time. The real roof is ten times longer.'; };
     plate.userData.info = 'The roof plate: 5.4 m here stands for 54 m, but the 16 mm thickness is real. Steel this long grows by about 30 mm from winter to summer.'; g.add(plate);
     const t = label([{ t: '54 m AT 1:10, 16 mm AT 1:1', size: 32, weight: 560, track: 2 }, { t: 'one folded steel plate; it moves about 30 mm between winter and summer', size: 20, color: '#bdb9b0' }], { w: 2.2, px: 1024 });
     g.add(onFloor(t, x + 1.25, y - 0.3, z));

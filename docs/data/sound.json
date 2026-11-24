@@ -1,0 +1,107 @@
+[
+ {
+  "id": "l-clap",
+  "title": "Clap",
+  "cam": [
+   2.0,
+   0.5,
+   1.6
+  ],
+  "look": [
+   10,
+   -3,
+   -0.4
+  ],
+  "text": "Room Tone is a show you hear, so turn the sound on. Tap anywhere and it claps there. Every surface answers, and the ring on the ground is the same sound slowed a hundred times. Out here, the garden barely answers at all."
+ },
+ {
+  "id": "l-lobby",
+  "title": "Again, Inside",
+  "cam": [
+   25.6,
+   14.6,
+   1.5
+  ],
+  "look": [
+   29.0,
+   11.7,
+   0.0
+  ],
+  "text": "Clap again inside. Concrete, glass and a low ceiling send the sound back sooner and hold it longer. Each white dot marks a wall that answered."
+ },
+ {
+  "id": "l-stair",
+  "title": "A Scale of Steps",
+  "cam": [
+   52.6,
+   16.2,
+   -1.4
+  ],
+  "look": [
+   43.5,
+   15.0,
+   -4.6
+  ],
+  "text": "The stair is tuned. In Walk, every step down plays the next note lower, and climbing back runs the scale upward. Here the building is an instrument you play with your feet."
+ },
+ {
+  "id": "l-field",
+  "title": "Twelve Voices",
+  "cam": [
+   37.4,
+   6.4,
+   -4.5
+  ],
+  "look": [
+   33.5,
+   3.5,
+   -4.6
+  ],
+  "text": "Twelve small speakers hang in Gallery 1, each holding one note. Walk between them and the chord shifts with every step. Tap one to silence it, and tap again to bring it back. Headphones help."
+ },
+ {
+  "id": "l-echo",
+  "title": "The Long Room",
+  "cam": [
+   42.2,
+   -5.4,
+   -2.9
+  ],
+  "look": [
+   60.0,
+   0.2,
+   -6.0
+  ],
+  "text": "Gallery 2 is about thirty metres long. Clap here, and the far wall answers less than two tenths of a second later. Watch the ring cross the floor, a hundred times slower than you hear it."
+ },
+ {
+  "id": "l-glass",
+  "title": "Tall Glass",
+  "cam": [
+   53.0,
+   3.2,
+   -4.3
+  ],
+  "look": [
+   54.6,
+   11.0,
+   -4.2
+  ],
+  "text": "Tap the court glass. It rings instead of answering, higher towards the roof. Beyond it, the open sky sends almost nothing back."
+ },
+ {
+  "id": "l-silence",
+  "title": "One Minute",
+  "cam": [
+   -1.6,
+   0.2,
+   1.5
+  ],
+  "look": [
+   1.0,
+   -3.0,
+   0.3
+  ],
+  "text": "The last room is kept quiet. The music steps back, and only a slow pulse stays, about sixty beats a minute. Stay as long as you like. When you leave, the building's sound returns."
+ }
+]

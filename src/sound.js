@@ -5,9 +5,15 @@
 const PAD = [73.42, 110.0, 164.81, 185.0, 277.18, 415.3];          // D2 A2 E3 F#3 C#4 G#4
 const BELLS = [587.33, 659.25, 739.99, 880.0, 987.77, 1108.73, 1318.5, 1479.98];
 const rnd = (a, b) => a + Math.random() * (b - a);
+// rooms by decay time (s), brightness (0..1) and wet level; values are judged by ear, not measured
+const ROOMS = {
+  outside: { rt: 0.7, bright: 0.7, wet: 0.25 }, lobby: { rt: 1.7, bright: 0.55, wet: 0.55 }, stair: { rt: 3.4, bright: 0.45, wet: 0.8 },
+  g1: { rt: 2.3, bright: 0.5, wet: 0.65 }, g2: { rt: 3.0, bright: 0.45, wet: 0.75 }, court: { rt: 1.3, bright: 0.7, wet: 0.45 }, g3: { rt: 2.0, bright: 0.5, wet: 0.6 },
+};
 
 export function createSound() {
   let ctx = null, master, duckG, padBus, padF, airG, airF, bellBus, verb, started = false;
+  let fxBus, roomA, roomB, roomAG, roomBG, roomSend, noiseBuf, roomName = '', roomFlip = false, voices = 0;
   const S = { on: false, under: 0, day: 0, water: false, ducked: false, hidden: false };
   let bellT = 0, dropT = 0, timer = null;
 
@@ -23,6 +29,13 @@ export function createSound() {
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 3;
     master.connect(duckG).connect(comp).connect(ctx.destination);
     verb = ctx.createConvolver(); verb.buffer = impulse(6, 2.6);
+    // spatial effects: each sound sits at its place in the model (HRTF), then goes dry + into the room it is in
+    fxBus = ctx.createGain(); fxBus.gain.value = 1; fxBus.connect(master);
+    roomA = ctx.createConvolver(); roomB = ctx.createConvolver(); roomAG = ctx.createGain(); roomBG = ctx.createGain(); roomBG.gain.value = 0;
+    roomSend = ctx.createGain(); roomSend.gain.value = 1; roomSend.connect(roomA); roomSend.connect(roomB);
+    roomA.connect(roomAG).connect(master); roomB.connect(roomBG).connect(master);
+    setRoomNow(ROOMS.outside);
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); { const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
     const wet = ctx.createGain(); wet.gain.value = 0.9; verb.connect(wet).connect(master);
 
     // pad: each note is two slightly detuned voices that breathe in and out on their own slow cycle
@@ -79,6 +92,108 @@ export function createSound() {
     o.connect(g); (p ? g.connect(p) : g).connect(verb); if (p) p.connect(master); else g.connect(master);
     o.start(t); o.stop(t + 0.2);
   }
+  // ---------- rooms: a synthetic impulse per space (seconds of decay, brightness, wet level) ----------
+  function roomIR(rt, bright) {
+    const sr = ctx.sampleRate, n = Math.floor(sr * Math.min(6, rt * 1.2 + 0.2)), b = ctx.createBuffer(2, n, sr);
+    for (let c = 0; c < 2; c++) {
+      const d = b.getChannelData(c); let lp = 0; const k = 0.15 + 0.8 * bright;
+      for (let i = 0; i < n; i++) { const t = i / sr; lp += k * ((Math.random() * 2 - 1) - lp); d[i] = lp * Math.exp(-6.9 * t / rt) * (t < 0.006 ? t / 0.006 : 1); }
+      // a few early reflections, distinct per channel
+      for (let r = 0; r < 6; r++) { const at = Math.floor(sr * (0.008 + Math.random() * 0.05 * Math.min(1.6, rt))); if (at < n) d[at] += (Math.random() < 0.5 ? -1 : 1) * 0.5 * (1 - r / 7); }
+    }
+    return b;
+  }
+  function setRoomNow(R) { roomA.buffer = roomIR(R.rt, R.bright); roomAG.gain.value = R.wet; roomBG.gain.value = 0; roomFlip = false; }
+  function setRoom(name) {
+    if (!ctx || name === roomName || !ROOMS[name]) return; roomName = name; const R = ROOMS[name], t = ctx.currentTime;
+    const [inC, inG, outG] = roomFlip ? [roomA, roomAG, roomBG] : [roomB, roomBG, roomAG];
+    inC.buffer = roomIR(R.rt, R.bright);
+    inG.gain.cancelScheduledValues(t); inG.gain.setValueAtTime(inG.gain.value, t); inG.gain.linearRampToValueAtTime(R.wet, t + 0.8);
+    outG.gain.cancelScheduledValues(t); outG.gain.setValueAtTime(outG.gain.value, t); outG.gain.linearRampToValueAtTime(0, t + 0.8);
+    roomFlip = !roomFlip;
+  }
+  // ---------- a sound at a place ----------
+  const L = { x: 0, y: 0, z: 0 };
+  function out(pos, amp, wet = 1) {          // -> node to connect a voice into; null when too far or too busy
+    const dx = pos.x - L.x, dy = pos.y - L.y, dz = pos.z - L.z, dist = Math.hypot(dx, dy, dz);
+    if (dist > 34 || voices > 48) return null;
+    const g = ctx.createGain(); g.gain.value = amp;
+    const p = ctx.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = 1.6; p.rolloffFactor = 1.1; p.maxDistance = 60;
+    if (p.positionX) { p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; } else p.setPosition(pos.x, pos.y, pos.z);
+    g.connect(p); p.connect(fxBus);
+    const send = ctx.createGain(); send.gain.value = 0.55 * wet; p.connect(send).connect(roomSend);
+    voices++; setTimeout(() => { voices--; try { g.disconnect(); p.disconnect(); send.disconnect(); } catch (e) {} }, 9000);
+    return g;
+  }
+  function env(g, t, a, peak, dec) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec); }
+  function osc(type, f, t, stop, to) { const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); o.connect(to); o.start(t); o.stop(t + stop); return o; }
+  function noise(t, dur, to, rate = 1) { const n = ctx.createBufferSource(); n.buffer = noiseBuf; n.playbackRate.value = rate; n.connect(to); n.start(t, Math.random() * 0.5, dur); return n; }
+  const KINDS = {
+    // a drop on still water: a short rising "plip" over a small hollow body
+    drop(o, t, { f = rnd(800, 1500), a = 1 }) {
+      const g1 = ctx.createGain(); g1.connect(o); env(g1, t, 0.002, 0.5 * a, 0.09);
+      const p = osc('sine', f, t, 0.15, g1); p.frequency.exponentialRampToValueAtTime(f * 2.1, t + 0.07);
+      const g2 = ctx.createGain(); g2.connect(o); env(g2, t + 0.01, 0.004, 0.25 * a, 0.28);
+      osc('sine', f * 0.42, t + 0.01, 0.35, g2).frequency.exponentialRampToValueAtTime(f * 0.6, t + 0.2);
+    },
+    // a hand moving through water: a soft bandpassed swish
+    stir(o, t, { a = 1 }) {
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(rnd(900, 1600), t); bp.frequency.exponentialRampToValueAtTime(rnd(2200, 3200), t + 0.2); bp.Q.value = 1.6;
+      const g = ctx.createGain(); bp.connect(g).connect(o); env(g, t, 0.05, 0.22 * a, 0.25); noise(t, 0.35, bp);
+    },
+    // a tuned ring: water basins, pendulums, anything with a pitch
+    note(o, t, { f = 440, a = 1, d = 2.6 }) {
+      for (const [m, k, dd] of [[1, 1, 1], [2.01, 0.22, 0.5], [3.02, 0.06, 0.3]]) { const g = ctx.createGain(); g.connect(o); env(g, t, 0.004, 0.32 * a * k, d * dd); osc('sine', f * m, t, d * dd + 0.1, g); }
+    },
+    // long glass or steel: inharmonic partials that beat slowly
+    glass(o, t, { f = 660, a = 1, d = 7 }) {
+      for (const [m, k, dd] of [[1, 1, 1], [2.32, 0.4, 0.6], [4.25, 0.18, 0.35], [6.63, 0.07, 0.2]]) { const g = ctx.createGain(); g.connect(o); env(g, t, 0.003, 0.26 * a * k, d * dd); const x = osc('sine', f * m, t, d * dd + 0.1, g); x.detune.value = rnd(-4, 4); }
+    },
+    // a knock on plywood, pitched by size
+    wood(o, t, { f = 300, a = 1 }) {
+      const g = ctx.createGain(); g.connect(o); env(g, t, 0.001, 0.6 * a, 0.12 + 60 / f);
+      osc('triangle', f, t, 0.6, g).frequency.exponentialRampToValueAtTime(f * 0.92, t + 0.2);
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 4; bp.Q.value = 2; const gn = ctx.createGain(); bp.connect(gn).connect(o); env(gn, t, 0.001, 0.4 * a, 0.03); noise(t, 0.05, bp);
+    },
+    // a soft thud: a bag set down, a ball on the floor
+    thud(o, t, { f = 90, a = 1 }) {
+      const g = ctx.createGain(); g.connect(o); env(g, t, 0.002, 0.8 * a, 0.18);
+      osc('sine', f * 1.8, t, 0.25, g).frequency.exponentialRampToValueAtTime(f, t + 0.08);
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; const gn = ctx.createGain(); lp.connect(gn).connect(o); env(gn, t, 0.001, 0.3 * a, 0.05); noise(t, 0.06, lp);
+    },
+    // a tick: the pendulum's second
+    tick(o, t, { a = 1, f = 2600 }) {
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800; const g = ctx.createGain(); hp.connect(g).connect(o); env(g, t, 0.0008, 0.5 * a, 0.02); noise(t, 0.03, hp, 1.5);
+      const g2 = ctx.createGain(); g2.connect(o); env(g2, t, 0.001, 0.12 * a, 0.05); osc('sine', f, t, 0.08, g2);
+    },
+    // small metal discs, a handful
+    clink(o, t, { a = 1, n = 5 }) { for (let i = 0; i < n; i++) KINDS.glass(o, t + i * rnd(0.03, 0.09), { f: rnd(2400, 4200), a: a * rnd(0.25, 0.5), d: 0.5 }); },
+    // a clap: short noise into the room
+    clap(o, t, { a = 1 }) {
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = rnd(1000, 1500); bp.Q.value = 0.9; const g = ctx.createGain(); bp.connect(g).connect(o);
+      env(g, t, 0.0015, 0.9 * a, 0.06); noise(t, 0.09, bp);
+    },
+    // a soft click for UI-like objects: vote pads, squares
+    click(o, t, { a = 1, f = 1400 }) { const g = ctx.createGain(); g.connect(o); env(g, t, 0.001, 0.25 * a, 0.06); osc('sine', f, t, 0.1, g); KINDS.tick(o, t, { a: a * 0.4, f: f * 2 }); },
+  };
+  function play(kind, pos, opt = {}) {
+    if (!ctx || !S.on || S.hidden || !KINDS[kind]) return false;
+    const o = out(pos, opt.gain ?? 1, opt.wet ?? 1); if (!o) return false;
+    KINDS[kind](o, ctx.currentTime + (opt.delay || 0), opt); return true;
+  }
+  // ---------- drones: a held tone at a place, its level set by the caller ----------
+  function drone(pos, f, type = 'sine') {
+    if (!ctx) return null;
+    const g = ctx.createGain(); g.gain.value = 0;
+    const p = ctx.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = 1.2; p.rolloffFactor = 1.6; p.maxDistance = 50;
+    if (p.positionX) { p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; } else p.setPosition(pos.x, pos.y, pos.z);
+    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = o2.type = type; o1.frequency.value = f; o2.frequency.value = f * 1.0035;
+    const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = rnd(0.08, 0.2); lg.gain.value = 0.25;
+    const vg = ctx.createGain(); vg.gain.value = 0.75; lfo.connect(lg).connect(vg.gain);
+    o1.connect(vg); o2.connect(vg); vg.connect(g).connect(p); p.connect(fxBus); const send = ctx.createGain(); send.gain.value = 0.4; p.connect(send).connect(roomSend);
+    o1.start(); o2.start(); lfo.start();
+    return { set(v, tc = 0.4) { g.gain.setTargetAtTime(v, ctx.currentTime, tc); }, stop() { g.gain.setTargetAtTime(0, ctx.currentTime, 0.3); setTimeout(() => { try { o1.stop(); o2.stop(); lfo.stop(); p.disconnect(); } catch (e) {} }, 2000); } };
+  }
   function tick() {                         // ~4 times a second: scene follows the camera, events are scheduled
     if (!ctx || !S.on) return;
     const t = ctx.currentTime, night = 1 - S.day;
@@ -112,6 +227,15 @@ export function createSound() {
       [[587.33, 1.0, -0.35, 0.25], [880, 0.85, 0.3, 0.95], [1318.5, 0.7, 0, 1.75]].forEach(([f, a, p, at]) => bell(f, a, p, at));
       bellT = ctx.currentTime + 9;
     },
+    get ready() { return !!ctx && S.on; },
+    get time() { return ctx ? ctx.currentTime : 0; },
+    listen(px, py, pz, fx, fy, fz) {           // three.js camera position and forward
+      if (!ctx) return; L.x = px; L.y = py; L.z = pz; const l = ctx.listener;
+      if (l.positionX) { const t = ctx.currentTime; l.positionX.setTargetAtTime(px, t, 0.03); l.positionY.setTargetAtTime(py, t, 0.03); l.positionZ.setTargetAtTime(pz, t, 0.03); l.forwardX.setTargetAtTime(fx, t, 0.03); l.forwardY.setTargetAtTime(fy, t, 0.03); l.forwardZ.setTargetAtTime(fz, t, 0.03); l.upX.value = 0; l.upY.value = 1; l.upZ.value = 0; }
+      else { l.setPosition(px, py, pz); l.setOrientation(fx, fy, fz, 0, 1, 0); }
+    },
+    room: setRoom, play, drone,
+    quiet(k, tc = 1.2) { if (ctx) padBus.gain.setTargetAtTime(0.11 * k, ctx.currentTime, tc); },   // the pad steps back for listening rooms
     duck(on) { if (S.ducked !== on) { S.ducked = on; apply(); } },
   };
 }
