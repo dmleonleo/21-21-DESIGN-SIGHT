@@ -373,3 +373,14 @@ body.light #snd{text-shadow:none;filter:drop-shadow(0 0 6px rgba(0,0,0,.4))}
   #tourCard .row{margin-top:14px}
 }
 @media (hover:none) and (max-width:720px){body.walk #ruler{top:calc(var(--pad) + 124px);bottom:auto;margin-top:env(safe-area-inset-top,0px)}}
+
+/* top-right cluster r6: one row, centred on one line */
+#topR{position:fixed;right:var(--pad);top:calc(var(--pad) - 4px);z-index:10;display:flex;align-items:center;gap:26px;margin-top:env(safe-area-inset-top,0px);margin-right:env(safe-area-inset-right,0px)}
+#topR #snd,#topR #theme,#topR #infoBtn{position:static;top:auto;right:auto;margin:0}
+#topR #theme{gap:18px;align-items:center}
+#topR #snd,#topR #theme button{padding:0;margin:0;height:20px;display:flex;align-items:center;justify-content:center;position:relative}
+#topR #snd::before,#topR #theme button::before{content:"";position:absolute;inset:-12px -8px}
+#topR #theme button::after{left:0;right:100%;bottom:-7px}
+#topR #theme button.on::after{right:0}
+#topR #infoBtn{line-height:20px;height:20px;display:flex;align-items:center}
+@media (max-width:720px){#topR{gap:18px} #topR #theme{gap:12px}}
