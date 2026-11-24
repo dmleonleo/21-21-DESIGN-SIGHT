@@ -300,3 +300,76 @@ html,body{font-weight:380}
 #chooser .t{font-weight:280;letter-spacing:-.01em}
 dialog#info .lede{font-weight:300}
 dialog#info h3,#tKick,.kick,nav button,#axis,#chooser .k{font-weight:560}
+
+/* r5 (2026-11-24): sound + voice, 44 px touch targets, safe areas, legibility, Journey framing */
+:root{--mute:rgba(233,230,223,.62);--faint:rgba(233,230,223,.22)}
+body.light{--mute:rgba(242,240,234,.8)}
+/* larger hit areas, same look: padding out, margin back in */
+.link{padding:15px 0;margin:-15px 0}
+#intro .go .first{padding:4px 0 6px;margin:0}
+#intro .go #introSkip{padding:4px 0 6px;margin:0}
+#modes button{padding:15px 0;margin:-9px 0}
+#modes button::after{bottom:9px}
+#theme button{padding:12px 7px 14px;margin:-12px -7px -14px}
+#theme button::after{left:7px;bottom:8px}
+#theme button.on::after{right:7px}
+#rail button{left:-16px;width:33px;height:26px;margin-top:-13px}
+#rail button::after{left:13px;top:13px}
+#rail button.on::after{left:11px}
+#rail button::before{right:32px;top:6px}
+#axTicks button{width:30px;height:30px;margin:-15px 0 0 -15px}
+#axTicks button::before{left:15px;top:12px}
+#axis .track,#axRange{height:40px}
+#sun input,#cut input{height:36px}
+/* sound */
+#snd{position:fixed;right:calc(var(--pad) + 142px);top:calc(var(--pad) - 6px);z-index:10;display:flex;padding:12px 7px 14px;margin:-12px -7px -14px;color:var(--mute);transition:color .4s var(--ease)}
+#snd svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+#snd .x{display:inline} #snd .w1,#snd .w2{display:none}
+#snd.on{color:var(--ink)} #snd.on .x{display:none} #snd.on .w1,#snd.on .w2{display:inline}
+#snd.on .w2{animation:breathe 4s ease-in-out infinite}
+@keyframes breathe{50%{opacity:.25}}
+#snd:hover{color:var(--ink)}
+body.light #snd{text-shadow:none;filter:drop-shadow(0 0 6px rgba(0,0,0,.4))}
+#tourCard .row{align-items:baseline}
+#tourCard .voice{margin-left:auto;color:var(--mute)}
+#tourCard .voice.on{color:var(--ink)}
+#tourCard .voice.on::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:#ff7a45;margin-right:9px;vertical-align:2px;animation:breathe 2.4s ease-in-out infinite}
+/* safe areas (notch, home bar): fixed elements step in by the inset */
+#modes,#sun,#tourCard,#axis,#stick,#ruler,#note,#walkHelp,#explode,#intro{margin-bottom:env(safe-area-inset-bottom,0px)}
+#sheet .block{margin-bottom:env(safe-area-inset-bottom,0px)}
+#brand,#theme,#snd,#infoBtn,#map,#toast{margin-top:env(safe-area-inset-top,0px)}
+#brand,#modes,#tourCard,#stick,#sun{margin-left:env(safe-area-inset-left,0px)}
+#infoBtn,#theme,#snd,#map,#rail,#ruler{margin-right:env(safe-area-inset-right,0px)}
+/* desktop: a step larger and clearer */
+@media (min-width:900px){
+  .link,#modes button,#theme button{font-size:11px}
+  #map .lvl,#walkHelp,#toast,#axOut,#axPlay,#cut,#cut .link,#dayBtn,#sun output,#tourCard .idx,#explode,#rulerBtn{font-size:10.5px}
+  #tourCard .kick{font-size:10px}
+  #tourCard{width:min(440px,calc(100vw - 2 * var(--pad)))}
+  #tourCard p{font-size:13.5px;line-height:1.7;color:rgba(233,230,223,.82)}
+  #tourCard h2{font-size:clamp(28px,2.8vw,40px)}
+  #brand .sub{font-size:10px}
+  #sheet .lv,#sheet .legend,#sheet .north{font-size:10px} #sheet .block{font-size:11px} #sheet .cell span{font-size:9px}
+  #rail button::before{font-size:10px}
+  #note{font-size:13px}
+}
+/* phone */
+@media (max-width:720px){
+  #snd{right:calc(var(--pad) + 124px)}
+  #modes{gap:13px} #modes button{font-size:10px;letter-spacing:.1em}
+  #tourCard p{font-size:12.5px;line-height:1.65;color:rgba(233,230,223,.84)}
+  body.walk #sun,body.tour #sun{display:none}
+  body.walk #ruler{bottom:calc(var(--pad) + 124px)}
+}
+@media (hover:none){
+  #walkHelp{animation:rise 1s var(--ease) both,away 1.2s var(--ease) 6s forwards}
+}
+@keyframes away{to{opacity:0;visibility:hidden}}
+/* Journey on a portrait screen: the card owns the lower half, a soft floor keeps it legible */
+@media (max-aspect-ratio:1/1){
+  body.tour #veil{background:radial-gradient(120% 90% at 50% 40%,transparent 55%,rgba(0,0,0,.5) 100%),linear-gradient(to bottom,rgba(0,0,0,.35),transparent 16%,transparent 48%,rgba(0,0,0,.72) 86%)}
+  #tourCard{bottom:calc(var(--pad) + 52px)}
+  #tourCard h2{margin-top:10px}
+  #tourCard .row{margin-top:14px}
+}
+@media (hover:none) and (max-width:720px){body.walk #ruler{top:calc(var(--pad) + 124px);bottom:auto;margin-top:env(safe-area-inset-top,0px)}}
