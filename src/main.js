@@ -1296,14 +1296,18 @@ function ldPath(P) {
 }
 function ldDraw() {
   const L = $('#loader'); if (!L) { LD.on = false; return; }
-  LD.show += (LD.k - LD.show) * 0.08;
+  const dk = LD.k - LD.show; LD.show = dk > 0 ? LD.show + Math.min(dk, Math.max(dk * 0.08, 0.012)) : LD.k;
   const k = LD.show, cl = (x) => Math.min(1, Math.max(0, x));
   L.classList.add('drawn');
   for (const [id, P, a] of [['#ldW', LD.W, 0], ['#ldE', LD.E, 0.35]]) { const el = $(id); el.setAttribute('d', ldPath(P)); el.style.strokeDashoffset = 1 - cl((k - a) / 0.65); }
   $('#loadpct').textContent = (k * 53.9).toFixed(1);
+  if (LD.fin && k >= 1 && !LD.end) { LD.end = true; ldOut(L); }
 }
 function ldDone() {
-  LD.k = 1; const L = $('#loader');
+  LD.k = 1; LD.fin = true;
+  setTimeout(() => { const L = $('#loader'); if (L && !LD.end) { LD.end = true; LD.show = 1; $('#loadpct').textContent = '53.9'; ldOut(L); } }, 4000);
+}
+function ldOut(L) {
   setTimeout(() => L.classList.add('full'), 500);
   setTimeout(() => { L.classList.add('done'); setTimeout(() => { L.remove(); LD.on = false; }, 1700); }, 1300);
 }
