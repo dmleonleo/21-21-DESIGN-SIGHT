@@ -53,7 +53,7 @@ export function buildFarGround(scene) {
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
   mat.onBeforeCompile = (s) => groundShader(s, true);
   const g = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000, 1, 1).rotateX(-Math.PI / 2), mat);
-  g.position.y = -0.62; g.receiveShadow = true; g.name = 'GROUND_far';
+  g.position.y = -0.8; g.receiveShadow = true; g.name = 'GROUND_far';   // under the lowest outer ground (-0.71), so it never pokes through the lawn (Leon 2026-11-24)
   scene.add(g);
   return g;
 }

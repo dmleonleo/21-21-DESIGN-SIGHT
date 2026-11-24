@@ -83,16 +83,27 @@ const HOLE = { X0: -12, X1: 80, Y0: -20, Y1: 30, S: 0.2 };
 HOLE.nx = Math.round((HOLE.X1 - HOLE.X0) / HOLE.S); HOLE.ny = Math.round((HOLE.Y1 - HOLE.Y0) / HOLE.S);
 HOLE.tex = new THREE.DataTexture(new Uint8Array(HOLE.nx * HOLE.ny), HOLE.nx, HOLE.ny, THREE.RedFormat, THREE.UnsignedByteType);
 HOLE.tex.magFilter = HOLE.tex.minFilter = THREE.LinearFilter; HOLE.tex.needsUpdate = true;
-function holeMask(tree) {      // a cell is the model's own wherever a ray from high above finds any of it; a few rows per frame, so loading never stalls
-  const d = HOLE.tex.image.data, ray = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+function holeMask(tree, isLawn) {      // a cell is the model's own wherever a ray from high above finds any of it; a few rows per frame, so loading never stalls
+  // lawn cells keep the ground under them, so a hairline crack between lawn pieces shows ground, not the void (Leon 2026-11-24);
+  // a deep hit (below the lawn) is a void: wide ones (court, stair) stay open, ones under ~0.4 m wide are cracks and get ground
+  const d = HOLE.tex.image.data, ray = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0)), idx = tree.geometry.index;
+  const deep = new Uint8Array(HOLE.nx * HOLE.ny);
   let j = 0;
   const step = () => {
     const t = performance.now();
     for (; j < HOLE.ny && performance.now() - t < 6; j++) for (let i = 0; i < HOLE.nx; i++) {
       ray.origin.copy(M(HOLE.X0 + (i + 0.5) * HOLE.S, HOLE.Y0 + (j + 0.5) * HOLE.S, 30));
-      d[j * HOLE.nx + i] = tree.raycastFirst(ray, THREE.DoubleSide) ? 255 : 0;
+      const h = tree.raycastFirst(ray, THREE.DoubleSide), k = j * HOLE.nx + i;
+      if (!h) { d[k] = 0; continue; }
+      const tri = Math.floor((idx ? idx.getX(h.faceIndex * 3) : h.faceIndex * 3) / 3);
+      if (isLawn && isLawn(tri)) { d[k] = 0; continue; }
+      d[k] = 255; if (h.point.y < -0.95) deep[k] = 1;
     }
-    if (j < HOLE.ny) setTimeout(step, 0); else HOLE.tex.needsUpdate = true;
+    if (j < HOLE.ny) { setTimeout(step, 0); return; }
+    const W = HOLE.nx, Hh = HOLE.ny, er = new Uint8Array(W * Hh);
+    for (let y = 1; y < Hh - 1; y++) for (let x = 1; x < W - 1; x++) { let a = 1; for (let dy = -1; dy <= 1 && a; dy++) for (let dx = -1; dx <= 1; dx++) if (!deep[(y + dy) * W + x + dx]) { a = 0; break; } er[y * W + x] = a; }
+    for (let y = 1; y < Hh - 1; y++) for (let x = 1; x < W - 1; x++) { const k = y * W + x; if (!deep[k]) continue; let a = 0; for (let dy = -1; dy <= 1 && !a; dy++) for (let dx = -1; dx <= 1; dx++) if (er[(y + dy) * W + x + dx]) { a = 1; break; } if (!a) d[k] = 0; }
+    HOLE.tex.needsUpdate = true;
   };
   step();
 }
@@ -835,6 +846,55 @@ function retag(mesh, box, mat) {         // move the triangles inside a model-sp
   mesh.material = [Array.isArray(mesh.material) ? mesh.material[0] : mesh.material, mat];
   return move.length / 3;
 }
+// Model patches (Leon 2026-11-24, screenshots): a wedge-shaped hole in the 1F slab along the long wing's south glass (it looked straight down to -6.5 m),
+// an open slot between the sunken court's east wall and the lawn, and a paper-thin cap left at GL east of the court, hovering 0.6 m over the lawn.
+function patchModel(root) {
+  let stone = null, lawn = null; const walls = [];
+  root.traverse((o) => { if (!o.isMesh) return; if (o.name === 'F1_floor_slab__stone') stone = o; if (/lawn$/.test(o.name) && !/^INT/.test(o.name)) lawn = o; if (/^F1_walls_RC__concrete/.test(o.name)) walls.push(o); });
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const prism = (pts, top, bot, src, name) => {
+    if (!src) return;
+    const sh = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+    const g = new THREE.ExtrudeGeometry(sh, { depth: top - bot, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, bot, 0).applyMatrix4(inv);
+    const m = new THREE.Mesh(g, Array.isArray(src.material) ? src.material[0] : src.material); m.name = name; root.add(m);
+  };
+  prism([[26.0, 9.27], [37.93, 8.67], [38.06, 11.2]], 0, -1.0, stone, 'PATCH_1F_wedge__stone');
+  prism([[61.9, 7.40], [64.31, 7.31], [68.98, 17.13], [65.85, 17.30]], -0.62, -0.8, lawn, 'PATCH_court_slot__lawncap');
+  // the lawn pieces carry steep skirts down to the slab below; seen through the hairline seams between pieces they drew dark lines across the grass
+  if (lawn && lawn.geometry.index) {
+    const g = lawn.geometry, ix = g.index, pos = g.attributes.position, a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), keep = [];
+    for (let t = 0; t < ix.count; t += 3) {
+      a.fromBufferAttribute(pos, ix.getX(t)).applyMatrix4(lawn.matrixWorld); b.fromBufferAttribute(pos, ix.getX(t + 1)).applyMatrix4(lawn.matrixWorld); c.fromBufferAttribute(pos, ix.getX(t + 2)).applyMatrix4(lawn.matrixWorld);
+      const n = b.sub(a).cross(c.sub(a)), L = n.length();
+      if (L < 1e-9 || Math.abs(n.y) / L > 0.7) keep.push(ix.getX(t), ix.getX(t + 1), ix.getX(t + 2));
+    }
+    g.setIndex(keep);
+  }
+  // the court's south wall had two corner vertices left 6.6 m out in the lawn at GL; its faces fanned out to them as a thin knife across the grass.
+  // Pull them back onto the wall's own end (x 61.1-61.6).
+  const pull = [[[67.64, 6.48], [61.06, 6.80]], [[67.67, 7.15], [61.55, 7.45]]];
+  for (const w of walls) {
+    const pos = w.geometry.attributes.position, f = new Float32Array(pos.count * 3), v = new THREE.Vector3(), wi = new THREE.Matrix4().copy(w.matrixWorld).invert();
+    let n = 0;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(w.matrixWorld);
+      for (const [[ax, ay], [bx, by]] of pull) if (Math.hypot(v.x - ax, -v.z - ay) < 0.08) { v.x = bx; v.z = -by; n++; }
+      v.applyMatrix4(wi); f[i * 3] = v.x; f[i * 3 + 1] = v.y; f[i * 3 + 2] = v.z;
+    }
+    if (n) { w.geometry.setAttribute('position', new THREE.BufferAttribute(f, 3)); w.geometry.computeBoundingBox(); w.geometry.computeBoundingSphere(); }
+  }
+  for (const w of walls) {   // drop the hovering cap: flat triangles at GL whose centre lies in x 60.5..68, y 6.3..7.6
+    const g = w.geometry, ix = g.index; if (!ix) continue;
+    const pos = g.attributes.position, v = new THREE.Vector3(), keep = [];
+    for (let t = 0; t < ix.count; t += 3) {
+      let flat = true, cx = 0, cy = 0;
+      for (let q = 0; q < 3; q++) { v.fromBufferAttribute(pos, ix.getX(t + q)).applyMatrix4(w.matrixWorld); if (Math.abs(v.y) > 0.05) flat = false; cx += v.x / 3; cy += -v.z / 3; }
+      if (!(flat && cx > 60.5 && cx < 68 && cy > 6.3 && cy < 7.6)) keep.push(ix.getX(t), ix.getX(t + 1), ix.getX(t + 2));
+    }
+    g.setIndex(keep);
+  }
+  root.updateMatrixWorld(true);
+}
 // F1 walls were modelled to stop at GL 0, but the forecourt paving falls away from the building, so their feet hover.
 // Drop every wall-foot vertex that has open ground below it (within 1.2 m) down to that ground.
 function groundWalls(root) {
@@ -898,8 +958,13 @@ function fitGround(lawn) {
   const H = new Float32Array(nx * ny).fill(NaN);
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const X = Math.min(X1 - 0.3, Math.max(X0 + 0.3, X0 + i * S)), Y = Math.min(Y1 - 0.3, Math.max(Y0 + 0.3, Y0 + j * S));
-    rc.set(M(X, Y, 3), DOWN); const h = rc.intersectObject(lawn, false).find((x) => x.point.y > -0.98);
-    if (h) H[j * nx + i] = h.point.y;
+    // the lowest lawn within 2.5 m, so the ground between grid points stays under the lawn's terraces and never pokes through (Leon 2026-11-24)
+    let lo = Infinity;
+    for (const ox of [-2.5, -1.2, 0, 1.2, 2.5]) for (const oy of [-2.5, -1.2, 0, 1.2, 2.5]) {
+      rc.set(M(X + ox, Y + oy, 3), DOWN); const h = rc.intersectObject(lawn, false).find((x) => x.point.y > -0.98);
+      if (h && h.point.y < lo) lo = h.point.y;
+    }
+    if (lo < Infinity) H[j * nx + i] = lo;
   }
   // holes (court, building): fill from the row's mean
   for (let j = 0; j < ny; j++) { let sum = 0, n = 0; for (let i = 0; i < nx; i++) if (!isNaN(H[j * nx + i])) { sum += H[j * nx + i]; n++; } for (let i = 0; i < nx; i++) if (isNaN(H[j * nx + i])) H[j * nx + i] = n ? sum / n : -0.45; }
@@ -926,8 +991,9 @@ const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 let exhibit = null;
 loader.load('model/2121.glb', async (gltf) => {
   const root = gltf.scene;
-  const geos = [];
+  const geos = [], lawnTris = [];
   root.updateMatrixWorld(true);
+  patchModel(root);
   groundWalls(root);
   try {
     let conc = null, lawn = null; root.traverse((o) => { if (o.isMesh && o.name === 'F1_walls_RC__concrete_v') conc = o; if (o.isMesh && /lawn$/.test(o.name)) lawn = o; });
@@ -962,6 +1028,7 @@ loader.load('model/2121.glb', async (gltf) => {
       const lm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true, side: THREE.DoubleSide });
       lm.onBeforeCompile = groundShader; lm.customProgramCacheKey = () => 'ground-flat'; lm.userData.night = lm.color.clone(); nightMats.push(lm); clipMats.push(lm); lm.userData.clip = true;
       o.material = lm;
+      o.castShadow = false;   // the lawn is a skin over the garden ground; its shadow on that ground drew every hairline seam as a dark line (B1 keeps its own ceiling for shade)
     }
     if (!isLight) {
       const g = o.geometry.clone();
@@ -972,7 +1039,9 @@ loader.load('model/2121.glb', async (gltf) => {
         g.setAttribute('position', new THREE.BufferAttribute(f, 3));
       }
       g.applyMatrix4(o.matrixWorld);
-      geos.push(g.index ? g.toNonIndexed() : g);
+      const gn = g.index ? g.toNonIndexed() : g;
+      if (/lawn$/.test(o.name)) { const a = geos.reduce((n, q) => n + q.attributes.position.count / 3, 0); lawnTris.push([a, a + gn.attributes.position.count / 3]); }
+      geos.push(gn);
     }
   });
   { // the transom panel over the entrance door came in on the steel layer; it is the concrete band (station 3 text, photos)
@@ -984,7 +1053,7 @@ loader.load('model/2121.glb', async (gltf) => {
   buildDiagram(root); setSun(+$('#sunRange').value);
   // two exhibitions share the building; each gets its own collision tree with its own plinths
   bvhs.base = new MeshBVH(BufferGeometryUtils.mergeGeometries(geos, false)); bvh = bvhs.base;
-  try { holeMask(bvhs.base); } catch (e) { console.error('holes', e); }   // the bare building, so exhibitions can find its floors
+  try { holeMask(bvhs.base, (t) => lawnTris.some(([a, b]) => t >= a && t < b)); } catch (e) { console.error('holes', e); }   // the bare building, so exhibitions can find its floors
   // exhibits play their sounds at model points; the engine is created further down, so look it up lazily
   const fx = (k, X, Y, Z, o) => { try { return sound.play(k, M(X, Y, Z), o || {}); } catch (e) { return false; } };
   for (const [name, build] of [['measure', () => buildExhibit(scene, root, fx)], ['rules', () => buildRules(scene, fx)], ['water', () => buildWater(scene, { sound: fx, ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })],
