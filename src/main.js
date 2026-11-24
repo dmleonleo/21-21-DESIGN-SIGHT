@@ -1227,7 +1227,9 @@ function stepTheme(dt) {
   $('#sunRange').value = hs; setSun(hs);
   if (themeRun.k >= 1) themeRun = null;
 }
-{ let t0 = null; try { t0 = localStorage.getItem('2121.theme'); } catch (e) {} setTheme(t0 || 'light', true); }   // a first visit arrives at 08:30 in the light theme (Leon 2026-11-24)
+// every visit follows the visitor's own clock: by day arrive at 08:30 light, by night at 20:00 dark (Leon 2026-11-25)
+const NIGHT = (() => { const d = new Date(), h = d.getHours() + d.getMinutes() / 60; return !(h >= 6 && h < 18.5); })();
+setTheme(NIGHT ? 'dark' : 'light', true); if (NIGHT) { setSun(20); $('#sunRange').value = 20; }
 // the theme follows the site clock: day hours read light, night hours read dark (Leon 2026-11-24)
 let themeNow = document.body.classList.contains('light') ? 'light' : 'dark';
 function syncTheme(dt) {
@@ -1296,14 +1298,18 @@ function ldPath(P) {
 }
 function ldDraw() {
   const L = $('#loader'); if (!L) { LD.on = false; return; }
-  LD.show += (LD.k - LD.show) * 0.08;
+  const dk = LD.k - LD.show; LD.show = dk > 0 ? LD.show + Math.min(dk, Math.max(dk * 0.08, 0.012)) : LD.k;
   const k = LD.show, cl = (x) => Math.min(1, Math.max(0, x));
   L.classList.add('drawn');
   for (const [id, P, a] of [['#ldW', LD.W, 0], ['#ldE', LD.E, 0.35]]) { const el = $(id); el.setAttribute('d', ldPath(P)); el.style.strokeDashoffset = 1 - cl((k - a) / 0.65); }
   $('#loadpct').textContent = (k * 53.9).toFixed(1);
+  if (LD.fin && k >= 1 && !LD.end) { LD.end = true; ldOut(L); }
 }
 function ldDone() {
-  LD.k = 1; const L = $('#loader');
+  LD.k = 1; LD.fin = true;
+  setTimeout(() => { const L = $('#loader'); if (L && !LD.end) { LD.end = true; LD.show = 1; $('#loadpct').textContent = '53.9'; ldOut(L); } }, 4000);
+}
+function ldOut(L) {
   setTimeout(() => L.classList.add('full'), 500);
   setTimeout(() => { L.classList.add('done'); setTimeout(() => { L.remove(); LD.on = false; }, 1700); }, 1300);
 }
