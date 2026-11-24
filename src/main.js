@@ -1159,7 +1159,7 @@ function stepTheme(dt) {
   if (themeRun.k >= 1) themeRun = null;
 }
 { let t0 = null; try { t0 = localStorage.getItem('2121.theme'); } catch (e) {} setTheme(t0 || 'dark', true);
-  if (!t0 && TOUCH && innerWidth < 760) { $('#sunRange').value = 19.25; setSun(19.25); } }   // a phone screen reads dusk better than deep night
+  if (!t0) { $('#sunRange').value = 8.5; setSun(8.5); } }   // a first visit arrives at 08:30, morning light (Leon 2026-11-24)
 
 // ---------- Journey framing: the subject sits clear of the text ----------
 // portrait: the card fills the lower half, so the picture is lifted; landscape: nudged up and right, away from the card
