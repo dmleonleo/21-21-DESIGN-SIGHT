@@ -1,5 +1,5 @@
 // One Big Clock: an independent homage to "Time" (2027) at 21_21 DESIGN SIGHT. Not affiliated with it.
-// The whole building keeps one day, 10:00 to 19:00, a frame every five minutes. Seven rooms, seven ways of looking
+// The whole building keeps one day, 10:00 to 19:00, a frame every five minutes. Eleven places, eleven ways of looking
 // at ordinary time. Everything moves in steps, like stop-motion, and every object here is our own.
 import * as THREE from 'three';
 import { M, B1, label, onWall, onFloor } from './exhibit.js';
@@ -40,6 +40,10 @@ function sunDir(hour) {
 }
 
 const ZONES = [
+  ['visit', (X, Y, Z) => Z > -1.2 && Math.hypot(X - 16.8, Y - 6.6) < 2.6],
+  ['read', (X, Y, Z) => X > 31 && X < 39.2 && Y > -2.4 && Y < 1.8 && Z < -1.2],
+  ['rice', (X, Y, Z) => X > 34.4 && X < 39.2 && Y > 6.4 && Y < 11 && Z < -1.2],
+  ['cal', (X, Y, Z) => X > 57 && X < 70 && Y > -8.5 && Y < -4.4 && Z < -1.2],
   ['stair', (X, Y, Z) => X > 42 && X < 54 && Y > 13.6 && Y < 17.6 && Z > B1 + 0.5 && Z < 2.4],
   ['light', (X, Y, Z) => X > 49 && X < 60 && Y > 4.5 && Y < 12 && Z < -1.2],
   ['line', (X, Y, Z) => X > 39 && X < 70 && Y > -8.5 && Y < 6 && Z < -1.2],
@@ -48,7 +52,7 @@ const ZONES = [
   ['stone', (X, Y, Z) => X > -3 && X < 7.2 && Y > -6.2 && Y < 6.6 && Z > -1 && Z < 4.5],
   ['plaza', (X, Y, Z) => Z > -1.2],
 ];
-const PAD = { plaza: 0.6, board: 0.4, stair: 0.25, rings: 0.2, line: 0.1, light: 0.25, stone: 0 };
+const PAD = { visit: 0.5, read: 0.15, rice: 0.35, cal: 0.3, plaza: 0.6, board: 0.4, stair: 0.25, rings: 0.2, line: 0.1, light: 0.25, stone: 0 };
 
 export async function buildTime(scene, { fx = () => {}, sound = () => null, hit = () => null, listener = () => null, ground = () => null, day = null } = {}) {
   try { await Promise.all([document.fonts.load(`280 40px ${SERIF}`), document.fonts.load(`600 40px ${SERIF}`)]); } catch (e) {}
@@ -447,6 +451,221 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
     g.add(onFloor(caption('One stone', ['Almost silence. One ordinary stone, a light that', 'circles it a frame a second. Stay for one turn.'], 1.05), SX - 0.5, SY - 1.5, Z));
   }
 
+  // ======================= 04 Gallery 1, south wall: reading time =======================
+  {
+    const WX = 34.6, WY = -2.39 + 0.16 * (34.6 - 33) + 0.03, ROT = 0.159, Z = B1, W = 3.6, H = 1.25;   // the south wall runs a little askew
+    const TEXT = 'This is a caption. Read every word and it takes about twenty seconds. Most people read the title, glance at the first line, and walk on. That is fine. The building keeps its own time either way, and so do you.';
+    const words = TEXT.split(' ');
+    const sp = sheet(W, H, 1800); onWall(sp.mesh, WX, WY, Z + 1.55, Math.PI / 2 + ROT); g.add(sp.mesh);
+    const c = sp.g, F = 56, LH = 84, PX = 90;
+    c.font = `280 ${F}px ${SERIF}`;
+    const pos = []; let x = PX, y = 150;
+    for (const w of words) { const ww = c.measureText(w + ' ').width; if (x + ww > sp.W - PX) { x = PX; y += LH; } pos.push([x, y]); x += ww; }
+    const SPEEDS = [['READING', 4], ['READING ALOUD', 2.4], ['SKIMMING', 12]];
+    let si = 0, t0 = -1, shown = -2, rest = 0;
+    function draw(k, el) {
+      c.clearRect(0, 0, sp.W, sp.H);
+      c.font = `600 26px ${SERIF}`; c.fillStyle = '#8f8b84'; c.fillText(SPEEDS[si][0] + `  ·  ${SPEEDS[si][1]} WORDS A SECOND`, PX, 70);
+      c.font = `280 ${F}px ${SERIF}`;
+      words.forEach((w, i) => { c.fillStyle = i < k ? '#f2efe8' : i === k ? ORANGE : '#5e5c57'; c.fillText(w, pos[i][0], pos[i][1]); });
+      c.font = `280 64px ${SERIF}`; c.fillStyle = '#f2efe8'; c.fillText(el.toFixed(1) + ' s', PX, sp.H - 60);
+      c.font = `600 24px ${SERIF}`; c.fillStyle = '#8f8b84'; c.fillText(`${Math.min(k, words.length)} OF ${words.length} WORDS`, PX + 260, sp.H - 72);
+      sp.tex.needsUpdate = true;
+    }
+    draw(0, 0);
+    const hb = hitBox(W, H, 0.3); hb.position.copy(M(WX, WY + 0.15, Z + 1.55)); hb.rotation.y = ROT; g.add(hb);
+    const fn = () => { si = (si + 1) % SPEEDS.length; t0 = now; rest = 0; fx('flap', WX, WY, Z + 1.5, { a: 0.6 }); return `${SPEEDS[si][0].toLowerCase().replace(/^./, (m) => m.toUpperCase())}: ${SPEEDS[si][1]} words a second.`; };
+    tap(hb, fn); tap(sp.mesh, fn);
+    anim.push(() => {
+      if (zone !== 'read') { t0 = -1; return; }
+      if (!newFrame) return;
+      if (rest) { if (now < rest) return; rest = 0; t0 = -1; }
+      if (t0 < 0) { t0 = now; shown = -2; }
+      const el = now - t0, k = Math.floor(el * SPEEDS[si][1]);
+      if (k !== shown) {
+        if (k < words.length) {
+          const w = words[Math.max(0, k - 1)], end = /[.,]$/.test(w) && k > 0;
+          const [px, py] = pos[Math.min(k, words.length - 1)];
+          const xx = WX - W / 2 + W * px / sp.W, zz = Z + 1.55 + H / 2 - H * py / sp.H;
+          fx(end ? 'wood' : 'tick', xx, WY, zz, end ? { f: /\.$/.test(w) ? 520 : 820, a: 0.35 } : { a: 0.09, f: 2600 + (k % 5) * 180 });
+        } else { fx('flap', WX, WY, Z + 1.5, { a: 0.7 }); fx('note', WX, WY, Z + 1.6, { f: 293.66, a: 0.2, d: 3 }); rest = now + 4; }
+        shown = k;
+      }
+      draw(k, Math.min(el, words.length / SPEEDS[si][1]));
+    });
+    g.add(onFloor(caption('Reading time', ['A caption, read one word at a time. Tap it to read', 'aloud, or to skim.'], 1.1), WX - 1.2, WY + 1.0, Z, ROT));
+  }
+
+  // ======================= 06 Gallery 1, north corner: one onigiri =======================
+  {
+    const RX = 36.6, RY = 8.4, Z = B1, TOP = Z + 0.78;
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.78, 0.9), new THREE.MeshStandardMaterial({ color: 0x1c1d20, roughness: 0.8 }));
+    plinth.position.copy(M(RX, RY, Z + 0.39)); plinth.castShadow = plinth.receiveShadow = true; g.add(plinth); g.userData.colliders.push(plinth);
+    const N = 560, S = 0.12;                                  // one rice ball, drawn about twice life size
+    const grain = new THREE.SphereGeometry(1, 8, 6); grain.scale(0.0095, 0.0055, 0.0055);
+    const rice = new THREE.InstancedMesh(grain, new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.55 }), N); rice.castShadow = true; g.add(rice);
+    const HEAP = [], BALL = [], q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1, 1, 1), mtx = new THREE.Matrix4();
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    for (let i = 0; i < N; i++) {
+      const r = 0.1 * Math.sqrt(Math.random()), a = Math.random() * 7, hgt = 0.05 * (1 - r / 0.1) * Math.random();
+      HEAP.push(M(RX - 0.2 + Math.cos(a) * r, RY + 0.18 + Math.sin(a) * r, TOP + 0.006 + hgt));
+      // a rounded triangle standing up: sample the triangle, keep the grain near its skin
+      let u, v; do { u = Math.random(); v = Math.random(); } while (u + v > 1);
+      const px = (u - v) * S, pz = (1 - u - v) * S * 1.6 - (u + v) * 0.0;
+      const d = rnd(-0.04, 0.04) * (1 - Math.abs(px) / S * 0.6);
+      BALL.push(M(RX + 0.08 + px, RY - 0.05 + d, TOP + 0.01 + (1 - pz / (S * 1.6)) * S * 1.45 * 0.0 + pz * 0.9));
+    }
+    const ROT = [...Array(N)].map(() => new THREE.Quaternion().setFromEuler(e.set(rnd(0, 3), rnd(0, 3), rnd(0, 3))));
+    const P = HEAP.map((p) => p.clone());
+    const place = () => { for (let i = 0; i < N; i++) { mtx.compose(P[i], ROT[i], one); rice.setMatrixAt(i, mtx); } rice.instanceMatrix.needsUpdate = true; };
+    place();
+    const nori = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.075), new THREE.MeshStandardMaterial({ color: 0x0d1410, roughness: 0.7, side: THREE.DoubleSide }));
+    const nori2 = nori.clone(); [nori, nori2].forEach((n, i) => { n.position.copy(M(RX + 0.08, RY - 0.05 + (i ? 0.047 : -0.047), TOP + 0.045)); n.rotation.y = i ? Math.PI : 0; n.visible = false; g.add(n); });
+    const tag = sheet(0.7, 0.22, 640); onFloor(tag.mesh, RX - 0.05, RY - 0.62, Z, 0); g.add(tag.mesh);
+    function writeTag(a, b) { const c = tag.g; c.clearRect(0, 0, tag.W, tag.H); c.font = `600 34px ${SERIF}`; c.fillStyle = '#f2efe8'; c.fillText(a, 10, 70); c.font = `280 28px ${SERIF}`; c.fillStyle = '#a9a59d'; c.fillText(b, 10, 140); tag.tex.needsUpdate = true; }
+    writeTag('TAP TO MAKE ONE', 'Rice, salt, nori. About two minutes.');
+    let st = 'heap', f = 0, madeH = null, lastTag = '';
+    const go = () => {
+      if (st === 'make' || st === 'unmake') return 'Hold on, it is still being made.';
+      if (st === 'heap') { st = 'make'; f = 0; return 'Making one: wet hands, salt, rice.'; }
+      st = 'unmake'; f = 0; return 'Back to the bowl. Another one.';
+    };
+    const hb = hitBox(0.9, 1.2, 0.9); hb.position.copy(M(RX, RY, Z + 0.6)); g.add(hb); tap(hb, go); tap(rice, go); tap(plinth, go);
+    anim.push(() => {
+      if (!newFrame) return;
+      if (st === 'heap' && zone === 'rice' && madeH === null) go();
+      if (st === 'make') {
+        f++;
+        const k = Math.min(N, Math.floor(f / 30 * N));                     // three seconds of grains, a few dozen a frame
+        for (let i = 0; i < k; i++) P[i].copy(BALL[i]);
+        place();
+        if (f <= 30) fx('tick', RX, RY, TOP + 0.1, { a: 0.12 + Math.random() * 0.12, f: rnd(3200, 5200) });
+        if (f === 34 || f === 40 || f === 46) { fx('thud', RX, RY, TOP, { f: 90, a: 0.5 }); fx('wood', RX, RY, TOP + 0.1, { f: 240, a: 0.3 }); }
+        if (f === 52) { nori.visible = nori2.visible = true; fx('shutter', RX, RY, TOP + 0.1, { a: 0.6 }); fx('flap', RX, RY, TOP + 0.1, { a: 0.4 }); }
+        if (f === 60) { st = 'made'; madeH = C.h; fx('marimba', RX, RY, TOP + 0.3, { f: pentF(7), a: 0.6 }); ring(M(RX, RY, Z + 0.01), 1.6, 2, 0.6); }
+      }
+      if (st === 'unmake') {
+        f++; nori.visible = nori2.visible = false;
+        const k = Math.max(0, N - Math.floor(f / 8 * N));
+        for (let i = k; i < N; i++) P[i].copy(HEAP[i]);
+        place(); if (f % 2) fx('tick', RX, RY, TOP, { a: 0.2, f: rnd(1800, 2600) });
+        if (k === 0) { st = 'make'; f = 0; madeH = null; }
+      }
+      // how old it is, on the site clock
+      let a = 'TAP TO MAKE ONE', b = 'Rice, salt, nori. About two minutes.';
+      if (st === 'make') { a = 'MAKING'; b = 'Wet hands, salt, rice, a strip of nori.'; }
+      if (st === 'made' && madeH !== null) {
+        let m = Math.round((C.h - madeH) * 60); if (m < 0) m += (CLOSE - OPEN) * 60;
+        a = `MADE AT ${hhmm(madeH)}`; b = m < 5 ? 'Just now, on the site clock.' : `${Math.floor(m / 60) ? Math.floor(m / 60) + ' h ' : ''}${m % 60} min ago, on the site clock.${m > 240 ? ' Eat it soon.' : ''}`;
+        const age = Math.min(1, m / 400); rice.material.color.setRGB(0.95 - 0.06 * age, 0.937 - 0.08 * age, 0.9 - 0.16 * age);
+      } else rice.material.color.setRGB(0.95, 0.937, 0.9);
+      if (a + b !== lastTag) { lastTag = a + b; writeTag(a, b); }
+    });
+    g.add(onFloor(caption('One onigiri', ['When was it made? Three hundred grains, three', 'presses, one strip of nori. Tap to make another.'], 1.1), RX - 1.6, RY - 1.2, Z));
+  }
+
+  // ======================= 07 Gallery 2, south wall: a year of days =======================
+  {
+    const WY = -7.24, WX = 62.8, Z = B1, W = 6.4, H = 1.5;
+    const yr = new Date().getFullYear(), jan1 = new Date(yr, 0, 1), days = (new Date(yr + 1, 0, 1) - jan1) / 864e5;
+    const today = Math.floor((new Date() - jan1) / 864e5), off = jan1.getDay();   // 0 = Sunday
+    const cal = sheet(W, H, 2400); onWall(cal.mesh, WX, WY + 0.01, Z + 1.75, Math.PI / 2); g.add(cal.mesh);
+    const c = cal.g, X0 = 150, Y0 = 110, CELL = 40;
+    const cell = (d) => { const k = d + off; return [X0 + Math.floor(k / 7) * CELL, Y0 + (k % 7) * CELL]; };
+    const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const mStart = MON.map((_, m) => Math.round((new Date(yr, m, 1) - jan1) / 864e5));
+    const SPEEDS = [[1, 'A DAY A FRAME'], [7, 'A WEEK A FRAME'], [30, 'A MONTH A FRAME']];
+    let si = 0, d = 0, rest = 0;
+    function draw(k) {
+      c.clearRect(0, 0, cal.W, cal.H);
+      c.font = `600 22px ${SERIF}`; c.fillStyle = '#8f8b84';
+      ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach((l, i) => c.fillText(l, X0 - 50, Y0 + i * CELL + 28));
+      MON.forEach((m, i) => c.fillText(m, cell(mStart[i])[0], Y0 - 24));
+      for (let i = 0; i < days; i++) {
+        const [x, y] = cell(i), wd = (i + off) % 7;
+        c.fillStyle = i === today ? ORANGE : i < k ? (wd === 2 ? '#6c6a66' : '#ece9e2') : (wd === 2 ? '#1f1f1f' : '#353432');
+        c.fillRect(x, y, CELL - 8, CELL - 8);
+      }
+      c.font = `280 56px ${SERIF}`; c.fillStyle = '#f2efe8'; c.fillText(String(yr), X0, cal.H - 60);
+      c.font = `600 22px ${SERIF}`; c.fillStyle = '#8f8b84'; c.fillText(`${Math.min(k, days)} OF ${days} DAYS  ·  ${SPEEDS[si][1]}  ·  DIMMER ROW: A DAY THE DOORS STAY SHUT`, X0 + 200, cal.H - 72);
+      cal.tex.needsUpdate = true;
+    }
+    draw(0);
+    const hb = hitBox(W, H, 0.3); hb.position.copy(M(WX, WY + 0.15, Z + 1.75)); g.add(hb);
+    const fn = () => { si = (si + 1) % SPEEDS.length; d = 0; rest = 0; fx('flap', WX, WY, Z + 1.6, { a: 0.6 }); return SPEEDS[si][1].toLowerCase().replace(/^./, (m) => m.toUpperCase()) + '.'; };
+    tap(hb, fn); tap(cal.mesh, fn);
+    const sx = (k) => WX - W / 2 + W * cell(Math.min(k, days - 1))[0] / cal.W;
+    anim.push(() => {
+      if (zone !== 'cal' || !newFrame) return;
+      if (rest) { if (now < rest) return; rest = 0; d = 0; }
+      const was = d; d = Math.min(days, d + SPEEDS[si][0]);
+      const a = Math.floor(was), b = Math.floor(d);
+      for (let i = a; i < b; i++) {
+        const m = mStart.indexOf(i);
+        if (m >= 0) fx('marimba', sx(i), WY, Z + 1.8, { f: pentF(5 + m), a: 0.55 });
+        else if (si === 0 && (i + off) % 7 === 2) fx('wood', sx(i), WY, Z + 1.6, { f: 300, a: 0.25 });
+        else if (si === 0) fx('tick', sx(i), WY, Z + 1.7, { a: 0.08, f: 2400 + ((i + off) % 7) * 150 });
+        if (i === today) { fx('bell', sx(i), WY, Z + 2, { f: 587.33, a: 0.6, d: 6 }); ring(M(sx(i), WY + 0.4, Z + 0.01), 2, 2, 0.7); }
+      }
+      if (b !== a || d === 0) draw(b);
+      if (d >= days && !rest) { fx('bell', WX, WY, Z + 2, { f: 146.83, a: 0.7, d: 9 }); rest = now + 5; }
+    });
+    g.add(onWall(caption('A year of days', ['Every day this year, one square at a time. The orange', 'one is today. Tap the wall to change the speed.'], 1.3), WX - W / 2 - 0.9, WY + 0.01, Z + 1.6, Math.PI / 2));
+  }
+
+  // ======================= 11 plaza: your visit =======================
+  {
+    const VX = 16.8, VY = 6.6, VZ = (ground(VX, VY) ?? -0.18) + 0.006, MAX = 1500;
+    const trail = new THREE.InstancedMesh(new THREE.CircleGeometry(0.045, 10), new THREE.MeshBasicMaterial({ color: 0xece9e2, transparent: true, opacity: 0.28, depthWrite: false, toneMapped: false }), MAX);
+    trail.count = 0; trail.renderOrder = 16; trail.frustumCulled = false; g.add(trail);
+    const PTS = [], mtx = new THREE.Matrix4(), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), one = new THREE.Vector3(1, 1, 1);
+    const V = { start: -1, dist: 0, last: null, next: 0, rooms: new Set(), startH: null, replay: -1 };
+    const pan = sheet(1.6, 0.62, 1100); onFloor(pan.mesh, VX, VY, VZ, 0); g.add(pan.mesh);
+    let lastTxt = '';
+    function write() {
+      const s = V.start < 0 ? 0 : Math.floor(now - V.start), mm = String(Math.floor(s / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
+      let sm = V.startH === null ? 0 : Math.round((C.h - V.startH) * 60); if (sm < 0) sm += (CLOSE - OPEN) * 60;
+      const lines = [`${mm}:${ss}`, `${Math.round(V.dist)} M ON FOOT  ·  ${V.rooms.size} OF ${ZONES.length} PLACES  ·  ${Math.floor(sm / 60)} H ${sm % 60} MIN ON THE SITE CLOCK`];
+      const txt = lines.join('|'); if (txt === lastTxt) return; lastTxt = txt;
+      const c = pan.g; c.clearRect(0, 0, pan.W, pan.H);
+      c.font = `600 26px ${SERIF}`; c.fillStyle = '#8f8b84'; c.fillText('YOUR VISIT', 30, 60);
+      c.font = `280 150px ${SERIF}`; c.fillStyle = '#f2efe8'; c.fillText(lines[0], 24, 230);
+      c.font = `600 24px ${SERIF}`; c.fillStyle = '#a9a59d'; c.fillText(lines[1], 30, 300);
+      c.font = `280 24px ${SERIF}`; c.fillText('Tap to replay your route, one frame at a time.', 30, 360);
+      pan.tex.needsUpdate = true;
+    }
+    const set = (i, p) => { mtx.compose(p, q, one); trail.setMatrixAt(i, mtx); };
+    const replay = () => { if (PTS.length < 2) return 'Walk a little first. Your route is drawn as you go.'; V.replay = 0; trail.material.opacity = 0.8; fx('shutter', VX, VY, VZ + 0.3, { a: 0.6 }); return `Your route: ${Math.round(V.dist)} metres, replayed.`; };
+    const hb = hitBox(1.6, 0.3, 0.62); hb.position.copy(M(VX, VY, VZ + 0.1)); g.add(hb); tap(hb, replay); tap(pan.mesh, replay);
+    anim.push(() => {
+      const L = listener();
+      if (L && V.start >= 0 && now > V.next) {
+        V.next = now + 0.8;
+        const X = L.x, Y = -L.z, Zc = L.y, h = hit(M(X, Y, Zc), DOWN, 4);
+        if (h) {
+          const p = new THREE.Vector3(X, h.point.y + 0.012, -Y);
+          if (!V.last || V.last.distanceTo(p) > 0.6) {
+            if (V.last && V.last.distanceTo(p) < 6) V.dist += V.last.distanceTo(p);
+            V.last = p;
+            if (PTS.length < MAX) { PTS.push({ p, z: zone }); set(PTS.length - 1, p); trail.count = V.replay >= 0 ? trail.count : PTS.length; trail.instanceMatrix.needsUpdate = true; }
+          }
+        }
+      }
+      if (zone) V.rooms.add(zone);
+      if (V.replay >= 0 && newFrame) {                       // the route redrawn, a few steps a frame, rising as it goes
+        const step = Math.max(1, Math.ceil(PTS.length / 72)), a = V.replay; V.replay = Math.min(PTS.length, V.replay + step); trail.count = V.replay;
+        const P = PTS[V.replay - 1], u = V.replay / PTS.length;
+        fx('tick', -P.p.z * 0 + VX, VY, VZ + 0.3, { a: 0.15 + 0.2 * u, f: 1600 + 2400 * u });
+        for (let i = a; i < V.replay; i++) if (i > 0 && PTS[i].z !== PTS[i - 1].z && PTS[i].z) fx('marimba', VX, VY, VZ + 0.6, { f: pentF(4 + ZONES.findIndex((zz) => zz[0] === PTS[i].z)), a: 0.45 });
+        if (V.replay >= PTS.length) { V.replay = -1; trail.material.opacity = 0.28; trail.count = PTS.length; fx('bell', VX, VY, VZ + 2, { f: 293.66, a: 0.5, d: 6 }); ring(M(VX, VY, VZ), 4, 2.4, 0.7); }
+      }
+      if (zone === 'visit' && !V.seen && PTS.length > 4) { V.seen = true; replay(); }
+      if (zone !== 'visit') V.seen = false;
+      if (Math.floor(now * 2) !== V.w) { V.w = Math.floor(now * 2); write(); }
+    });
+    var visitStart = () => { if (V.start < 0) { V.start = now; V.startH = C.h; } };
+  }
+
   // ---------- which room the visitor is in ----------
   let prevH = null;
   anim.push(() => {
@@ -469,7 +688,7 @@ export async function buildTime(scene, { fx = () => {}, sound = () => null, hit 
   return {
     group: g, colliders: g.userData.colliders,
     get hour() { return C.h; },
-    enter: () => { if (day) { prevH = day.get(); setH(C.h); } C.next = now + FRAME; },
+    enter: () => { if (day) { prevH = day.get(); setH(C.h); } C.next = now + FRAME; visitStart(); },
     update: (t) => { now = t; const f = Math.floor(t * FPS); newFrame = f !== frame; frame = f; anim.forEach((fn) => fn(t)); },
     leave: () => {
       const s = sound(); if (s && s.quiet) s.quiet(1); zone = null;

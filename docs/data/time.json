@@ -5,7 +5,7 @@
   "cam": [
    18.6,
    4.4,
-   1.8
+   1.3
   ],
   "look": [
    12.8,
@@ -45,6 +45,21 @@
   "text": "Stop-motion is time cut into stills. Twelve frames on the stair wall make one bounce, lit one at a time. At two frames a second you see the cuts. At twenty-four you see a ball. Tap a frame to change the speed."
  },
  {
+  "id": "t-read",
+  "title": "Reading Time",
+  "cam": [
+   33.8,
+   3.6,
+   -4.4
+  ],
+  "look": [
+   34.8,
+   -2.1,
+   -4.6
+  ],
+  "text": "A caption, read one word at a time. Read every word and it takes about twenty seconds. Most of us read the title and walk on. Tap the wall to hear it read aloud, slower, or skimmed, faster."
+ },
+ {
   "id": "t-rings",
   "title": "A Day, a Week, a Year",
   "cam": [
@@ -60,6 +75,21 @@
   "text": "Three hands on the gallery floor. First they keep the building's own hour. Then a week passes in fourteen seconds, then a whole year in twenty-four, and the day hand turns too fast to follow. Then one low bell, and nothing. Tap the centre to change the speed."
  },
  {
+  "id": "t-rice",
+  "title": "One Onigiri",
+  "cam": [
+   35.2,
+   6.6,
+   -4.5
+  ],
+  "look": [
+   36.6,
+   8.4,
+   -5.1
+  ],
+  "text": "When was this rice ball made? Three hundred grains, three presses, one strip of nori. The label keeps count on the site clock, and the rice grows a little tired as the day goes on. Tap to make another."
+ },
+ {
   "id": "t-line",
   "title": "Ten Times Longer",
   "cam": [
@@ -73,6 +103,21 @@
    -6.0
   ],
   "text": "Every step along this line is ten times longer than the last. A second, a caption, a rice ball, a visit, a day, a rice season, this building, and roughly three thousand years of rice in Japan. Listen as the ticks slow and fall. Tap a dot to read it."
+ },
+ {
+  "id": "t-cal",
+  "title": "A Year of Days",
+  "cam": [
+   62.8,
+   -2.0,
+   -4.3
+  ],
+  "look": [
+   62.8,
+   -7.24,
+   -4.3
+  ],
+  "text": "Every day of this year, one square at a time. Each month rings a note. The dimmer row is the day of the week the doors stay shut. The orange square is today. Tap the wall and the year runs faster."
  },
  {
   "id": "t-light",
@@ -103,5 +148,20 @@
    0.1
   ],
   "text": "The last room is almost silent. One ordinary stone, and a light that circles it, one frame a second. Stay for one full turn. Nothing else happens, and that is the point."
+ },
+ {
+  "id": "t-visit",
+  "title": "Your Visit",
+  "cam": [
+   16.8,
+   3.6,
+   1.5
+  ],
+  "look": [
+   16.8,
+   6.6,
+   -0.2
+  ],
+  "text": "Your own time here. Every step you took since the clock started is drawn on the ground. Stand here and your route is replayed, one frame at a time, a note for every room. Then the day goes on without you."
  }
 ]

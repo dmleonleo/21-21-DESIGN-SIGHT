@@ -79,6 +79,18 @@ sky.material.uniforms.rayleigh = { value: 0 };
 scene.add(sky);
 const nightMats = [];
 const realList = [sky];
+const HOLE = { X0: -12, X1: 80, Y0: -20, Y1: 30, S: 0.2 };
+HOLE.nx = Math.round((HOLE.X1 - HOLE.X0) / HOLE.S); HOLE.ny = Math.round((HOLE.Y1 - HOLE.Y0) / HOLE.S);
+HOLE.tex = new THREE.DataTexture(new Uint8Array(HOLE.nx * HOLE.ny), HOLE.nx, HOLE.ny, THREE.RedFormat, THREE.UnsignedByteType);
+HOLE.tex.magFilter = HOLE.tex.minFilter = THREE.LinearFilter; HOLE.tex.needsUpdate = true;
+function holeMask(tree) {      // a cell is the model's own wherever a ray from high above finds any of it
+  const d = HOLE.tex.image.data, ray = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+  for (let j = 0; j < HOLE.ny; j++) for (let i = 0; i < HOLE.nx; i++) {
+    ray.origin.copy(M(HOLE.X0 + (i + 0.5) * HOLE.S, HOLE.Y0 + (j + 0.5) * HOLE.S, 30));
+    d[j * HOLE.nx + i] = tree.raycastFirst(ray, THREE.DoubleSide) ? 255 : 0;
+  }
+  HOLE.tex.needsUpdate = true;
+}
 let groundMat = null, outerGround = null, farGround = null, context = null; const trees = []; const treePts = [];
 
 const hemi = new THREE.HemisphereLight(0xc9d3dc, 0x2b2a24, 0.6);
@@ -102,9 +114,20 @@ let lampLevel = 0, baseExposure = 0.8, underK = 0;
   // the outer ground: a 5 m grid that takes the lawn's own heights at its edges (fitGround), so the garden reads level with it
   const g = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200, 240, 240).rotateX(-Math.PI / 2),
     new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }));
-  g.material.onBeforeCompile = groundShader;
+  // the garden ground runs under the whole site; wherever the model has its own surface (lawn, roof, a stair void, the sunken court)
+  // the ground steps aside, so it never lids a void (holeMask, filled once the building is in)
+  g.material.onBeforeCompile = holeShader;
+  g.material.customProgramCacheKey = () => 'ground-holes';
+  function holeShader(sh) {
+    groundShader(sh); sh.uniforms.uHole = { value: HOLE.tex };
+    sh.fragmentShader = sh.fragmentShader.replace('varying vec2 vGP;', 'varying vec2 vGP;\nuniform sampler2D uHole;')
+      .replace('float gShFade', `vec2 hu = (vGP - vec2(${HOLE.X0.toFixed(1)}, ${HOLE.Y0.toFixed(1)})) / vec2(${(HOLE.X1 - HOLE.X0).toFixed(1)}, ${(HOLE.Y1 - HOLE.Y0).toFixed(1)});
+      if (hu.x > 0.0 && hu.y > 0.0 && hu.x < 1.0 && hu.y < 1.0 && texture2D(uHole, hu).r > 0.5) discard;
+      float gShFade`);
+  }
   g.position.y = -0.45; g.receiveShadow = true; scene.add(g); realList.push(g); groundMat = g.material; outerGround = g;
   farGround = buildFarGround(scene); realList.push(farGround);
+  farGround.material.onBeforeCompile = holeShader; farGround.material.customProgramCacheKey = () => 'ground-holes-far'; farGround.material.needsUpdate = true;
   for (const m of [g.material, farGround.material]) { m.userData.night = m.color.clone(); nightMats.push(m); }
   fetch('data/context.json').then((r) => r.json()).then((rows) => {
     context = buildContext(scene, rows); realList.push(context);
@@ -299,7 +322,13 @@ camera.fov = fovTarget; camera.updateProjectionMatrix();
 const PROGRAMS = { building: await (await fetch('data/stations.json')).json(), measure: await (await fetch('data/exhibit.json')).json(), rules: await (await fetch('data/rules.json')).json(), water: await (await fetch('data/water.json')).json(), listen: await (await fetch('data/sound.json')).json(), time: await (await fetch('data/time.json')).json() };
 const SHOWS = { measure: 'Measure the Sight', rules: 'Read the Building', water: 'Still Water', listen: 'Room Tone', time: 'One Big Clock' };
 let program = 'building', stations = PROGRAMS.building;
-let show = (() => { try { return SHOWS[localStorage.getItem('2121.show')] ? localStorage.getItem('2121.show') : 'measure'; } catch (e) { return 'measure'; } })();
+// the newest show opens by default; when a newer one launches, every visitor meets it first, then their own choice sticks again
+const NEWEST = 'time';
+let show = (() => { try {
+  const saved = localStorage.getItem('2121.show'), seen = localStorage.getItem('2121.newest');
+  if (seen !== NEWEST) { localStorage.setItem('2121.newest', NEWEST); return NEWEST; }
+  return SHOWS[saved] ? saved : NEWEST;
+} catch (e) { return NEWEST; } })();
 const shows = {}, bvhs = {};
 function setShow(name) {                      // one exhibition is installed at a time: its objects, its collisions
   if (exhibit && exhibit.leave && show !== name) exhibit.leave();
@@ -949,7 +978,8 @@ loader.load('model/2121.glb', async (gltf) => {
   scene.add(root); realThings.push(...realList, root);
   buildDiagram(root); setSun(+$('#sunRange').value);
   // two exhibitions share the building; each gets its own collision tree with its own plinths
-  bvhs.base = new MeshBVH(BufferGeometryUtils.mergeGeometries(geos, false)); bvh = bvhs.base;   // the bare building, so exhibitions can find its floors
+  bvhs.base = new MeshBVH(BufferGeometryUtils.mergeGeometries(geos, false)); bvh = bvhs.base;
+  try { holeMask(bvhs.base); } catch (e) { console.error('holes', e); }   // the bare building, so exhibitions can find its floors
   // exhibits play their sounds at model points; the engine is created further down, so look it up lazily
   const fx = (k, X, Y, Z, o) => { try { return sound.play(k, M(X, Y, Z), o || {}); } catch (e) { return false; } };
   for (const [name, build] of [['measure', () => buildExhibit(scene, root, fx)], ['rules', () => buildRules(scene, fx)], ['water', () => buildWater(scene, { sound: fx, ground: (x, y) => { const h = hit(M(x, y, 2.5), DOWN, 6); return h ? toModel(h.point).z : null; } })],
