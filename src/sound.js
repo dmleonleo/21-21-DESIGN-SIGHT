@@ -112,7 +112,7 @@ export function createSound() {
 }
 
 // ---------- narration ----------
-// Pre-recorded clips (Kokoro-82M, Apache 2.0, a blend of two of its voices), one per chapter: voice/<program>/<nn>.mp3
+// Pre-recorded clips (Kokoro-82M, Apache 2.0, its af_heart voice pitched lower), one per chapter: voice/<program>/<nn>.mp3
 export function createVoice() {
   const el = new Audio(); el.preload = 'auto';
   const V = { on: false, busy: false, i: -1, t: null, onEnd: null, unlocked: false };
