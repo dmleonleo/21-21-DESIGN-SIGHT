@@ -112,42 +112,35 @@ export function createSound() {
 }
 
 // ---------- narration ----------
+// Pre-recorded clips (Kokoro-82M, Apache 2.0, a blend of two of its voices), one per chapter: voice/<program>/<nn>.mp3
 export function createVoice() {
-  const syn = window.speechSynthesis;
+  const el = new Audio(); el.preload = 'auto';
+  const V = { on: false, busy: false, i: -1, t: null, onEnd: null, unlocked: false };
   let tok = 0;
-  const V = { on: false, voice: null, busy: false, i: -1, unlocked: false, t: null, onEnd: null };
-  const PREF = [/natural/i, /^(Daniel|Serena|Kate|Moira|Arthur|Martha|Oliver)\b/, /Google UK English (Male|Female)/, /^(Samantha|Ava|Allison|Susan|Karen)\b/, /Google US English/, /Microsoft (Libby|Sonia|Ryan|Aria|Jenny|Guy)/];
-  function pick() {
-    if (!syn) return;
-    const vs = syn.getVoices().filter((v) => /^en/i.test(v.lang));
-    for (const re of PREF) { const v = vs.find((x) => re.test(x.name)); if (v) return (V.voice = v); }
-    V.voice = vs.find((v) => /en-GB/i.test(v.lang)) || vs[0] || null;
-  }
-  if (syn) { pick(); syn.onvoiceschanged = pick; }
+  const src = (p, i) => `voice/${p}/${String(i).padStart(2, '0')}.mp3`;
+  el.addEventListener('ended', () => { V.busy = false; V.onEnd && V.onEnd(V.i); });
+  el.addEventListener('error', () => { V.busy = false; });
   return {
-    supported: !!syn,
+    supported: true,
     get on() { return V.on; },
     get busy() { return V.busy || !!V.t; },
     get index() { return V.i; },
     set onEnd(f) { V.onEnd = f; },
-    set(on) { V.on = on && !!syn; if (!V.on) this.stop(); },
-    unlock() {                              // iOS only lets speech start from a gesture; an empty line opens the door
-      if (!syn || V.unlocked) return; V.unlocked = true;
-      try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; syn.speak(u); } catch (e) {}
+    set(on) { V.on = on; if (!on) this.stop(); },
+    unlock() {                              // mobile browsers only let audio start from a gesture: prime the element once
+      if (V.unlocked) return; V.unlocked = true;
+      try { el.muted = true; el.src = src('building', 0); const p = el.play(); if (p) p.then(() => { if (!V.busy) el.pause(); el.muted = false; }).catch(() => { el.muted = false; }); else el.muted = false; } catch (e) { el.muted = false; }
     },
-    say(i, title, text, delay = 450) {
-      if (!V.on || !syn) return;
+    say(program, i, delay = 450) {
+      if (!V.on) return;
       this.stop(); V.i = i; const my = ++tok;
       V.t = setTimeout(() => {
-        V.t = null;
-        const u = new SpeechSynthesisUtterance(`${title}. ${text}`.replace(/×/g, ' by ').replace(/m²/g, ' square metres').replace(/(\d) mm\b/g, '$1 millimetres').replace(/(\d(?:\.\d)?) m\b/g, '$1 metres').replace(/(\d) cm\b/g, '$1 centimetres'));
-        if (V.voice) { u.voice = V.voice; u.lang = V.voice.lang; } else u.lang = 'en-GB';
-        u.rate = 0.94; u.pitch = 1; u.volume = 1;
-        u.onstart = () => { V.busy = true; };
-        u.onend = u.onerror = () => { if (my === tok) { V.busy = false; V.onEnd && V.onEnd(i); } };
-        V.busy = true; syn.speak(u);
+        V.t = null; if (my !== tok) return;
+        el.muted = false; el.src = src(program, i); el.currentTime = 0; V.busy = true;
+        const p = el.play(); if (p) p.catch(() => { if (my === tok) V.busy = false; });
+        const nx = new Audio(); nx.preload = 'auto'; nx.src = src(program, i + 1);   // warm the next chapter
       }, delay);
     },
-    stop() { tok++; clearTimeout(V.t); V.t = null; V.busy = false; V.i = -1; if (syn && (syn.speaking || syn.pending)) syn.cancel(); },
+    stop() { tok++; clearTimeout(V.t); V.t = null; V.busy = false; V.i = -1; try { el.pause(); } catch (e) {} },
   };
 }

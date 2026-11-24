@@ -330,7 +330,7 @@ function jumpTo(i) {                                // a far chapter cuts straig
 }
 function chapterText(i) {
   const s = stations[i];
-  if (J.on) voice.say(i, s.title, s.text);
+  if (J.on) voice.say(program, i);
   $('#tIdx').textContent = String(i + 1).padStart(2, '0');
   $('#tOf').textContent = `/ ${String(stations.length).padStart(2, '0')}`;
   $('#tTitle').textContent = s.title; $('#tText').textContent = s.text;
@@ -467,7 +467,7 @@ function setMode(m) {
   } else if (m === 'tour') {
     const i = THREE.MathUtils.clamp(Math.round(J.t), 0, stations.length - 1), s = stations[i];
     J.t = J.p = i; J.chapter = -1;
-    flyTo(M(...s.cam), M(...s.look), () => { J.on = true; });
+    flyTo(M(...s.cam), M(...s.look), () => { J.on = true; if (mode === 'tour') voice.say(program, i, 200); });
     chapterText(i);
     if (!TEST) toast(TOUCH ? 'Swipe up to move through the building' : 'Scroll to move through the building');
   } else if (m === 'walk') {
@@ -1118,7 +1118,7 @@ const keep = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch (
 let soundWant = pref('2121.sound', true);
 function setSound(on) { soundWant = on; keep('2121.sound', on); sound.set(on); $('#snd').classList.toggle('on', on); $('#snd').setAttribute('aria-pressed', on); }
 function setVoice(on) { keep('2121.voice', on); voice.set(on); $('#tVoice').classList.toggle('on', voice.on); $('#tVoice').textContent = voice.on ? 'Voice on' : 'Voice off';
-  if (voice.on && mode === 'tour' && J.on) { const i = Math.round(J.p); voice.say(i, stations[i].title, stations[i].text, 150); } }
+  if (voice.on && mode === 'tour' && J.on) { const i = Math.round(J.p); voice.say(program, i, 150); } }
 $('#snd').classList.toggle('on', soundWant);
 $('#snd').onclick = () => setSound(!sound.on);
 if (!voice.supported) $('#tVoice').hidden = true;
