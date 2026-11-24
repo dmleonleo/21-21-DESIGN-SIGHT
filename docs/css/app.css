@@ -31,8 +31,8 @@ body.tour #veil{background:radial-gradient(120% 90% at 50% 46%,transparent 55%,r
 #loader.full path{fill-opacity:.14}
 #loader:not(.drawn) .hint{animation:ldBreath 2.4s var(--ease) infinite alternate}
 @keyframes ldBreath{to{opacity:.35}}
-#loader.drawn .mark,#loader.drawn .hint{position:absolute;left:0;right:0;text-align:center}
-#loader.drawn .mark{bottom:calc(var(--pad) + 40px)} #loader.drawn .hint{bottom:var(--pad)}
+#loader .ldtxt{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:28px;text-align:center;transition:top 1.4s var(--ease),transform 1.4s var(--ease),gap 1.4s var(--ease)}
+#loader.drawn .ldtxt{top:calc(100% - var(--pad));transform:translateY(-100%);gap:18px}
 #loader .hint{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--mute);font-variant-numeric:tabular-nums}
 
 /* brand */
