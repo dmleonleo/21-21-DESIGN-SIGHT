@@ -1002,12 +1002,11 @@ loader.load('model/2121.glb', async (gltf) => {
   setShow(show);
   buildAxis(); axisUI();
   buildCover();
-  $('#loader').classList.add('done');
-  setTimeout(() => $('#loader').remove(), 1000);
+  ldDone();
   showIntro();
   orbit.update();
 }, (e) => {
-  if (e.total) { const k = e.loaded / e.total; $('#loadbar').style.width = `${k * 100}%`; $('#loadpct').textContent = Math.round(k * 100); }
+  if (e.total) LD.k = 0.08 + 0.84 * (e.loaded / e.total);
 }, (err) => { $('#loadtext').textContent = 'Could not load the model. ' + err.message; });
 
 
@@ -1208,6 +1207,28 @@ $('#tVoice').onclick = () => { voice.unlock(); setVoice(!voice.on); };
 
 // ---------- loop ----------
 const clock = new THREE.Timer();
+// loader: the two folded plates traced where the model will appear on screen, 0 to 54 m (the longest plate) as it loads
+const LD = { k: 0.04, on: true, show: 0,
+  W: [[9.07, 19.01, 4.8], [-8.37, -9.65, 4.8], [4.85, -5.19, 0.69], [12.99, 8.09, 4.8]],
+  E: [[12.01, 19.86, 4.8], [65.85, 16.98, 4.8], [41.1, 7.7, 0.69], [15.82, 9.33, 4.8]] };
+function ldPath(P) {
+  const s = P.map((p) => { const v = M(...p).project(camera); return `${((v.x + 1) / 2 * innerWidth).toFixed(1)},${((1 - v.y) / 2 * innerHeight).toFixed(1)}`; });
+  return `M${s[0]}L${s[1]}L${s[2]}L${s[3]}ZM${s[1]}L${s[3]}`;
+}
+function ldDraw() {
+  const L = $('#loader'); if (!L) { LD.on = false; return; }
+  LD.show += (LD.k - LD.show) * 0.08;
+  const k = LD.show, cl = (x) => Math.min(1, Math.max(0, x));
+  L.classList.add('drawn');
+  for (const [id, P, a] of [['#ldW', LD.W, 0], ['#ldE', LD.E, 0.35]]) { const el = $(id); el.setAttribute('d', ldPath(P)); el.style.strokeDashoffset = 1 - cl((k - a) / 0.65); }
+  $('#loadpct').textContent = (k * 53.9).toFixed(1);
+}
+function ldDone() {
+  LD.k = 1; const L = $('#loader');
+  setTimeout(() => L.classList.add('full'), 500);
+  setTimeout(() => { L.classList.add('done'); setTimeout(() => { L.remove(); LD.on = false; }, 1700); }, 1300);
+}
+
 function frame() {
   clock.update(); const dt = Math.min(clock.getDelta(), 0.05);
   if (exhibit && mode !== 'diagram') exhibit.update(clock.getElapsed());
@@ -1235,6 +1256,7 @@ function frame() {
   frameJourney();
   updateMap();
   renderFrame(dt);
+  if (LD.on) ldDraw();
   requestAnimationFrame(frame);
 }
 frame();
